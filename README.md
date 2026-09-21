@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./Multron_Dowland_Manager_logo.jpg" alt="Multron Download Manager Logo" width="160" height="160" style="border-radius: 50%;" />
+  <img src="./Multron_Dowland_Manager_logo.png" alt="Multron Download Manager Logo" width="160" height="160" style="border-radius: 50%;" />
 
   # Multron Download Manager
 
