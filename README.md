@@ -9,11 +9,11 @@
 </p>
 
 <p align="center">
-  <img src="[https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white](https://img.shields.io/badge/Go-1.21+-00ADD8?style=flat&logo=go&logoColor=white)" alt="Go" />
-  <img src="[https://img.shields.io/badge/Svelte-5-FF3E00?style=flat&logo=svelte&logoColor=white](https://img.shields.io/badge/Svelte-5-FF3E00?style=flat&logo=svelte&logoColor=white)" alt="Svelte 5" />
-  <img src="[https://img.shields.io/badge/Wails-v2-DF0000?style=flat&logo=wails&logoColor=white](https://img.shields.io/badge/Wails-v2-DF0000?style=flat&logo=wails&logoColor=white)" alt="Wails" />
-  <img src="[https://img.shields.io/badge/TailwindCSS-v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white](https://img.shields.io/badge/TailwindCSS-v4-06B6D4?style=flat&logo=tailwindcss&logoColor=white)" alt="Tailwind CSS" />
-  <img src="[https://img.shields.io/badge/License-MIT-blue.svg](https://img.shields.io/badge/License-MIT-blue.svg)" alt="License" />
+  <img src="https://img.shields.io/badge/Go-1.21%2B-00ADD8?logo=go&logoColor=white" alt="Go" />
+  <img src="https://img.shields.io/badge/Svelte-5-FF3E00?logo=svelte&logoColor=white" alt="Svelte 5" />
+  <img src="https://img.shields.io/badge/Wails-v2-DF0000?logo=wails&logoColor=white" alt="Wails" />
+  <img src="https://img.shields.io/badge/TailwindCSS-v4-06B6D4?logo=tailwindcss&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/License-MIT-blue" alt="License" />
 </p>
 
 ---
@@ -67,14 +67,14 @@ Multron-Download-Manager/
 * **Node.js** (v18 veya üzeri) ve **npm**
 * **Wails CLI:**
   ```bash
-  go install github.com/wailsapp/wails/v2/cmd/wails@latest
+  go install [github.com/wailsapp/wails/v2/cmd/wails@latest](https://github.com/wailsapp/wails/v2/cmd/wails@latest)
   ```
 
 ### Depoyu Klonlama ve Çalıştırma
 
 ```bash
 # 1. Depoyu klonlayın
-git clone https://github.com/Multron-Community/Multron-Download-Manager.git
+git clone [https://github.com/Multron-Community/Multron-Download-Manager.git](https://github.com/Multron-Community/Multron-Download-Manager.git)
 cd Multron-Download-Manager
 
 # 2. Geliştirici modunda başlatın (Hot-Reload devrede)
