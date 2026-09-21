@@ -1,0 +1,12 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "Multron Download Manager",
+  "outputfilename": "multron-download-manager",
+  "frontend:install": "npm install --legacy-peer-deps",
+  "frontend:build": "npm run build",
+  "frontend:dev:watcher": "npm run dev",
+  "frontend:dev:serverUrl": "auto",
+  "author": {
+    "name": "Multron Team"
+  }
+}
