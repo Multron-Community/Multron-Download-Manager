@@ -67,7 +67,7 @@ Multron-Download-Manager/
 * **Node.js** (v18 veya üzeri) ve **npm**
 * **Wails CLI:**
   ```bash
-  go install [github.com/wailsapp/wails/v2/cmd/wails@latest](https://github.com/wailsapp/wails/v2/cmd/wails@latest)
+  go install github.com/wailsapp/wails/v2/cmd/wails@latest
   ```
 
 ### Depoyu Klonlama ve Çalıştırma
