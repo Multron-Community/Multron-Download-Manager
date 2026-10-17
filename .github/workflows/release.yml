@@ -255,10 +255,10 @@ jobs:
               apt-get install -y --no-install-recommends bash ca-certificates curl git build-essential pkg-config file patchelf lld libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
               ;;
             fedora)
-              dnf install -y bash gcc gcc-c++ make git curl file tar gzip xz which pkg-config lld 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)'
+              dnf install -y bash gcc gcc-c++ make git curl file tar gzip xz which pkg-config lld 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)' 'pkgconfig(ayatana-appindicator3-0.1)'
               ;;
             opensuse)
-              zypper --non-interactive install bash gcc gcc-c++ make git curl file tar gzip xz which pkg-config 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)'
+              zypper --non-interactive install bash gcc gcc-c++ make git curl file tar gzip xz which pkg-config 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)' 'pkgconfig(ayatana-appindicator3-0.1)'
               zypper --non-interactive install lld || true
               ;;
           esac
