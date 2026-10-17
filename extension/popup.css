@@ -1,0 +1,155 @@
+* {
+  box-sizing: border-box;
+}
+body {
+  width: 340px;
+  margin: 0;
+  padding: 14px;
+  background: #161617;
+  color: #fff;
+  font: 13px/1.35 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+header img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+}
+header div {
+  flex: 1;
+}
+h1 {
+  margin: 0;
+  font-size: 14px;
+}
+#status {
+  margin: 2px 0 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  color: #8e8e93;
+}
+.dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #555558;
+}
+.dot.ok {
+  background: #34c759;
+}
+.dot.warn {
+  background: #ffb340;
+}
+.dot.bad {
+  background: #ff5a52;
+}
+section {
+  background: #1e1e1f;
+  border: 1px solid #2c2c2e;
+  border-radius: 12px;
+  padding: 10px;
+  margin-bottom: 10px;
+}
+.label {
+  font-size: 11px;
+  color: #8e8e93;
+  margin-bottom: 6px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.row {
+  display: flex;
+  gap: 6px;
+}
+input,
+select {
+  flex: 1;
+  min-width: 0;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: 8px;
+  border: 1px solid #2c2c2e;
+  background: #161617;
+  color: #fff;
+  font-size: 12px;
+  outline: none;
+}
+input:focus,
+select:focus {
+  border-color: #4fc3d1;
+}
+.btn {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 8px;
+  background: #2c2c2e;
+  color: #fff;
+  font-weight: 600;
+  font-size: 12px;
+  cursor: pointer;
+}
+.btn:hover {
+  background: #3a3a3d;
+}
+.btn.primary {
+  background: #fff;
+  color: #161617;
+}
+.btn.accent {
+  background: #2aa9b8;
+}
+.opts label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  padding: 3px 0;
+  cursor: pointer;
+}
+.opts input[type="checkbox"] {
+  flex: none;
+  width: 14px;
+  height: 14px;
+  accent-color: #2aa9b8;
+}
+.grid {
+  display: grid;
+  grid-template-columns: 1fr 120px;
+  gap: 6px;
+  align-items: center;
+  margin-top: 8px;
+  font-size: 11.5px;
+  color: #8e8e93;
+}
+.grid input {
+  height: 26px;
+}
+footer {
+  min-height: 16px;
+  font-size: 11.5px;
+  color: #8e8e93;
+}
+
+.warn {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: rgba(255, 179, 64, 0.12);
+  border: 1px solid rgba(255, 179, 64, 0.35);
+  border-radius: 10px;
+  padding: 10px;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.warn[hidden] {
+  display: none;
+}

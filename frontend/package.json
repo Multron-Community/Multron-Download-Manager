@@ -1,7 +1,8 @@
 {
-  "name": "frontend",
+  "name": "multron-frontend",
   "private": true,
-  "version": "0.0.0",
+  "version": "0.0.1",
+  "license": "SEE LICENSE IN LICENSE",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -10,17 +11,19 @@
     "check": "svelte-check --tsconfig ./tsconfig.json"
   },
   "devDependencies": {
-    "@sveltejs/vite-plugin-svelte": "^6.0.0",
+    "@sveltejs/vite-plugin-svelte": "^7.3.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@tsconfig/svelte": "^5.0.0",
-    "autoprefixer": "^10.6.1",
     "postcss": "^8.5.28",
     "svelte": "^5.55.7",
     "svelte-check": "^4.0.0",
-    "svelte-preprocess": "^6.0.3",
     "tailwindcss": "^4.3.3",
     "tslib": "^2.4.0",
     "typescript": "^5.6.3",
     "vite": "^8.0.13"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.9.0",
+    "@tauri-apps/plugin-dialog": "^2.4.0"
   }
 }

@@ -1,0 +1,74 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Multron Download Manager</title>
+  <link rel="stylesheet" href="popup.css" />
+</head>
+<body>
+  <header>
+    <img src="icons/icon64.png" alt="" />
+    <div>
+      <h1>Multron Download Manager</h1>
+      <p id="status"><span class="dot"></span><span id="status-text">Checking…</span></p>
+    </div>
+    <button id="connect" class="btn accent" hidden>Connect</button>
+  </header>
+
+  <section id="perm-box" class="warn" hidden>
+    <div>Multron Download Manager needs access to websites to show the <b>Download video</b> button and take over downloads.</div>
+    <button id="grant" class="btn accent">Allow on all sites</button>
+  </section>
+
+  <section id="page-box" hidden>
+    <div class="label" id="page-label">This page</div>
+    <div class="row">
+      <select id="quality">
+        <option value="best">Best quality</option>
+        <option value="1080">1080p</option>
+        <option value="720">720p</option>
+        <option value="480">480p</option>
+        <option value="audio-mp3">Audio (MP3)</option>
+        <option value="audio-m4a">Audio (M4A)</option>
+      </select>
+      <button id="send-page" class="btn primary">Download</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Everything on this page</div>
+    <div class="row">
+      <select id="grab-pages" title="Infinite feeds (Reddit, Instagram, X…) load more while scrolling">
+        <option value="0">Visible part</option>
+        <option value="5">Scroll 5 screens</option>
+        <option value="20">Scroll 20 screens</option>
+        <option value="60">Scroll 60 screens</option>
+      </select>
+      <button id="grab" class="btn">Download all…</button>
+    </div>
+  </section>
+
+  <section>
+    <div class="label">Link or magnet</div>
+    <div class="row">
+      <input id="link" placeholder="https://… or magnet:?…" />
+      <button id="send-link" class="btn">Send</button>
+    </div>
+  </section>
+
+  <section class="opts">
+    <label><input type="checkbox" id="intercept" /> Take over browser downloads</label>
+    <label><input type="checkbox" id="interceptMagnets" /> Open magnet links in Multron Download Manager</label>
+    <label><input type="checkbox" id="mediaButton" /> Show the download button on video pages</label>
+    <label><input type="checkbox" id="sendCookies" /> Send site cookies (private / login-only files)</label>
+    <div class="grid">
+      <span>Ignore files smaller than (KB)</span><input id="minSizeKB" type="number" min="0" />
+      <span>Never take over from</span><input id="skipDomains" placeholder="example.com other.org" />
+      <span>App port</span><input id="port" type="number" min="1024" max="65535" />
+    </div>
+  </section>
+
+  <footer id="msg"></footer>
+  <script src="popup.js"></script>
+</body>
+</html>

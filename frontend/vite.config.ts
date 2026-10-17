@@ -1,7 +1,17 @@
-import {defineConfig} from 'vite'
-import {svelte} from '@sveltejs/vite-plugin-svelte'
+import { defineConfig } from 'vite'
+import { svelte } from '@sveltejs/vite-plugin-svelte'
 
-// https://vitejs.dev/config/
 export default defineConfig({
-  plugins: [svelte()]
+  plugins: [svelte()],
+  clearScreen: false,
+  server: {
+    port: 5173,
+    strictPort: true,
+    watch: { ignored: ['**/src-tauri/**'] }
+  },
+  envPrefix: ['VITE_', 'TAURI_ENV_'],
+  build: {
+    target: 'es2021',
+    sourcemap: false
+  }
 })

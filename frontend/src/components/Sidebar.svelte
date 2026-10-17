@@ -1,81 +1,156 @@
 <script lang="ts">
-  import type { CategoryFilter, FolderFilter } from '../types';
+  import { app } from '../lib/store.svelte';
+  import { t } from '../lib/i18n.svelte';
+  import { bytes } from '../lib/format';
+  import Icon from './Icon.svelte';
+  import type { CategoryFilter, KindFilter, StatusFilter } from '../types';
 
-  interface Props {
-    activeCategory: CategoryFilter;
-    activeFolder: FolderFilter;
-    counts: { all: number; active: number; completed: number; paused: number };
-    onSelectCategory: (cat: CategoryFilter) => void;
-    onSelectFolder: (folder: FolderFilter) => void;
+  const statuses: { id: StatusFilter; label: string; icon: string }[] = [
+    { id: 'all', label: 'All Downloads', icon: 'list' },
+    { id: 'active', label: 'Active', icon: 'down' },
+    { id: 'queued', label: 'Queued', icon: 'clock' },
+    { id: 'paused', label: 'Paused', icon: 'pause' },
+    { id: 'completed', label: 'Completed', icon: 'check' },
+    { id: 'failed', label: 'Failed', icon: 'alert' }
+  ];
+  const kinds: { id: KindFilter; label: string; icon: string }[] = [
+    { id: 'http', label: 'Direct links', icon: 'link' },
+    { id: 'media', label: 'Media', icon: 'film' },
+    { id: 'torrent', label: 'Torrents', icon: 'magnet' }
+  ];
+  const categories: { id: CategoryFilter; label: string; icon: string }[] = [
+    { id: 'video', label: 'Video', icon: 'film' },
+    { id: 'music', label: 'Music', icon: 'music' },
+    { id: 'documents', label: 'Documents', icon: 'doc' },
+    { id: 'archives', label: 'Archives', icon: 'archive' },
+    { id: 'programs', label: 'Programs', icon: 'app' },
+    { id: 'images', label: 'Images', icon: 'image' },
+    { id: 'other', label: 'Other', icon: 'file' }
+  ];
+
+  function pickStatus(id: StatusFilter) {
+    app.view = 'downloads';
+    app.statusFilter = id;
+    app.kindFilter = 'all';
+    app.categoryFilter = 'all';
+  }
+  function pickKind(id: KindFilter) {
+    app.view = 'downloads';
+    app.kindFilter = app.kindFilter === id ? 'all' : id;
+    app.categoryFilter = 'all';
+  }
+  function pickCategory(id: CategoryFilter) {
+    app.view = 'downloads';
+    app.categoryFilter = app.categoryFilter === id ? 'all' : id;
+    app.kindFilter = 'all';
   }
 
-  let { activeCategory, activeFolder, counts, onSelectCategory, onSelectFolder }: Props = $props();
-
-  const isCatActive = (cat: CategoryFilter) => activeCategory === cat && activeFolder === 'all';
+  let usedPct = $derived(app.disk ? ((app.disk.total - app.disk.free) / app.disk.total) * 100 : 0);
 </script>
 
-<aside class="w-[220px] bg-[#1e1e1f] border-r border-[#2c2c2e] flex flex-col justify-between p-[20px_16px] select-none flex-shrink-0 h-full">
-  <div class="space-y-6">
-    <nav class="space-y-[4px]">
-      {#each [
-        { id: 'all', label: 'Tüm İndirmeler', count: counts.all, icon: 'M4 6h16M4 12h16M4 18h16', isSvgFill: false },
-        { id: 'active', label: 'Devam Edenler', count: counts.active, icon: 'M19 14l-7 7m0 0l-7-7m7 7V3', isSvgFill: false },
-        { id: 'completed', label: 'Tamamlananlar', count: counts.completed, icon: 'M5 13l4 4L19 7', isSvgFill: false },
-        { id: 'paused', label: 'Duraklatılanlar', count: counts.paused, icon: 'pause', isSvgFill: true }
-      ] as item}
+<aside class="w-[220px] bg-panel border-r border-line flex flex-col p-[14px_12px] flex-shrink-0 h-full">
+  <div class="flex items-center gap-2 px-2 pb-4">
+    <img src="/logo.png" alt="" class="w-7 h-7 rounded-full" />
+    <div class="leading-tight">
+      <div class="text-[13px] font-semibold leading-tight">Multron Download Manager</div>
+    </div>
+  </div>
+
+  <div class="flex-1 overflow-y-auto space-y-5 pr-1">
+    <nav class="space-y-[2px]">
+      {#each statuses as s}
+        {@const on = app.view === 'downloads' && app.statusFilter === s.id && app.kindFilter === 'all' && app.categoryFilter === 'all'}
         <button
           type="button"
-          onclick={() => { onSelectCategory(item.id as CategoryFilter); onSelectFolder('all'); }}
-          class="w-full h-[37px] px-[12px] py-[10px] rounded-[10px] flex items-center justify-between text-[13px] font-medium transition-colors cursor-pointer {isCatActive(item.id as CategoryFilter) ? 'bg-[#2c2c2e] text-white' : 'text-[#8e8e93] hover:bg-[#252528] hover:text-white'}"
+          onclick={() => pickStatus(s.id)}
+          class="w-full h-[32px] px-[10px] rounded-[8px] flex items-center justify-between text-[12.5px] font-medium transition-colors cursor-pointer {on ? 'bg-line text-white' : 'text-muted hover:bg-hover hover:text-white'}"
         >
-          <div class="flex items-center gap-[10px]">
-            {#if item.icon === 'pause'}
-              <svg class="w-4 h-4 fill-current stroke-none" viewBox="0 0 24 24">
-                <rect x="6" y="4" width="4" height="16" rx="1" />
-                <rect x="14" y="4" width="4" height="16" rx="1" />
-              </svg>
-            {:else}
-              <svg class="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2">
-                <path stroke-linecap="round" stroke-linejoin="round" d={item.icon} />
-              </svg>
-            {/if}
-            <span>{item.label}</span>
-          </div>
-          <span class="text-[11px] font-medium {isCatActive(item.id as CategoryFilter) ? 'text-white' : 'text-[#555558]'}">{item.count}</span>
+          <span class="flex items-center gap-[10px]"><Icon name={s.icon} size={15} />{t(s.label)}</span>
+          <span class="text-[11px] {on ? 'text-white' : 'text-dim'}">{app.counts[s.id] ?? 0}</span>
         </button>
       {/each}
     </nav>
 
-    <div class="space-y-[6px]">
-      <h3 class="text-[11px] font-semibold text-[#555558] px-1 uppercase tracking-wider">Klasörler</h3>
-      <nav class="space-y-[4px]">
-        {#each [
-          { id: 'downloads', name: 'İndirilenler', icon: 'M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z' },
-          { id: 'videos', name: 'Videolar', icon: 'M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z' },
-          { id: 'music', name: 'Müzikler', icon: 'M9 19V6l12-3v13M9 19c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zm12 0c0 1.105-1.343 2-3 2s-3-.895-3-2 1.343-2 3-2 3 .895 3 2zM9 10l12-3' }
-        ] as folder}
-          <button
-            type="button"
-            onclick={() => onSelectFolder(folder.id as FolderFilter)}
-            class="w-full h-[37px] px-[12px] py-[10px] rounded-[10px] flex items-center gap-[10px] text-[13px] font-normal transition-colors cursor-pointer {activeFolder === folder.id ? 'bg-[#2c2c2e] text-white' : 'text-[#8e8e93] hover:bg-[#252528] hover:text-white'}"
-          >
-            <svg class="w-4 h-4 stroke-current" fill="none" viewBox="0 0 24 24" stroke-width="2">
-              <path stroke-linecap="round" stroke-linejoin="round" d={folder.icon} />
-            </svg>
-            <span>{folder.name}</span>
-          </button>
-        {/each}
-      </nav>
+    <div class="space-y-[4px]">
+      <h3 class="text-[10.5px] font-semibold text-dim px-2 uppercase tracking-wider">{t('Sources')}</h3>
+      {#each kinds as k}
+        {@const on = app.view === 'downloads' && app.kindFilter === k.id}
+        <button
+          type="button"
+          onclick={() => pickKind(k.id)}
+          class="w-full h-[30px] px-[10px] rounded-[8px] flex items-center justify-between text-[12.5px] transition-colors cursor-pointer {on ? 'bg-line text-white' : 'text-muted hover:bg-hover hover:text-white'}"
+        >
+          <span class="flex items-center gap-[10px]"><Icon name={k.icon} size={15} />{t(k.label)}</span>
+          <span class="text-[11px] text-dim">{app.counts[`kind:${k.id}`] ?? 0}</span>
+        </button>
+      {/each}
+    </div>
+
+    <div class="space-y-[4px]">
+      <h3 class="text-[10.5px] font-semibold text-dim px-2 uppercase tracking-wider">{t('Categories')}</h3>
+      {#each categories as c}
+        {@const on = app.view === 'downloads' && app.categoryFilter === c.id}
+        <button
+          type="button"
+          onclick={() => pickCategory(c.id)}
+          class="w-full h-[30px] px-[10px] rounded-[8px] flex items-center justify-between text-[12.5px] transition-colors cursor-pointer {on ? 'bg-line text-white' : 'text-muted hover:bg-hover hover:text-white'}"
+        >
+          <span class="flex items-center gap-[10px]"><Icon name={c.icon} size={15} />{t(c.label)}</span>
+          {#if app.counts[`cat:${c.id}`]}
+            <span class="text-[11px] text-dim">{app.counts[`cat:${c.id}`]}</span>
+          {/if}
+        </button>
+      {/each}
     </div>
   </div>
 
-  <div class="space-y-[8px] pt-4 border-t border-[#2c2c2e]/60">
-    <div class="flex items-center justify-between text-[11px]">
-      <span class="text-[#8e8e93]">Macintosh HD</span>
-      <span class="text-[#555558]">124 GB boş</span>
+  <div class="pt-3 mt-2 border-t border-line/60 space-y-3">
+    <div class="flex gap-1 -mb-2">
+      <button
+        type="button"
+        onclick={() => (app.view = app.view === 'rss' ? 'downloads' : 'rss')}
+        class="flex-1 h-[32px] px-[10px] rounded-[8px] flex items-center gap-[10px] text-[12.5px] font-medium cursor-pointer {app.view === 'rss' ? 'bg-line text-white' : 'text-muted hover:bg-hover hover:text-white'}"
+      >
+        <Icon name="rss" size={15} />RSS
+      </button>
+      <button
+        type="button"
+        title={t('Create torrent')}
+        onclick={() => (app.createTorrentOpen = true)}
+        class="h-[32px] px-[10px] rounded-[8px] flex items-center gap-[8px] text-[12.5px] font-medium cursor-pointer text-muted hover:bg-hover hover:text-white"
+      >
+        <Icon name="magnet" size={14} /><Icon name="plus" size={11} />
+      </button>
     </div>
-    <div class="w-full h-[4px] bg-[#2c2c2e] rounded-[2px] overflow-hidden">
-      <div class="h-full bg-[#8e8e93] rounded-[2px] transition-all duration-300 w-[74%]"></div>
-    </div>
+    <button
+      type="button"
+      onclick={() => (app.extensionSetupOpen = true)}
+      class="w-full h-[32px] px-[10px] -mb-2 rounded-[8px] flex items-center justify-between text-[12.5px] font-medium cursor-pointer text-muted hover:bg-hover hover:text-white"
+    >
+      <span class="flex items-center gap-[10px]"><Icon name="puzzle" size={15} />{t('Browser extension')}</span>
+      {#if app.settings?.trustedExtensions.length}
+        <span class="w-[7px] h-[7px] rounded-full bg-ok" title={t('Connected')}></span>
+      {:else}
+        <span class="w-[7px] h-[7px] rounded-full bg-warn" title={t('Not connected')}></span>
+      {/if}
+    </button>
+    <button
+      type="button"
+      onclick={() => (app.view = app.view === 'settings' ? 'downloads' : 'settings')}
+      class="w-full h-[32px] px-[10px] rounded-[8px] flex items-center gap-[10px] text-[12.5px] font-medium cursor-pointer {app.view === 'settings' ? 'bg-line text-white' : 'text-muted hover:bg-hover hover:text-white'}"
+    >
+      <Icon name="settings" size={15} />{t('Settings')}
+    </button>
+    {#if app.disk}
+      <div class="px-1 space-y-[6px]">
+        <div class="flex items-center justify-between text-[11px]">
+          <span class="text-muted truncate">{t('Downloads')}</span>
+          <span class="text-dim">{bytes(app.disk.free)} {t('free')}</span>
+        </div>
+        <div class="w-full h-[4px] bg-line rounded-[2px] overflow-hidden">
+          <div class="h-full rounded-[2px] {usedPct > 90 ? 'bg-bad' : 'bg-muted'}" style="width: {usedPct}%"></div>
+        </div>
+      </div>
+    {/if}
   </div>
 </aside>

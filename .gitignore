@@ -1,42 +1,22 @@
-# ==========================================
-# macOS Sistem Dosyaları
-# ==========================================
 .DS_Store
 .AppleDouble
 .LSOverride
 ._*
-.Spotlight-V100
-.Trashes
+Thumbs.db
+desktop.ini
 
-# ==========================================
-# Wails & Derleme Çıktıları (Binary / App)
-# ==========================================
-build/bin/
-*.app/
+/dist/
+/extension-build/
+src-tauri/target/
+src-tauri/gen/schemas/
+frontend/dist/
 *.exe
 *.exe~
 *.dll
 *.so
 *.dylib
-*.app
-frontend/package.json.md5
 
-# ==========================================
-# Go Çıktıları ve Geçici Dosyalar
-# ==========================================
-*.test
-*.out
-/bin/
-/dist/
-vendor/
-
-# ==========================================
-# Node / Frontend Bağımlılıkları ve Build
-# ==========================================
 node_modules/
-frontend/node_modules/
-frontend/dist/
-dist/
 .npm
 *-debug.log*
 npm-debug.log*
@@ -44,26 +24,16 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
-# ==========================================
-# İndirme Motoru Test & Geçici Dosyaları
-# ==========================================
-# Test sırasında inecek dosyaların repoya girmesini engeller
 downloads/
 temp/
 *.part
 *.crdownload
 *.tmp
 
-# ==========================================
-# Çevre Değişkenleri & Gizli Anahtarlar
-# ==========================================
 .env
 .env.*
 !.env.example
 
-# ==========================================
-# Editör & IDE Yapılandırmaları
-# ==========================================
 .idea/
 .vscode/*
 !.vscode/extensions.json

@@ -1,0 +1,276 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      draft:
+        description: Keep the release as a draft
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  create-release:
+    name: Create release
+    runs-on: ubuntu-latest
+    outputs:
+      release_id: ${{ steps.create.outputs.release_id }}
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read version
+        id: version
+        run: echo "version=$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Check tag matches version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          if [ "${GITHUB_REF_NAME}" != "v${{ steps.version.outputs.version }}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match app version ${{ steps.version.outputs.version }} (use npm run release)"
+            exit 1
+          fi
+
+      - name: Create draft release
+        id: create
+        uses: actions/github-script@v7
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const tag = `v${process.env.VERSION}`;
+            const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
+            let release = releases.find((r) => r.tag_name === tag);
+            if (!release) {
+              const fs = require('fs');
+              const notesFile = `release-notes/${tag}.md`;
+              const notes = fs.existsSync(notesFile) ? fs.readFileSync(notesFile, 'utf8').trim() : `## Multron Download Manager ${tag}`;
+              const body = [
+                notes,
+                '',
+                '## Downloads',
+                '',
+                '| Platform | File |',
+                '| --- | --- |',
+                '| Windows 10/11 (x64) | `Multron-Download-Manager-*-x64-Setup.exe` |',
+                '| macOS Apple Silicon | `*_aarch64.dmg` |',
+                '| macOS Intel | `*_x64.dmg` |',
+                '| Debian / Ubuntu (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
+                '| Fedora / RHEL (dnf) | `*.x86_64.rpm` / `*.aarch64.rpm` → `sudo dnf install ./file.rpm` |',
+                '| Any Linux | `*.AppImage` |',
+                '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` |',
+                '',
+                'Verify downloads with `SHA256SUMS.txt`.',
+                '',
+                'macOS builds are not notarized: right-click → Open the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.'
+              ].join('\n');
+              release = (await github.rest.repos.createRelease({
+                owner, repo,
+                tag_name: tag,
+                target_commitish: context.sha,
+                name: `Multron Download Manager ${tag}`,
+                body,
+                draft: true,
+                prerelease: tag.includes('-'),
+              })).data;
+            }
+            core.setOutput('release_id', String(release.id));
+
+  build-unix:
+    name: Build ${{ matrix.name }}
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS (Apple Silicon)
+            platform: macos-latest
+            args: --target aarch64-apple-darwin --bundles app,dmg
+            rust_targets: aarch64-apple-darwin
+          - name: macOS (Intel)
+            platform: macos-latest
+            args: --target x86_64-apple-darwin --bundles app,dmg
+            rust_targets: x86_64-apple-darwin
+          - name: Linux (x86_64)
+            platform: ubuntu-22.04
+            args: --bundles deb,rpm,appimage
+            rust_targets: ''
+          - name: Linux (arm64)
+            platform: ubuntu-22.04-arm
+            args: --bundles deb,rpm,appimage
+            rust_targets: ''
+            rustflags: -C link-arg=-fuse-ld=lld
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Linux dependencies
+        if: startsWith(matrix.platform, 'ubuntu')
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file xdg-utils lld
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust_targets }}
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.platform }}-${{ matrix.rust_targets }}
+          cache-on-failure: true
+
+      - name: Install npm packages
+        run: npm ci && npm ci --prefix frontend
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUSTFLAGS: ${{ matrix.rustflags }}
+        with:
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.args }}
+
+  build-windows:
+    name: Build Windows (Inno Setup)
+    needs: create-release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          cache-on-failure: true
+
+      - name: Install npm packages
+        run: npm ci && npm ci --prefix frontend
+
+      - name: Install Inno Setup (only if the runner lacks it)
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+
+      - name: Download WebView2 bootstrapper
+        shell: pwsh
+        run: Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile MicrosoftEdgeWebview2Setup.exe
+
+      - name: Build installer
+        env:
+          ISCC: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
+        run: node scripts/build-windows.mjs --webview2 MicrosoftEdgeWebview2Setup.exe
+
+      - name: Upload installer
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const release_id = Number(process.env.RELEASE_ID);
+            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            for (const name of fs.readdirSync('dist').filter((n) => n.endsWith('-Setup.exe'))) {
+              const old = existing.find((a) => a.name === name);
+              if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
+              await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id, name,
+                headers: { 'content-type': 'application/vnd.microsoft.portable-executable' },
+                data: fs.readFileSync(path.join('dist', name)),
+              });
+              core.info(`uploaded ${name}`);
+            }
+
+  extension:
+    name: Package browser extension
+    needs: create-release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: node scripts/package-extension.mjs
+      - name: Upload extension
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const release_id = Number(process.env.RELEASE_ID);
+            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            for (const name of fs.readdirSync('dist').filter((n) => n.endsWith('.zip'))) {
+              const old = existing.find((a) => a.name === name);
+              if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
+              await github.rest.repos.uploadReleaseAsset({
+                owner, repo, release_id, name,
+                headers: { 'content-type': 'application/zip' },
+                data: fs.readFileSync(path.join('dist', name)),
+              });
+            }
+
+  publish:
+    name: Checksums & publish
+    needs: [create-release, build-unix, build-windows, extension]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Write SHA256SUMS.txt and publish
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          KEEP_DRAFT: ${{ github.event.inputs.draft || 'false' }}
+        with:
+          script: |
+            const crypto = require('crypto');
+            const { owner, repo } = context.repo;
+            const release_id = Number(process.env.RELEASE_ID);
+            const assets = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            const lines = [];
+            for (const a of assets.filter((a) => a.name !== 'SHA256SUMS.txt').sort((x, y) => x.name.localeCompare(y.name))) {
+              const res = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
+                owner, repo, asset_id: a.id, headers: { accept: 'application/octet-stream' },
+              });
+              const hash = crypto.createHash('sha256').update(Buffer.from(res.data)).digest('hex');
+              lines.push(`${hash}  ${a.name}`);
+            }
+            const old = assets.find((a) => a.name === 'SHA256SUMS.txt');
+            if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
+            await github.rest.repos.uploadReleaseAsset({
+              owner, repo, release_id, name: 'SHA256SUMS.txt',
+              headers: { 'content-type': 'text/plain' },
+              data: Buffer.from(lines.join('\n') + '\n'),
+            });
+            if (process.env.KEEP_DRAFT !== 'true') {
+              await github.rest.repos.updateRelease({ owner, repo, release_id, draft: false });
+            }

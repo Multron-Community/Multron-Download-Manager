@@ -1,0 +1,147 @@
+MULTRON DOWNLOAD MANAGER - END USER LICENSE AGREEMENT
+
+Copyright (c) 2026 Multron Community. All rights reserved.
+
+Please read this agreement before installing or using the Software. By
+installing, copying or using the Software you agree to these terms. If you do
+not agree, do not install or use the Software.
+
+1. DEFINITIONS
+
+"Software" means Multron Download Manager in any form, including the desktop
+application, the browser extension, installers and packages, source code,
+documentation, translations, images and other files that come with it.
+"Licensor" means Multron Community. "You" means the person or organization
+using the Software.
+
+2. LICENSE TO USE
+
+The Licensor grants you a personal, non-exclusive, non-transferable and
+revocable license to download, install and use the Software on devices you own
+or control, for personal use or for the internal use of your organization,
+according to this agreement. The Software is licensed, not sold. The Licensor
+may offer paid versions, editions, subscriptions or features under separate
+terms; using those requires accepting those terms and paying any fees that
+apply.
+
+3. SHARING
+
+You may share copies of the official, unmodified installers and packages that
+the Licensor publishes (for example on the project's GitHub Releases page),
+and you may link to the official download page, provided that:
+
+  a) you share them free of charge;
+  b) the files are complete and unchanged, including this agreement;
+  c) you do not claim the Software as your own or suggest that the Licensor
+     endorses you, your product or your website; and
+  d) you do not bundle the Software with other software, installers, offers or
+     advertising.
+
+4. RESTRICTIONS
+
+Except where this agreement expressly allows it (including section 6 for
+Authorized Developers), you may not:
+
+  a) modify, adapt, translate, patch or create derivative works of the
+     Software, or publish modified builds, forks or variants of it;
+  b) copy the Software, other than installing it, making a backup, and sharing
+     it as permitted in section 3;
+  c) copy, reuse, publish or redistribute the source code or any part of it, or
+     use it in another program, product or service;
+  d) sell, rent, lease, lend, sublicense or otherwise distribute the Software
+     for a fee or as part of a commercial offering;
+  e) decompile, reverse engineer or disassemble the Software, except to the
+     extent that applicable law expressly permits it despite this restriction;
+  f) remove, change or hide any copyright notice, trademark, license text or
+     attribution in the Software; or
+  g) bypass, disable or interfere with any license check, payment, update or
+     security feature of the Software.
+
+5. SOURCE CODE
+
+If the Licensor makes the source code visible, for example in a public
+repository, it is shared only so that it can be read and reviewed. Being able
+to see the source code does not give you any right to copy, modify, build,
+distribute or otherwise use it beyond what this agreement allows. Any right to
+view or fork a public repository that a hosting service's own terms of service
+require is limited to viewing it on that service, and does not include using,
+modifying, building or distributing the code or any fork of it.
+
+If you send the Licensor suggestions, bug reports, translations or code
+("Contributions"), you grant the Licensor a perpetual, irrevocable, worldwide,
+royalty-free license to use, modify, publish, relicense and sell your
+Contributions as part of the Software or otherwise, and you confirm that you
+have the right to grant it.
+
+6. AUTHORIZED DEVELOPERS
+
+The Licensor may invite people to help develop the Software, for example by
+adding them to the Multron Community organization on GitHub or giving them
+write access to the official repository ("Authorized Developers"). While they
+have this permission, Authorized Developers may copy, modify, build, run and
+test the source code, but only to develop, test, maintain, translate or
+document the Software for the Licensor, and only inside the Licensor's official
+repositories and their own private working copies.
+
+Authorized Developers may not publish, distribute or sell their own builds,
+forks or versions of the Software, use the source code in any other program,
+product or service, or share it with anyone who is not an Authorized
+Developer, except as the Licensor allows in writing. Everything they
+contribute is a Contribution under section 5. The permission ends when the
+Licensor removes it or when the person leaves the organization; after that
+this agreement applies to them like to any other user.
+
+7. TRADEMARKS
+
+"Multron", "Multron Download Manager" and the Multron logo are names and marks
+of the Licensor. This agreement does not give you any right to use them,
+except to refer to the Software truthfully.
+
+8. THIRD-PARTY COMPONENTS
+
+The Software contains or uses third-party components that are licensed under
+their own terms. Those components are listed in THIRD-PARTY-NOTICES.md. This
+agreement does not limit any rights you have under those licenses for those
+components. Tools that the Software downloads on your request or when needed,
+such as yt-dlp and FFmpeg, are separate programs under their own licenses and
+are not part of the Software.
+
+9. UPDATES AND CHANGES
+
+The Licensor may update the Software and may change these terms for future
+versions. Future versions or features may require payment. A new version is
+governed by the agreement that comes with it.
+
+10. YOUR RESPONSIBILITY
+
+You are responsible for what you download with the Software. Only download
+content that you have the right to download, and follow the laws that apply to
+you and the terms of the websites and services you use.
+
+11. TERMINATION
+
+This license ends automatically if you break any of its terms. When it ends,
+you must stop using the Software and delete all copies of it. Sections 4 to 8
+and 12 to 14 continue to apply after the license ends.
+
+12. NO WARRANTY
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NON-INFRINGEMENT.
+
+13. LIMITATION OF LIABILITY
+
+TO THE EXTENT PERMITTED BY LAW, IN NO EVENT SHALL THE LICENSOR OR ITS
+CONTRIBUTORS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN
+ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
+WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE, INCLUDING LOSS
+OF DATA, PROFITS OR BUSINESS.
+
+14. GENERAL
+
+If any part of this agreement cannot be enforced, the rest of it stays in
+effect. Any rights not expressly granted in this agreement are reserved by the
+Licensor. For permissions beyond this agreement, such as redistribution,
+commercial use or partnerships, contact the Licensor through the project's
+GitHub page.
