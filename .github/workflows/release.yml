@@ -245,7 +245,10 @@ jobs:
             bundle: rpm
             arch: aarch64
     runs-on: ${{ matrix.platform }}
-    container: ${{ matrix.image }}
+    container:
+      image: ${{ matrix.image }}
+      env:
+        PATH: /usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
     steps:
       - name: Install build dependencies
         run: |
