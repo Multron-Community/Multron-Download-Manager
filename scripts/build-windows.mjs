@@ -14,7 +14,8 @@ const exe = path.join(root, 'src-tauri', 'target', 'release', 'multron-download-
 
 execFileSync(process.execPath, [path.join(root, 'scripts', 'extension-builds.mjs')], { stdio: 'inherit' });
 if (!args.includes('--skip-build')) {
-  execFileSync('npx', ['tauri', 'build', '--no-bundle'], { cwd: root, stdio: 'inherit', shell: true });
+  const tauriCli = path.join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
+  execFileSync(process.execPath, [tauriCli, 'build', '--no-bundle'], { cwd: root, stdio: 'inherit' });
 }
 if (!fs.existsSync(exe)) {
   console.error(`Missing ${exe}. Run without --skip-build.`);

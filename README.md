@@ -48,7 +48,7 @@
 | | |
 |---|---|
 | <img src="docs/screenshots/downloads-dark.png" alt="Downloads with the segment view" /> | <img src="docs/screenshots/torrent-dark.png" alt="Torrent seeding with tracker, DHT and LSD sources" /> |
-| **Downloads** — every connection writes to its own range; the bar shows each segment live. | **Torrents** — seeding with tracker, DHT and LSD sources, peers, pieces and more. |
+| **Downloads** — every connection writes to its own range; the progress bar fills from start to end, and the *Segments* tab shows each connection’s range live. | **Torrents** — seeding with tracker, DHT and LSD sources, peers, pieces and more. |
 | <img src="docs/screenshots/settings-light.png" alt="Appearance settings in the light theme" /> | <img src="docs/screenshots/security-dark.png" alt="Security settings with SmartScreen, antivirus and TLS options" /> |
 | **Appearance** — light, dark or system theme, accent colours and transparency. | **Security** — SmartScreen mark, antivirus scan, extension approval, TLS and redirect rules. |
 | <img src="docs/screenshots/downloads-light-tr.png" alt="The app in Turkish with the light theme" /> | |
@@ -120,6 +120,8 @@ Download the file for your system from the [latest release](https://github.com/M
 | Browser extension | `multron-browser-extension-chromium-v<version>.zip` (Chrome, Edge, Brave, Opera, Vivaldi) or `multron-browser-extension-firefox-v<version>.zip` | See [Browser extension](#browser-extension). |
 
 Verify any file with the `SHA256SUMS.txt` attached to the release.
+
+> **Linux:** the packages are built on Ubuntu 24.04 and need glibc 2.39 or newer: Ubuntu 24.04+, Linux Mint 22+, Debian 13+, Fedora 40+ and other distributions of the same age. Older releases such as Ubuntu 22.04, Linux Mint 21 or Debian 12 are not supported.
 
 > **macOS:** builds are not notarized yet. Right-click the app → **Open** the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.
 
@@ -277,7 +279,7 @@ The Options window is organised like a classic torrent client, with a searchable
 | **Windows:** Visual Studio Build Tools with “Desktop development with C++”, WebView2 (preinstalled on Windows 11) | |
 | **Windows installer:** [Inno Setup 6](https://jrsoftware.org/isinfo.php) | `winget install -e --id JRSoftware.InnoSetup` |
 | **macOS:** Xcode Command Line Tools | `xcode-select --install` |
-| **Debian/Ubuntu:** | `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file` |
+| **Ubuntu 24.04 / Linux Mint 22 / Debian 13:** | `sudo apt install libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file libfuse2t64` |
 | **Fedora:** | `sudo dnf install webkit2gtk4.1-devel libappindicator-gtk3-devel librsvg2-devel openssl-devel patchelf` and the “C Development Tools and Libraries” group |
 
 ### Run in development

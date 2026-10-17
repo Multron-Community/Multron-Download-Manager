@@ -65,14 +65,6 @@
           : 'text-muted'
   );
 
-  let barSegments = $derived.by(() => {
-    if (item.kind !== 'http' || !item.total || item.segments.length < 2) return [];
-    return item.segments.map((s) => ({
-      left: (s.start / item.total!) * 100,
-      width: ((s.pos - s.start) / item.total!) * 100
-    }));
-  });
-
   const kindIcon: Record<string, string> = { http: 'link', media: 'film', torrent: 'magnet' };
 
   const speedPresets = [0, 256, 512, 1024, 2048, 5120, 10240];
@@ -261,19 +253,10 @@
 
   {#if item.status !== 'completed'}
     <div class="relative w-full h-[5px] bg-line rounded-[3px] overflow-hidden">
-      {#if barSegments.length && !tool}
-        {#each barSegments as s}
-          <div
-            class="absolute top-0 h-full {item.status === 'active' ? 'bg-accent' : 'bg-dim'}"
-            style="left: {s.left}%; width: {s.width}%"
-          ></div>
-        {/each}
-      {:else}
-        <div
-          class="h-full rounded-[3px] transition-[width] duration-300 {item.status === 'active' ? 'bg-accent' : item.status === 'failed' ? 'bg-bad/60' : 'bg-dim'} {item.status === 'active' && !barTotal ? 'progress-live w-full' : ''}"
-          style={barTotal ? `width: ${pct}%` : ''}
-        ></div>
-      {/if}
+      <div
+        class="h-full rounded-[3px] transition-[width] duration-300 {item.status === 'active' ? 'bg-accent' : item.status === 'failed' ? 'bg-bad/60' : 'bg-dim'} {item.status === 'active' && !barTotal ? 'progress-live w-full' : ''}"
+        style={barTotal ? `width: ${pct}%` : ''}
+      ></div>
     </div>
   {/if}
 </div>

@@ -34,7 +34,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest, macos-latest]
+        os: [ubuntu-24.04, windows-latest, macos-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -53,6 +53,8 @@ jobs:
       - name: Placeholder frontend build
         shell: bash
         run: mkdir -p frontend/dist && echo '<!doctype html>' > frontend/dist/index.html
+      - name: Generate the Firefox extension build
+        run: node scripts/extension-builds.mjs
       - name: Format
         if: startsWith(matrix.os, 'ubuntu')
         run: cargo fmt --manifest-path src-tauri/Cargo.toml --check

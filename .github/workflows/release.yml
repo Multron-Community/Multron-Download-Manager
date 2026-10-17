@@ -104,11 +104,11 @@ jobs:
             args: --target x86_64-apple-darwin --bundles app,dmg
             rust_targets: x86_64-apple-darwin
           - name: Linux (x86_64)
-            platform: ubuntu-22.04
+            platform: ubuntu-24.04
             args: --bundles deb,rpm,appimage
             rust_targets: ''
           - name: Linux (arm64)
-            platform: ubuntu-22.04-arm
+            platform: ubuntu-24.04-arm
             args: --bundles deb,rpm,appimage
             rust_targets: ''
             rustflags: -C link-arg=-fuse-ld=lld
@@ -120,7 +120,7 @@ jobs:
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file xdg-utils lld
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file xdg-utils lld libfuse2t64
 
       - uses: actions/setup-node@v4
         with:
