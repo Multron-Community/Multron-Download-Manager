@@ -86,6 +86,8 @@ pub fn run() {
             let settings = mgr.settings();
             tray::create(&handle, &settings.language)?;
             tray::start_animation(&handle);
+            let refresh = handle.clone();
+            std::thread::spawn(move || browsers::refresh_copies(&refresh));
             if let Some(w) = handle.get_webview_window("main") {
                 appearance::apply_settings(&w, &settings);
             }

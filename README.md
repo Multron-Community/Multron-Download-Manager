@@ -150,6 +150,7 @@ The extension (any Chromium-based browser — Chrome, Edge, Brave, Opera, Vivald
   - save into a folder named after the page, and optionally add everything paused.
 - **"Multron Download Manager" button on file-host pages** (Google Drive, MEGA, MediaFire, Dropbox, Pixeldrain).
 - **Manage it from the app** — *Settings → Browser Integration* shows your installed browsers (each with an *Install extension* button) and every connected extension. *Reinstall* opens the setup assistant; *Remove from browser* makes that extension uninstall itself (within half a minute while the browser is open); *Remove completely* removes it from every browser, forgets all connections and removes Multron Download Manager’s native-messaging registration, which stays off until you connect an extension again.
+- **Updates with the app** — browsers do not reload an unpacked or temporary extension when its files change, so the extension checks the app's version whenever it connects and reloads itself from the updated folder when the app is newer (once per version). The AppImage and Flatpak browsers use a copy of the extension, which is refreshed every time Multron Download Manager starts.
 - Opens **magnet links** in Multron.
 - Context menu: *Download link*, *Download video/audio from link*, *Download this media*, *Download video on this page*, *Download all from this page*, *Download selected link*.
 - Popup: connection status, quick quality picker for the current page, *Download all…* with a scroll depth, paste-a-link box and options (minimum file size, domains to skip, port).

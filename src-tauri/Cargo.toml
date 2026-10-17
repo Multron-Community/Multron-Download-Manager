@@ -1,6 +1,6 @@
 [package]
 name = "multron-download-manager"
-version = "0.0.3"
+version = "0.0.4"
 description = "Multron Download Manager - fast multi-connection, media and torrent downloader"
 authors = ["Multron Community"]
 license-file = "../LICENSE"

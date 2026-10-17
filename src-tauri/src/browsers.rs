@@ -826,6 +826,38 @@ pub fn extension_folder_for(app: &AppHandle, browser: &Browser) -> Result<PathBu
     Ok(dest)
 }
 
+pub fn refresh_copies(app: &AppHandle) {
+    let mut bases = Vec::new();
+    if std::env::var_os("APPIMAGE").is_some() {
+        bases.extend(app.path().app_data_dir().ok());
+    }
+    if cfg!(target_os = "linux") {
+        if let Some(home) = crate::flatpak::home() {
+            bases.extend(
+                crate::flatpak::APPS
+                    .iter()
+                    .map(|a| crate::flatpak::data_dir(&home, a.id)),
+            );
+        }
+    }
+    for base in bases {
+        for (folder, firefox) in [
+            ("browser-extension", false),
+            ("browser-extension-firefox", true),
+        ] {
+            let dest = base.join(folder);
+            if !dest.join("manifest.json").is_file() {
+                continue;
+            }
+            if let Some(src) = bundled_extension(app, firefox) {
+                if let Err(e) = copy_dir(&src, &dest) {
+                    tracing::warn!("could not refresh {}: {e:#}", dest.display());
+                }
+            }
+        }
+    }
+}
+
 fn copy_dir(src: &Path, dest: &Path) -> Result<()> {
     std::fs::create_dir_all(dest)?;
     for entry in std::fs::read_dir(src)? {

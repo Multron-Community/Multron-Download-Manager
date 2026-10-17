@@ -78,7 +78,29 @@ async function ping(force = false) {
   }
   updateBadge(value);
   if (value && !value.paired) autoPair();
+  if (value?.version) reloadIfUpdated(value.version);
   return value;
+}
+
+function versionParts(v) {
+  return String(v).split('-')[0].split('.').map((n) => parseInt(n, 10) || 0);
+}
+
+function isNewer(a, b) {
+  const x = versionParts(a);
+  const y = versionParts(b);
+  for (let i = 0; i < Math.max(x.length, y.length); i++) {
+    if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
+  }
+  return false;
+}
+
+async function reloadIfUpdated(appVersion) {
+  if (!isNewer(appVersion, chrome.runtime.getManifest().version)) return;
+  const { reloadedFor } = await chrome.storage.local.get('reloadedFor');
+  if (reloadedFor === appVersion) return;
+  await chrome.storage.local.set({ reloadedFor: appVersion });
+  chrome.runtime.reload();
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
