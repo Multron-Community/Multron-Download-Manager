@@ -87,7 +87,7 @@ function main() {
   else console.log(`Releasing the current version ${version}.`);
 
   const notes = path.join(root, 'release-notes', `v${version}.md`);
-  if (!fs.existsSync(notes)) console.log(`Note: release-notes/v${version}.md does not exist; the release gets only the download table.`);
+  if (!fs.existsSync(notes)) console.log(`Note: release-notes/v${version}.md does not exist; the release notes are generated from the commits and pull requests.`);
 
   if (flags.has('--no-git')) return;
 

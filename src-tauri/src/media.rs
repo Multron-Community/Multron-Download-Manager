@@ -92,6 +92,24 @@ fn ytdlp_asset() -> &'static str {
     }
 }
 
+fn ffmpeg_build_asset() -> Option<&'static str> {
+    if cfg!(windows) {
+        Some("ffmpeg-master-latest-win64-gpl.zip")
+    } else if !cfg!(target_os = "linux") {
+        None
+    } else if cfg!(target_arch = "x86_64") {
+        Some("ffmpeg-master-latest-linux64-gpl.tar.xz")
+    } else if cfg!(target_arch = "aarch64") {
+        Some("ffmpeg-master-latest-linuxarm64-gpl.tar.xz")
+    } else {
+        None
+    }
+}
+
+pub fn ffmpeg_auto_install() -> bool {
+    cfg!(target_os = "macos") || ffmpeg_build_asset().is_some()
+}
+
 pub fn hide_console(cmd: &mut Command) {
     #[cfg(windows)]
     {
@@ -144,7 +162,7 @@ impl Tools {
             ffmpeg_available: ffmpeg.is_some(),
             ffmpeg_path: ffmpeg.map(|p| p.to_string_lossy().into_owned()),
             ffmpeg_managed: self.managed_ffmpeg().is_file(),
-            ffmpeg_auto_install: cfg!(any(windows, target_os = "macos")),
+            ffmpeg_auto_install: ffmpeg_auto_install(),
         }
     }
 
@@ -242,7 +260,7 @@ impl Tools {
     }
 
     pub async fn latest_ffmpeg_source(&self) -> Result<String> {
-        if cfg!(windows) {
+        if let Some(asset) = ffmpeg_build_asset() {
             let release: Value = self
                 .client
                 .get("https://api.github.com/repos/yt-dlp/FFmpeg-Builds/releases/tags/latest")
@@ -256,10 +274,8 @@ impl Tools {
                 .get("assets")
                 .and_then(Value::as_array)
                 .and_then(|a| {
-                    a.iter().find(|x| {
-                        x.get("name").and_then(Value::as_str)
-                            == Some("ffmpeg-master-latest-win64-gpl.zip")
-                    })
+                    a.iter()
+                        .find(|x| x.get("name").and_then(Value::as_str) == Some(asset))
                 })
                 .and_then(|x| x.get("updated_at").and_then(Value::as_str))
                 .map(str::to_string)
@@ -290,7 +306,9 @@ impl Tools {
         let now = util::now_ms();
         match self.read_ffmpeg_stamp() {
             Some((source, _)) if source == latest => return Ok(false),
-            Some((_, installed)) if cfg!(windows) && now - installed < 7 * 24 * 3600 * 1000 => {
+            Some((_, installed))
+                if !cfg!(target_os = "macos") && now - installed < 7 * 24 * 3600 * 1000 =>
+            {
                 return Ok(false)
             }
             None => {
@@ -323,30 +341,41 @@ impl Tools {
         let staging = self.dir.join("ffmpeg-update");
         let _ = tokio::fs::remove_dir_all(&staging).await;
         tokio::fs::create_dir_all(&staging).await?;
-        let sources: Vec<(&str, &str)> = if cfg!(windows) {
+        let sources: Vec<(String, &str)> = if let Some(asset) = ffmpeg_build_asset() {
             vec![(
-                "https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/ffmpeg-master-latest-win64-gpl.zip",
+                format!("https://github.com/yt-dlp/FFmpeg-Builds/releases/download/latest/{asset}"),
                 "ffmpeg",
             )]
         } else if cfg!(target_os = "macos") {
             vec![
-                ("https://evermeet.cx/ffmpeg/getrelease/zip", "ffmpeg"),
                 (
-                    "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip",
+                    "https://evermeet.cx/ffmpeg/getrelease/zip".to_string(),
+                    "ffmpeg",
+                ),
+                (
+                    "https://evermeet.cx/ffmpeg/getrelease/ffprobe/zip".to_string(),
                     "ffprobe",
                 ),
             ]
         } else {
-            bail!("Install FFmpeg with your package manager: `sudo apt install ffmpeg` or `sudo dnf install ffmpeg`");
+            bail!("Install FFmpeg with your package manager, for example `sudo apt install ffmpeg`, `sudo dnf install ffmpeg` or `sudo pacman -S ffmpeg`");
         };
         for (url, label) in sources {
-            let archive = self.dir.join(format!("{label}.zip.download"));
-            self.fetch_to(url, &archive, label, on_progress, cancel)
+            let tar = url.ends_with(".tar.xz");
+            let ext = if tar { "tar.xz" } else { "zip" };
+            let archive = self.dir.join(format!("{label}.{ext}.download"));
+            self.fetch_to(&url, &archive, label, on_progress, cancel)
                 .await?;
             let target = staging.clone();
             let archive2 = archive.clone();
-            let extracted =
-                tokio::task::spawn_blocking(move || extract_ffmpeg(&archive2, &target)).await;
+            let extracted = tokio::task::spawn_blocking(move || {
+                if tar {
+                    extract_ffmpeg_tar(&archive2, &target)
+                } else {
+                    extract_ffmpeg(&archive2, &target)
+                }
+            })
+            .await;
             let _ = tokio::fs::remove_file(&archive).await;
             extracted??;
         }
@@ -634,6 +663,47 @@ fn extract_ffmpeg(archive: &Path, dir: &Path) -> Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+fn extract_ffmpeg_tar(archive: &Path, dir: &Path) -> Result<()> {
+    let raw = dir.join("unpacked");
+    std::fs::create_dir_all(&raw)?;
+    let untar = |members: &[&str]| {
+        std::process::Command::new("tar")
+            .arg("-xJf")
+            .arg(archive)
+            .arg("-C")
+            .arg(&raw)
+            .args(members)
+            .stdin(Stdio::null())
+            .stderr(Stdio::null())
+            .status()
+            .context("tar is needed to unpack FFmpeg")
+    };
+    let mut status = untar(&["--wildcards", "*/bin/ffmpeg", "*/bin/ffprobe"])?;
+    if !status.success() {
+        status = untar(&[])?;
+    }
+    if !status.success() {
+        let _ = std::fs::remove_dir_all(&raw);
+        bail!("FFmpeg could not be unpacked (tar exited with {status})");
+    }
+    for top in std::fs::read_dir(&raw)?.flatten() {
+        for name in ["ffmpeg", "ffprobe"] {
+            let from = top.path().join("bin").join(name);
+            if from.is_file() {
+                let to = dir.join(name);
+                std::fs::rename(&from, &to)?;
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::PermissionsExt;
+                    std::fs::set_permissions(&to, std::fs::Permissions::from_mode(0o755))?;
+                }
+            }
+        }
+    }
+    let _ = std::fs::remove_dir_all(&raw);
     Ok(())
 }
 

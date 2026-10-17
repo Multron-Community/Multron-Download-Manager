@@ -554,7 +554,7 @@
                     <Icon name="down" size={13} />{toolBusy === 'ffmpeg' ? t('Downloading…') : tools?.ffmpegManaged ? t('Reinstall') : t('Install')}
                   </button>
                 {:else if !tools?.ffmpegAvailable}
-                  <span class="mono text-[11px] text-muted">sudo apt install ffmpeg · sudo dnf install ffmpeg</span>
+                  <span class="mono text-[11px] text-muted">sudo apt install ffmpeg · sudo dnf install ffmpeg · sudo pacman -S ffmpeg</span>
                 {/if}
               </div>
               {#if app.toolProgress}

@@ -1334,7 +1334,7 @@ impl Manager {
         }
 
         let mut ffmpeg = self.tools.ffmpeg_location();
-        if ffmpeg.is_none() && cfg!(any(windows, target_os = "macos")) {
+        if ffmpeg.is_none() && crate::media::ffmpeg_auto_install() {
             self.with_entry(id, |e| e.live.phase = Some("installing FFmpeg".into()));
             self.dirty.store(true, Ordering::Relaxed);
             let app = self.app.clone();
