@@ -67,8 +67,10 @@ jobs:
                 '| Windows 10/11 (x64) | `Multron-Download-Manager-*-x64-Setup.exe` |',
                 '| macOS Apple Silicon | `*_aarch64.dmg` |',
                 '| macOS Intel | `*_x64.dmg` |',
-                '| Debian / Ubuntu (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
-                '| Fedora / RHEL (dnf) | `*.x86_64.rpm` / `*.aarch64.rpm` → `sudo dnf install ./file.rpm` |',
+                '| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
+                '| Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` / `*_debian12_arm64.deb` → `sudo apt install ./file.deb` |',
+                '| Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` / `*_fedora_aarch64.rpm` → `sudo dnf install ./file.rpm` |',
+                '| openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` / `*_opensuse_aarch64.rpm` → `sudo zypper install --allow-unsigned-rpm ./file.rpm` |',
                 '| Any Linux | `*.AppImage` |',
                 '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` |',
                 '',
@@ -105,11 +107,11 @@ jobs:
             rust_targets: x86_64-apple-darwin
           - name: Linux (x86_64)
             platform: ubuntu-24.04
-            args: --bundles deb,rpm,appimage
+            args: --bundles deb,appimage
             rust_targets: ''
           - name: Linux (arm64)
             platform: ubuntu-24.04-arm
-            args: --bundles deb,rpm,appimage
+            args: --bundles deb,appimage
             rust_targets: ''
             rustflags: -C link-arg=-fuse-ld=lld
     runs-on: ${{ matrix.platform }}
@@ -150,6 +152,137 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: ${{ matrix.args }}
+
+  build-distro:
+    name: Build ${{ matrix.name }}
+    needs: create-release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Debian 12 (amd64)
+            platform: ubuntu-24.04
+            image: debian:12
+            family: debian
+            flavor: debian12
+            bundle: deb
+            arch: amd64
+          - name: Debian 12 (arm64)
+            platform: ubuntu-24.04-arm
+            image: debian:12
+            family: debian
+            flavor: debian12
+            bundle: deb
+            arch: arm64
+          - name: Fedora (x86_64)
+            platform: ubuntu-24.04
+            image: fedora:43
+            family: fedora
+            flavor: fedora
+            bundle: rpm
+            arch: x86_64
+          - name: Fedora (aarch64)
+            platform: ubuntu-24.04-arm
+            image: fedora:43
+            family: fedora
+            flavor: fedora
+            bundle: rpm
+            arch: aarch64
+          - name: openSUSE (x86_64)
+            platform: ubuntu-24.04
+            image: registry.opensuse.org/opensuse/leap:16.0
+            family: opensuse
+            flavor: opensuse
+            bundle: rpm
+            arch: x86_64
+          - name: openSUSE (aarch64)
+            platform: ubuntu-24.04-arm
+            image: registry.opensuse.org/opensuse/leap:16.0
+            family: opensuse
+            flavor: opensuse
+            bundle: rpm
+            arch: aarch64
+    runs-on: ${{ matrix.platform }}
+    container: ${{ matrix.image }}
+    steps:
+      - name: Install build dependencies
+        run: |
+          case "${{ matrix.family }}" in
+            debian)
+              apt-get update
+              apt-get install -y --no-install-recommends ca-certificates curl git build-essential pkg-config file patchelf lld libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev libssl-dev
+              ;;
+            fedora)
+              dnf install -y gcc gcc-c++ make git curl file tar gzip xz which pkg-config lld 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)'
+              ;;
+            opensuse)
+              zypper --non-interactive install gcc gcc-c++ make git curl file tar gzip xz which pkg-config 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)'
+              zypper --non-interactive install lld || true
+              ;;
+          esac
+
+      - name: Use lld on arm64
+        if: runner.arch == 'ARM64'
+        run: |
+          if command -v ld.lld >/dev/null 2>&1; then
+            echo "RUSTFLAGS=-C link-arg=-fuse-ld=lld" >> "$GITHUB_ENV"
+          fi
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            frontend/package-lock.json
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+          key: ${{ matrix.flavor }}-${{ matrix.arch }}
+          cache-on-failure: true
+
+      - name: Install npm packages
+        run: npm ci && npm ci --prefix frontend
+
+      - name: Build package
+        env:
+          MULTRON_PACKAGE_FLAVOR: ${{ matrix.flavor }}
+        run: npm run tauri -- build --bundles ${{ matrix.bundle }}
+
+      - name: Upload package
+        uses: actions/github-script@v7
+        env:
+          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+          FLAVOR: ${{ matrix.flavor }}
+          BUNDLE: ${{ matrix.bundle }}
+          ARCH: ${{ matrix.arch }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const { owner, repo } = context.repo;
+            const { RELEASE_ID, VERSION, FLAVOR, BUNDLE, ARCH } = process.env;
+            const release_id = Number(RELEASE_ID);
+            const dir = `src-tauri/target/release/bundle/${BUNDLE}`;
+            const built = fs.readdirSync(dir).filter((n) => n.endsWith(`.${BUNDLE}`));
+            if (built.length !== 1) throw new Error(`expected one .${BUNDLE} in ${dir}, found: ${built.join(', ') || 'none'}`);
+            const name = `Multron-Download-Manager_${VERSION}_${FLAVOR}_${ARCH}.${BUNDLE}`;
+            const type = BUNDLE === 'deb' ? 'application/vnd.debian.binary-package' : 'application/x-rpm';
+            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            const old = existing.find((a) => a.name === name);
+            if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
+            await github.rest.repos.uploadReleaseAsset({
+              owner, repo, release_id, name,
+              headers: { 'content-type': type },
+              data: fs.readFileSync(path.join(dir, built[0])),
+            });
+            core.info(`uploaded ${name}`);
 
   build-windows:
     name: Build Windows (Inno Setup)
@@ -242,7 +375,7 @@ jobs:
 
   publish:
     name: Checksums & publish
-    needs: [create-release, build-unix, build-windows, extension]
+    needs: [create-release, build-unix, build-distro, build-windows, extension]
     runs-on: ubuntu-latest
     steps:
       - name: Write SHA256SUMS.txt and publish

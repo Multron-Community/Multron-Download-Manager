@@ -215,9 +215,6 @@ pub fn make_sparse(file: &File) {
     }
 }
 
-#[cfg(not(windows))]
-pub fn make_sparse(_file: &File) {}
-
 pub fn which(name: &str) -> Option<PathBuf> {
     let exe = if cfg!(windows) {
         format!("{name}.exe")

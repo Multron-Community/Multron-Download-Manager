@@ -178,11 +178,19 @@ impl Progress {
     }
 
     fn should_retire(&self) -> bool {
-        self.retire.load(Ordering::Relaxed) > 0
-            && self
-                .retire
-                .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |r| r.checked_sub(1))
-                .is_ok()
+        let mut current = self.retire.load(Ordering::Relaxed);
+        while current > 0 {
+            match self.retire.compare_exchange_weak(
+                current,
+                current - 1,
+                Ordering::SeqCst,
+                Ordering::Relaxed,
+            ) {
+                Ok(_) => return true,
+                Err(actual) => current = actual,
+            }
+        }
+        false
     }
 }
 

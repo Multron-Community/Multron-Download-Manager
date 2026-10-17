@@ -61,20 +61,86 @@ fn wanted_kind() -> Option<PackageKind> {
 }
 
 fn arch_names() -> &'static [&'static str] {
-    match std::env::consts::ARCH {
+    arch_names_for(std::env::consts::ARCH)
+}
+
+fn arch_names_for(arch: &str) -> &'static [&'static str] {
+    match arch {
         "x86_64" => &["x64", "x86_64", "amd64"],
         "aarch64" => &["aarch64", "arm64"],
         _ => &[],
     }
 }
 
+const PACKAGE_FLAVOR: Option<&str> = option_env!("MULTRON_PACKAGE_FLAVOR");
+const FLAVORS: &[(&str, PackageKind)] = &[
+    ("debian12", PackageKind::Deb),
+    ("fedora", PackageKind::Rpm),
+    ("opensuse", PackageKind::Rpm),
+];
+
+fn flavor_of(name: &str) -> Option<&'static str> {
+    let lower = name.to_ascii_lowercase();
+    FLAVORS
+        .iter()
+        .map(|(f, _)| *f)
+        .find(|f| lower.contains(&format!("_{f}_")))
+}
+
+fn rpm_flavor(os_release: &str) -> &'static str {
+    let suse = os_release.lines().any(|line| {
+        let Some((key, value)) = line.split_once('=') else {
+            return false;
+        };
+        matches!(key.trim(), "ID" | "ID_LIKE") && value.to_ascii_lowercase().contains("suse")
+    });
+    if suse {
+        "opensuse"
+    } else {
+        "fedora"
+    }
+}
+
+fn wanted_flavor(kind: PackageKind) -> Option<&'static str> {
+    if let Some(built) = PACKAGE_FLAVOR {
+        if let Some((name, _)) = FLAVORS.iter().find(|(f, k)| *f == built && *k == kind) {
+            return Some(name);
+        }
+    }
+    (kind == PackageKind::Rpm)
+        .then(|| rpm_flavor(&std::fs::read_to_string("/etc/os-release").unwrap_or_default()))
+}
+
 pub fn pick_asset(assets: &[ReleaseAsset]) -> Option<&ReleaseAsset> {
     let kind = wanted_kind()?;
-    let arch = arch_names();
+    pick_asset_for(assets, kind, arch_names(), wanted_flavor(kind))
+}
+
+fn pick_asset_for<'a>(
+    assets: &'a [ReleaseAsset],
+    kind: PackageKind,
+    arch: &[&str],
+    flavor: Option<&str>,
+) -> Option<&'a ReleaseAsset> {
     assets.iter().find(|a| {
         let lower = a.name.to_ascii_lowercase();
-        kind_of(&a.name) == Some(kind) && arch.iter().any(|x| lower.contains(x))
+        kind_of(&a.name) == Some(kind)
+            && arch.iter().any(|x| lower.contains(x))
+            && flavor_of(&a.name) == flavor
     })
+}
+
+fn rpm_installer(pkg: &str) -> String {
+    if Path::new("/usr/bin/zypper").exists() {
+        format!(
+            "pkexec zypper --non-interactive install --allow-unsigned-rpm {}",
+            sh_quote(pkg)
+        )
+    } else if Path::new("/usr/bin/dnf").exists() {
+        format!("pkexec dnf install -y {}", sh_quote(pkg))
+    } else {
+        format!("pkexec rpm -U {}", sh_quote(pkg))
+    }
 }
 
 fn update_dir() -> PathBuf {
@@ -219,7 +285,7 @@ hdiutil detach -quiet "$mnt"
             let installer = if update.kind == PackageKind::Deb {
                 format!("pkexec apt-get install -y {}", sh_quote(&pkg))
             } else {
-                format!("pkexec dnf install -y {}", sh_quote(&pkg))
+                rpm_installer(&pkg)
             };
             let exe = std::env::current_exe()?;
             let script = format!(
@@ -427,9 +493,9 @@ mod tests {
 
     #[test]
     fn reads_sha256sums() {
-        let sums = "abc  other.zip\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789ABCDEF *Multron-Download-Manager-0.3.0-x64-Setup.exe\n";
+        let sums = "abc  other.zip\n0123456789abcdef0123456789abcdef0123456789abcdef0123456789ABCDEF *Multron-Download-Manager-0.0.2-x64-Setup.exe\n";
         assert_eq!(
-            expected_sha256(sums, "Multron-Download-Manager-0.3.0-x64-Setup.exe").as_deref(),
+            expected_sha256(sums, "Multron-Download-Manager-0.0.2-x64-Setup.exe").as_deref(),
             Some("0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef")
         );
         assert_eq!(expected_sha256(sums, "missing.exe"), None);
@@ -438,24 +504,99 @@ mod tests {
     #[test]
     fn picks_the_package_for_this_system() {
         let assets = [
-            asset("Multron-Download-Manager-0.3.0-x64-Setup.exe"),
-            asset("Multron.Download.Manager_0.3.0_aarch64.dmg"),
-            asset("Multron.Download.Manager_0.3.0_x64.dmg"),
-            asset("Multron.Download.Manager_0.3.0_amd64.deb"),
-            asset("Multron.Download.Manager-0.3.0-1.x86_64.rpm"),
-            asset("multron-browser-extension-0.3.0.zip"),
+            asset("Multron-Download-Manager-0.0.2-x64-Setup.exe"),
+            asset("Multron.Download.Manager_0.0.2_aarch64.dmg"),
+            asset("Multron.Download.Manager_0.0.2_x64.dmg"),
+            asset("Multron.Download.Manager_0.0.2_amd64.deb"),
+            asset("Multron.Download.Manager-0.0.2-1.x86_64.rpm"),
+            asset("multron-browser-extension-0.0.2.zip"),
             asset("SHA256SUMS.txt"),
         ];
         let picked = pick_asset(&assets).map(|a| a.name.as_str());
         if cfg!(all(windows, target_arch = "x86_64")) {
-            assert_eq!(picked, Some("Multron-Download-Manager-0.3.0-x64-Setup.exe"));
+            assert_eq!(picked, Some("Multron-Download-Manager-0.0.2-x64-Setup.exe"));
         }
         if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
-            assert_eq!(picked, Some("Multron.Download.Manager_0.3.0_aarch64.dmg"));
+            assert_eq!(picked, Some("Multron.Download.Manager_0.0.2_aarch64.dmg"));
         }
         assert_eq!(
             sums_url(&assets).as_deref(),
             Some("https://example.com/SHA256SUMS.txt")
         );
+    }
+
+    #[test]
+    fn picks_the_package_built_for_this_distribution() {
+        let assets = [
+            asset("Multron-Download-Manager_0.0.2_debian12_amd64.deb"),
+            asset("Multron-Download-Manager_0.0.2_debian12_arm64.deb"),
+            asset("Multron-Download-Manager_0.0.2_opensuse_x86_64.rpm"),
+            asset("Multron-Download-Manager_0.0.2_opensuse_aarch64.rpm"),
+            asset("Multron-Download-Manager_0.0.2_fedora_x86_64.rpm"),
+            asset("Multron-Download-Manager_0.0.2_fedora_aarch64.rpm"),
+            asset("Multron.Download.Manager_0.0.2_amd64.deb"),
+            asset("Multron.Download.Manager_0.0.2_arm64.deb"),
+            asset("Multron.Download.Manager_0.0.2_amd64.AppImage"),
+        ];
+        let x64 = arch_names_for("x86_64");
+        let arm = arch_names_for("aarch64");
+        let pick = |kind, arch, flavor| {
+            pick_asset_for(&assets, kind, arch, flavor).map(|a| a.name.as_str())
+        };
+        assert_eq!(
+            pick(PackageKind::Deb, x64, None),
+            Some("Multron.Download.Manager_0.0.2_amd64.deb")
+        );
+        assert_eq!(
+            pick(PackageKind::Deb, arm, None),
+            Some("Multron.Download.Manager_0.0.2_arm64.deb")
+        );
+        assert_eq!(
+            pick(PackageKind::Deb, x64, Some("debian12")),
+            Some("Multron-Download-Manager_0.0.2_debian12_amd64.deb")
+        );
+        assert_eq!(
+            pick(PackageKind::Deb, arm, Some("debian12")),
+            Some("Multron-Download-Manager_0.0.2_debian12_arm64.deb")
+        );
+        assert_eq!(
+            pick(PackageKind::Rpm, x64, Some("fedora")),
+            Some("Multron-Download-Manager_0.0.2_fedora_x86_64.rpm")
+        );
+        assert_eq!(
+            pick(PackageKind::Rpm, arm, Some("fedora")),
+            Some("Multron-Download-Manager_0.0.2_fedora_aarch64.rpm")
+        );
+        assert_eq!(
+            pick(PackageKind::Rpm, x64, Some("opensuse")),
+            Some("Multron-Download-Manager_0.0.2_opensuse_x86_64.rpm")
+        );
+        assert_eq!(
+            pick(PackageKind::Rpm, arm, Some("opensuse")),
+            Some("Multron-Download-Manager_0.0.2_opensuse_aarch64.rpm")
+        );
+        assert_eq!(pick(PackageKind::Rpm, x64, None), None);
+        assert_eq!(
+            pick(PackageKind::AppImage, x64, None),
+            Some("Multron.Download.Manager_0.0.2_amd64.AppImage")
+        );
+    }
+
+    #[test]
+    fn tells_opensuse_from_fedora() {
+        assert_eq!(
+            rpm_flavor("NAME=\"openSUSE Leap\"\nID=\"opensuse-leap\"\nID_LIKE=\"suse opensuse\"\n"),
+            "opensuse"
+        );
+        assert_eq!(
+            rpm_flavor("NAME=\"openSUSE Tumbleweed\"\nID=\"opensuse-tumbleweed\"\nID_LIKE=\"opensuse suse\"\n"),
+            "opensuse"
+        );
+        assert_eq!(rpm_flavor("NAME=\"Fedora Linux\"\nID=fedora\n"), "fedora");
+        assert_eq!(
+            rpm_flavor("NAME=\"Nobara Linux\"\nID=nobara\nID_LIKE=\"rhel centos fedora\"\n"),
+            "fedora"
+        );
+        assert_eq!(rpm_flavor(""), "fedora");
     }
 }

@@ -83,9 +83,47 @@ struct Frames {
     tray: Vec<Vec<u8>>,
 }
 
-const OVERLAY_SIZE: u32 = 32;
 const TRAY_SIZE: u32 = 32;
 const TRAY_BADGE: u32 = 18;
+
+#[cfg(windows)]
+mod overlay {
+    use tauri::image::Image;
+    use tauri::{AppHandle, Manager as _};
+
+    const SIZE: u32 = 32;
+
+    pub fn frames(color: [u8; 3]) -> Vec<Vec<u8>> {
+        (0..crate::spinner::FRAMES)
+            .map(|f| crate::spinner::badge(SIZE, f, color))
+            .collect()
+    }
+
+    pub fn show(app: &AppHandle, rgba: &[u8]) {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.set_overlay_icon(Some(Image::new(rgba, SIZE, SIZE)));
+        }
+    }
+
+    pub fn clear(app: &AppHandle) {
+        if let Some(w) = app.get_webview_window("main") {
+            let _ = w.set_overlay_icon(None);
+        }
+    }
+}
+
+#[cfg(not(windows))]
+mod overlay {
+    use tauri::AppHandle;
+
+    pub fn frames(_color: [u8; 3]) -> Vec<Vec<u8>> {
+        Vec::new()
+    }
+
+    pub fn show(_app: &AppHandle, _rgba: &[u8]) {}
+
+    pub fn clear(_app: &AppHandle) {}
+}
 
 fn build_frames(app: &AppHandle, accent: &str) -> Frames {
     let color = crate::spinner::accent(accent);
@@ -93,9 +131,6 @@ fn build_frames(app: &AppHandle, accent: &str) -> Frames {
         .default_window_icon()
         .map(|i| crate::spinner::downscale(i.rgba(), i.width(), i.height(), TRAY_SIZE))
         .unwrap_or_else(|| vec![0u8; (TRAY_SIZE * TRAY_SIZE * 4) as usize]);
-    let overlay = (0..crate::spinner::FRAMES)
-        .map(|f| crate::spinner::badge(OVERLAY_SIZE, f, color))
-        .collect();
     let tray = (0..crate::spinner::FRAMES)
         .map(|f| {
             let badge = crate::spinner::badge(TRAY_BADGE, f, color);
@@ -104,7 +139,7 @@ fn build_frames(app: &AppHandle, accent: &str) -> Frames {
         .collect();
     Frames {
         accent: accent.to_string(),
-        overlay,
+        overlay: overlay::frames(color),
         tray,
     }
 }
@@ -120,15 +155,11 @@ pub fn start_animation(app: &AppHandle) {
         let mut tick = tokio::time::interval(std::time::Duration::from_millis(90));
         loop {
             tick.tick().await;
-            let busy = BUSY.load(Ordering::Relaxed);
-            let window = app.get_webview_window("main");
             let tray = app.tray_by_id(TRAY_ID);
-            if !busy {
+            if !BUSY.load(Ordering::Relaxed) {
                 if shown {
                     shown = false;
-                    if let Some(w) = &window {
-                        let _ = w.set_overlay_icon(None);
-                    }
+                    overlay::clear(&app);
                     if let (Some(t), Some(icon)) = (&tray, app.default_window_icon()) {
                         let _ = t.set_icon(Some(icon.clone()));
                     }
@@ -144,9 +175,8 @@ pub fn start_animation(app: &AppHandle) {
             }
             let Some(set) = &frames else { continue };
             frame = (frame + 1) % crate::spinner::FRAMES;
-            if let Some(w) = &window {
-                let img = Image::new(&set.overlay[frame], OVERLAY_SIZE, OVERLAY_SIZE);
-                let _ = w.set_overlay_icon(Some(img));
+            if let Some(rgba) = set.overlay.get(frame) {
+                overlay::show(&app, rgba);
             }
             if let Some(t) = &tray {
                 let img = Image::new(&set.tray[frame], TRAY_SIZE, TRAY_SIZE);

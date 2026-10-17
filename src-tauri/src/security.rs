@@ -1,8 +1,10 @@
 use std::path::{Path, PathBuf};
 
+#[cfg(windows)]
 pub const AMSI_MAX_BYTES: u64 = 50 * 1024 * 1024;
 
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(not(windows), allow(dead_code))]
 pub enum Verdict {
     Clean(String),
     Threat(String),
@@ -136,6 +138,7 @@ pub fn antivirus_error(err: &anyhow::Error) -> Option<&'static str> {
     None
 }
 
+#[cfg(any(windows, test))]
 pub fn decode_product_state(state: u32) -> bool {
     (state >> 12) & 0xF == 1
 }

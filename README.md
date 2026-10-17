@@ -114,14 +114,16 @@ Download the file for your system from the [latest release](https://github.com/M
 | Windows 10/11 x64 | `Multron-Download-Manager-<version>-x64-Setup.exe` | Run the installer (Inno Setup). It installs WebView2 if it is missing, and can associate `.torrent` files and `magnet:` links. |
 | macOS Apple Silicon | `*_aarch64.dmg` | Open the DMG and drag the app to Applications. |
 | macOS Intel | `*_x64.dmg` | Same as above. |
-| Debian / Ubuntu / Mint (apt) | `*_amd64.deb` (or `*_arm64.deb`) | `sudo apt install ./<file>.deb` |
-| Fedora / RHEL / openSUSE (dnf, zypper) | `*.x86_64.rpm` (or `*.aarch64.rpm`) | `sudo dnf install ./<file>.rpm` |
+| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` (or `*_arm64.deb`) | `sudo apt install ./<file>.deb` |
+| Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` (or `*_debian12_arm64.deb`) | `sudo apt install ./<file>.deb` |
+| Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` (or `*_fedora_aarch64.rpm`) | `sudo dnf install ./<file>.rpm` |
+| openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` (or `*_opensuse_aarch64.rpm`) | `sudo zypper install --allow-unsigned-rpm ./<file>.rpm` |
 | Any Linux | `*_amd64.AppImage` (or `*_aarch64.AppImage`) | `chmod +x <file>.AppImage && ./<file>.AppImage` |
 | Browser extension | `multron-browser-extension-chromium-v<version>.zip` (Chrome, Edge, Brave, Opera, Vivaldi) or `multron-browser-extension-firefox-v<version>.zip` | See [Browser extension](#browser-extension). |
 
 Verify any file with the `SHA256SUMS.txt` attached to the release.
 
-> **Linux:** the packages are built on Ubuntu 24.04 and need glibc 2.39 or newer: Ubuntu 24.04+, Linux Mint 22+, Debian 13+, Fedora 40+ and other distributions of the same age. Older releases such as Ubuntu 22.04, Linux Mint 21 or Debian 12 are not supported.
+> **Linux:** every package is built on the distribution it is meant for. The plain `.deb` and the AppImage are built on Ubuntu 24.04 and need glibc 2.39 or newer (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). Debian 12 (bookworm) and LMDE 6 have their own `.deb` built on Debian 12, Fedora has its own `.rpm` built on Fedora 43, and openSUSE has its own `.rpm` built on Leap 16 (it also runs on Tumbleweed). Automatic updates keep each installation on the package built for its distribution. Older releases such as Ubuntu 22.04 or Linux Mint 21 are not supported.
 
 > **macOS:** builds are not notarized yet. Right-click the app → **Open** the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.
 
@@ -297,7 +299,7 @@ npm run dev        # starts Vite + the Rust app with hot reload
 | --- | --- |
 | `npm run build:windows` | Windows Inno Setup installer in `dist/` |
 | `npm run build:mac` | `.app` and `.dmg` |
-| `npm run build:linux` | `.deb` (apt), `.rpm` (dnf) and `.AppImage` |
+| `npm run build:linux` | `.deb` (apt), `.rpm` (dnf, zypper) and `.AppImage` |
 | `npm run package:extension` | `dist/multron-browser-extension-chromium-v<version>.zip` and `-firefox-` (Firefox gets its own manifest with `background.scripts`) |
 
 Builds are tuned for speed on every platform:
@@ -321,7 +323,7 @@ Version numbers count each part up to 10, and the release after that carries ove
 1. Commit your changes. Write the release notes in `release-notes/v<version>.md` (optional) — the workflow puts them at the top of the GitHub release, above the download table. `npm run release -- --dry-run` prints the version that comes next.
 2. `npm run release` — picks the next version by the rule above (the first release is `0.0.1`), sets it in `package.json`, `frontend/package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `extension/manifest.json`, commits and creates the tag `v<version>` **locally** (nothing is pushed). `npm run release -- 0.2.0` releases a specific version instead.
 3. Push when you are ready: `git push origin HEAD --follow-tags`.
-4. The **Release** workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer, macOS DMGs (Apple Silicon + Intel), Linux `.deb` / `.rpm` / `.AppImage` (x86_64 + arm64), the browser extension zip and `SHA256SUMS.txt`, then publishes the release.
+4. The **Release** workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer, macOS DMGs (Apple Silicon + Intel), Linux `.deb` and `.AppImage` built on Ubuntu 24.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip and `SHA256SUMS.txt`, then publishes the release.
 
 Installed copies pick the new release up through automatic updates: each one downloads the file for its own platform and package format and only installs it when its SHA-256 matches `SHA256SUMS.txt`.
 
