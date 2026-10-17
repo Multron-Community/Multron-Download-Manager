@@ -262,12 +262,11 @@ jobs:
               ;;
             opensuse)
               zypper --non-interactive install bash gcc gcc-c++ make git curl file tar gzip xz which pkg-config 'pkgconfig(webkit2gtk-4.1)' 'pkgconfig(openssl)' 'pkgconfig(librsvg-2.0)' 'pkgconfig(ayatana-appindicator3-0.1)'
-              zypper --non-interactive install lld || true
               ;;
           esac
 
       - name: Use lld on arm64
-        if: runner.arch == 'ARM64'
+        if: runner.arch == 'ARM64' && matrix.family != 'opensuse'
         run: |
           if command -v ld.lld >/dev/null 2>&1; then
             echo "RUSTFLAGS=-C link-arg=-fuse-ld=lld" >> "$GITHUB_ENV"
