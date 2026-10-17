@@ -23,7 +23,7 @@ permissions:
 
 concurrency:
   group: release-${{ github.ref }}
-  cancel-in-progress: ${{ startsWith(github.ref, 'refs/heads/') }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
