@@ -2,11 +2,19 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
+    paths-ignore:
+      - '**.md'
+      - 'docs/**'
   workflow_dispatch:
     inputs:
       draft:
         description: Keep the release as a draft
+        type: boolean
+        default: false
+      prerelease:
+        description: Mark as pre-release (a pre-release is not shown as Latest)
         type: boolean
         default: false
 
@@ -14,7 +22,7 @@ permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 env:
@@ -27,6 +35,7 @@ jobs:
     outputs:
       release_id: ${{ steps.create.outputs.release_id }}
       version: ${{ steps.version.outputs.version }}
+      skip: ${{ steps.create.outputs.skip }}
     steps:
       - uses: actions/checkout@v4
 
@@ -47,6 +56,7 @@ jobs:
         uses: actions/github-script@v7
         env:
           VERSION: ${{ steps.version.outputs.version }}
+          PRERELEASE: ${{ github.event.inputs.prerelease || 'false' }}
         with:
           script: |
             const fs = require('fs');
@@ -55,8 +65,19 @@ jobs:
             const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
             let release = releases.find((r) => r.tag_name === tag);
             if (release && !release.draft) {
-              core.setOutput('release_id', String(release.id));
+              core.notice(`${tag} is already released. Raise the version to publish a new release.`);
+              core.setOutput('skip', 'true');
               return;
+            }
+            if (context.eventName === 'push' && context.ref.startsWith('refs/heads/')) {
+              try {
+                await github.rest.git.getRef({ owner, repo, ref: `tags/${tag}` });
+                core.notice(`${tag} is tagged, so the run for that tag publishes it.`);
+                core.setOutput('skip', 'true');
+                return;
+              } catch (e) {
+                if (e.status !== 404) throw e;
+              }
             }
             const notesFile = `release-notes/${tag}.md`;
             let notes;
@@ -104,7 +125,7 @@ jobs:
                 name: `Multron Download Manager ${tag}`,
                 body,
                 draft: true,
-                prerelease: tag.includes('-'),
+                prerelease: tag.includes('-') || process.env.PRERELEASE === 'true',
               })).data;
             }
             core.setOutput('release_id', String(release.id));
@@ -112,6 +133,7 @@ jobs:
   build-unix:
     name: Build ${{ matrix.name }}
     needs: create-release
+    if: needs.create-release.outputs.skip != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -175,6 +197,7 @@ jobs:
   build-distro:
     name: Build ${{ matrix.name }}
     needs: create-release
+    if: needs.create-release.outputs.skip != 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -306,6 +329,7 @@ jobs:
   build-windows:
     name: Build Windows (Inno Setup)
     needs: create-release
+    if: needs.create-release.outputs.skip != 'true'
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -367,6 +391,7 @@ jobs:
   extension:
     name: Package browser extension
     needs: create-release
+    if: needs.create-release.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -395,6 +420,7 @@ jobs:
   publish:
     name: Checksums & publish
     needs: [create-release, build-unix, build-distro, build-windows, extension]
+    if: needs.create-release.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Write SHA256SUMS.txt and publish
@@ -402,6 +428,7 @@ jobs:
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           KEEP_DRAFT: ${{ github.event.inputs.draft || 'false' }}
+          PRERELEASE: ${{ github.event.inputs.prerelease || 'false' }}
         with:
           script: |
             const crypto = require('crypto');
@@ -424,5 +451,11 @@ jobs:
               data: Buffer.from(lines.join('\n') + '\n'),
             });
             if (process.env.KEEP_DRAFT !== 'true') {
-              await github.rest.repos.updateRelease({ owner, repo, release_id, draft: false });
+              const prerelease = process.env.PRERELEASE === 'true';
+              await github.rest.repos.updateRelease({
+                owner, repo, release_id,
+                draft: false,
+                prerelease: prerelease || undefined,
+                make_latest: prerelease ? 'false' : 'true',
+              });
             }
