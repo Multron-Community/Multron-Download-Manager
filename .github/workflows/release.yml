@@ -49,35 +49,54 @@ jobs:
           VERSION: ${{ steps.version.outputs.version }}
         with:
           script: |
+            const fs = require('fs');
             const { owner, repo } = context.repo;
             const tag = `v${process.env.VERSION}`;
             const releases = await github.paginate(github.rest.repos.listReleases, { owner, repo, per_page: 100 });
             let release = releases.find((r) => r.tag_name === tag);
-            if (!release) {
-              const fs = require('fs');
-              const notesFile = `release-notes/${tag}.md`;
-              const notes = fs.existsSync(notesFile) ? fs.readFileSync(notesFile, 'utf8').trim() : `## Multron Download Manager ${tag}`;
-              const body = [
-                notes,
-                '',
-                '## Downloads',
-                '',
-                '| Platform | File |',
-                '| --- | --- |',
-                '| Windows 10/11 (x64) | `Multron-Download-Manager-*-x64-Setup.exe` |',
-                '| macOS Apple Silicon | `*_aarch64.dmg` |',
-                '| macOS Intel | `*_x64.dmg` |',
-                '| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
-                '| Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` / `*_debian12_arm64.deb` → `sudo apt install ./file.deb` |',
-                '| Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` / `*_fedora_aarch64.rpm` → `sudo dnf install ./file.rpm` |',
-                '| openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` / `*_opensuse_aarch64.rpm` → `sudo zypper install --allow-unsigned-rpm ./file.rpm` |',
-                '| Any Linux | `*.AppImage` |',
-                '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` |',
-                '',
-                'Verify downloads with `SHA256SUMS.txt`.',
-                '',
-                'macOS builds are not notarized: right-click → Open the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.'
-              ].join('\n');
+            if (release && !release.draft) {
+              core.setOutput('release_id', String(release.id));
+              return;
+            }
+            const notesFile = `release-notes/${tag}.md`;
+            let notes;
+            if (fs.existsSync(notesFile)) {
+              notes = fs.readFileSync(notesFile, 'utf8').trim();
+              core.info(`using ${notesFile}`);
+            } else {
+              try {
+                const generated = await github.rest.repos.generateReleaseNotes({ owner, repo, tag_name: tag, target_commitish: context.sha });
+                notes = `## Multron Download Manager ${tag}\n\n${generated.data.body.trim()}`;
+                core.info(`${notesFile} not found, generated the notes from commits and pull requests`);
+              } catch (e) {
+                core.warning(`could not generate release notes: ${e.message}`);
+                notes = `## Multron Download Manager ${tag}`;
+              }
+            }
+            const body = [
+              notes,
+              '',
+              '## Downloads',
+              '',
+              '| Platform | File |',
+              '| --- | --- |',
+              '| Windows 10/11 (x64) | `Multron-Download-Manager-*-x64-Setup.exe` |',
+              '| macOS Apple Silicon | `*_aarch64.dmg` |',
+              '| macOS Intel | `*_x64.dmg` |',
+              '| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
+              '| Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` / `*_debian12_arm64.deb` → `sudo apt install ./file.deb` |',
+              '| Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` / `*_fedora_aarch64.rpm` → `sudo dnf install ./file.rpm` |',
+              '| openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` / `*_opensuse_aarch64.rpm` → `sudo zypper install --allow-unsigned-rpm ./file.rpm` |',
+              '| Any Linux | `*.AppImage` |',
+              '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` |',
+              '',
+              'Verify downloads with `SHA256SUMS.txt`.',
+              '',
+              'macOS builds are not notarized: right-click → Open the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.'
+            ].join('\n');
+            if (release) {
+              await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, body });
+            } else {
               release = (await github.rest.repos.createRelease({
                 owner, repo,
                 tag_name: tag,
