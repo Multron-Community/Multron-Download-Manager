@@ -519,7 +519,7 @@ pub async fn setup_extension(app: AppHandle, browser: String) -> R<String> {
             .into_iter()
             .find(|b| b.id == browser)
             .ok_or_else(|| anyhow::anyhow!("{browser} is not installed"))?;
-        let folder = crate::browsers::extension_folder(&app, b.engine == "firefox")?;
+        let folder = crate::browsers::extension_folder_for(&app, &b)?;
         crate::browsers::open_page(&b)?;
         Ok::<_, anyhow::Error>(folder.to_string_lossy().into_owned())
     })

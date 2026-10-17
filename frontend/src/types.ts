@@ -312,6 +312,7 @@ export interface ToolProgress {
   tool: string;
   downloaded: number;
   total: number | null;
+  speed: number;
   done: boolean;
 }
 
@@ -366,6 +367,9 @@ export interface Browser {
   engine: 'chromium' | 'firefox';
   path: string;
   extensionsPage: string;
+  flatpak?: string | null;
+  flatpakAutostart?: boolean;
+  flatpakGrant?: string | null;
 }
 
 export interface ReadyUpdate {

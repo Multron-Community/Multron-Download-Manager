@@ -3,6 +3,7 @@ mod bridge;
 mod browsers;
 mod commands;
 mod engine;
+mod flatpak;
 mod i18n;
 mod ipfilter;
 mod manager;

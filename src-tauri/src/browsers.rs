@@ -5,7 +5,7 @@ use anyhow::{Context, Result};
 use serde::Serialize;
 use tauri::{AppHandle, Manager as _};
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Default, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Browser {
     pub id: String,
@@ -13,6 +13,9 @@ pub struct Browser {
     pub engine: String,
     pub path: String,
     pub extensions_page: String,
+    pub flatpak: Option<String>,
+    pub flatpak_autostart: bool,
+    pub flatpak_grant: Option<String>,
 }
 
 #[allow(dead_code)]
@@ -480,6 +483,7 @@ pub fn detect() -> Vec<Browser> {
                 engine: k.engine.into(),
                 path: path.to_string_lossy().into_owned(),
                 extensions_page: k.page.into(),
+                ..Default::default()
             })
         })
         .collect();
@@ -489,7 +493,31 @@ pub fn detect() -> Vec<Browser> {
             list.push(extra);
         }
     }
+    if cfg!(target_os = "linux") {
+        if let Some(home) = crate::flatpak::home() {
+            list.extend(flatpak_browsers(&home, &crate::flatpak::roots(&home)));
+        }
+    }
     list
+}
+
+fn flatpak_browsers(home: &Path, roots: &[PathBuf]) -> Vec<Browser> {
+    crate::flatpak::installed(roots)
+        .into_iter()
+        .filter_map(|app| {
+            let k = KNOWN.iter().find(|k| k.id == app.browser)?;
+            Some(Browser {
+                id: format!("flatpak:{}", app.id),
+                name: format!("{} (Flatpak)", app.name.unwrap_or(k.name)),
+                engine: k.engine.into(),
+                path: format!("flatpak run {}", app.id),
+                extensions_page: k.page.into(),
+                flatpak: Some(app.id.into()),
+                flatpak_autostart: crate::flatpak::can_start_host(home, roots, app.id),
+                flatpak_grant: Some(crate::flatpak::grant_command(app.id)),
+            })
+        })
+        .collect()
 }
 
 #[cfg(not(windows))]
@@ -583,6 +611,7 @@ fn registered_browsers() -> Vec<Browser> {
                 } else {
                     "chrome://extensions".into()
                 },
+                ..Default::default()
             });
         }
     }
@@ -720,7 +749,14 @@ fn find(k: &Known) -> Option<PathBuf> {
 }
 
 pub fn open_page(browser: &Browser) -> Result<()> {
-    let mut cmd = Command::new(&browser.path);
+    let mut cmd = match &browser.flatpak {
+        Some(id) => {
+            let mut c = Command::new("flatpak");
+            c.args(["run", id]);
+            c
+        }
+        None => Command::new(&browser.path),
+    };
     cmd.arg(&browser.extensions_page)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
@@ -773,6 +809,23 @@ pub fn extension_folder(app: &AppHandle, firefox: bool) -> Result<PathBuf> {
     Ok(dest)
 }
 
+pub fn extension_folder_for(app: &AppHandle, browser: &Browser) -> Result<PathBuf> {
+    let firefox = browser.engine == "firefox";
+    let Some(id) = &browser.flatpak else {
+        return extension_folder(app, firefox);
+    };
+    let src = bundled_extension(app, firefox)
+        .context("the browser extension is not bundled with this build")?;
+    let home = crate::flatpak::home().context("HOME is not set")?;
+    let dest = crate::flatpak::data_dir(&home, id).join(if firefox {
+        "browser-extension-firefox"
+    } else {
+        "browser-extension"
+    });
+    copy_dir(&src, &dest)?;
+    Ok(dest)
+}
+
 fn copy_dir(src: &Path, dest: &Path) -> Result<()> {
     std::fs::create_dir_all(dest)?;
     for entry in std::fs::read_dir(src)? {
@@ -805,6 +858,54 @@ mod tests {
         );
         assert_eq!(expand_env("%MULTRON_MISSING_VAR%\\a.exe"), None);
         assert_eq!(expand_env("plain").as_deref(), Some("plain"));
+    }
+
+    #[test]
+    fn lists_flatpak_browsers() {
+        let home = std::env::temp_dir().join(format!("mdm-browsers-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        let root = home.join(".local/share/flatpak");
+        for id in [
+            "org.mozilla.firefox",
+            "io.github.ungoogled_software.ungoogled_chromium",
+        ] {
+            std::fs::create_dir_all(root.join("app").join(id).join("current")).unwrap();
+        }
+        let list = flatpak_browsers(&home, &[root]);
+        let summary: Vec<_> = list
+            .iter()
+            .map(|b| {
+                (
+                    b.id.as_str(),
+                    b.name.as_str(),
+                    b.engine.as_str(),
+                    b.path.as_str(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            summary,
+            vec![
+                (
+                    "flatpak:io.github.ungoogled_software.ungoogled_chromium",
+                    "Ungoogled Chromium (Flatpak)",
+                    "chromium",
+                    "flatpak run io.github.ungoogled_software.ungoogled_chromium"
+                ),
+                (
+                    "flatpak:org.mozilla.firefox",
+                    "Mozilla Firefox (Flatpak)",
+                    "firefox",
+                    "flatpak run org.mozilla.firefox"
+                ),
+            ]
+        );
+        assert!(list.iter().all(|b| !b.flatpak_autostart));
+        assert_eq!(
+            list[1].flatpak_grant.as_deref(),
+            Some("flatpak override --user --talk-name=org.freedesktop.Flatpak org.mozilla.firefox")
+        );
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

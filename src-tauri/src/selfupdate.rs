@@ -152,7 +152,7 @@ pub async fn download(
     version: &str,
     asset: &ReleaseAsset,
     sums_url: Option<&str>,
-    mut progress: impl FnMut(u64, Option<u64>),
+    mut progress: impl FnMut(u64, Option<u64>, u64),
 ) -> Result<ReadyUpdate> {
     let kind = kind_of(&asset.name).ok_or_else(|| anyhow!("unsupported update package"))?;
     let expected = match sums_url {
@@ -188,14 +188,22 @@ pub async fn download(
     let mut file = tokio::fs::File::create(&part).await?;
     let mut hasher = Sha256::new();
     let mut done = 0u64;
+    let mut meter = crate::media::SpeedMeter::default();
+    let mut reported = std::time::Instant::now();
+    progress(0, total, 0);
     let mut stream = resp.bytes_stream();
     while let Some(chunk) = stream.next().await {
         let chunk = chunk?;
         hasher.update(&chunk);
         file.write_all(&chunk).await?;
         done += chunk.len() as u64;
-        progress(done, total);
+        let speed = meter.sample(done);
+        if reported.elapsed() >= std::time::Duration::from_millis(250) {
+            reported = std::time::Instant::now();
+            progress(done, total, speed);
+        }
     }
+    progress(done, total, meter.sample(done));
     file.flush().await?;
     drop(file);
 
@@ -431,22 +439,27 @@ pub async fn fetch_latest(
         bail!("the update is already downloading");
     }
     let label = format!("Multron Download Manager {latest}");
-    let emit = |downloaded: u64, total: Option<u64>, done: bool| {
+    let emit = |downloaded: u64, total: Option<u64>, speed: u64, done: bool| {
         let _ = app.emit(
             crate::manager::EVT_TOOLS,
             crate::media::ToolProgress {
                 tool: label.clone(),
                 downloaded,
                 total,
+                speed,
                 done,
             },
         );
     };
-    let result = download(client, &latest, &asset, info.sums_url.as_deref(), |d, t| {
-        emit(d, t, false)
-    })
+    let result = download(
+        client,
+        &latest,
+        &asset,
+        info.sums_url.as_deref(),
+        |d, t, s| emit(d, t, s, false),
+    )
     .await;
-    emit(0, None, true);
+    emit(0, None, 0, true);
     BUSY.store(false, Ordering::SeqCst);
     let update = result?;
     if let Ok(mut r) = READY.lock() {

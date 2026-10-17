@@ -4,7 +4,7 @@
   import { app } from '../lib/store.svelte';
   import { api, errorText } from '../lib/api';
   import { t, i18n, LANGUAGES } from '../lib/i18n.svelte';
-  import { date } from '../lib/format';
+  import { bytes, date, duration, percent, speed } from '../lib/format';
   import type { BridgeStatus, FilterStatus, Settings, ToolStatus, UpdateReport } from '../types';
   import Icon from './Icon.svelte';
   import { ACCENTS, MATERIALS } from '../lib/theme';
@@ -47,6 +47,7 @@
   let tools = $state<ToolStatus | null>(null);
   let updates = $state<UpdateReport | null>(null);
   let checking = $state(false);
+  let updateProgress = $derived(app.toolProgress?.tool.startsWith('Multron Download Manager') ? app.toolProgress : null);
   let filterStatus = $state<FilterStatus | null>(null);
   let bridge = $state<BridgeStatus | null>(null);
   let toolBusy = $state<string | null>(null);
@@ -804,6 +805,23 @@
               <div class="rounded-[10px] border border-ok/40 bg-ok/10 p-3 my-3 flex items-center justify-between text-[12px]">
                 <span>{t('Multron Download Manager {version} is downloaded and ready.', { version: app.updateReady.version })}</span>
                 <button class="btn btn-primary" onclick={() => app.installUpdate()}>{t('Restart and update')}</button>
+              </div>
+            {/if}
+            {#if updateProgress}
+              {@const p = updateProgress}
+              {@const pct = p.total ? percent(p.downloaded, p.total) : null}
+              <div class="rounded-[10px] border border-line bg-panel p-3 my-3 text-[12px] space-y-2">
+                <div class="flex items-center justify-between gap-3">
+                  <span>{t('Downloading')} {p.tool}</span>
+                  <span class="mono text-muted">{pct !== null ? Math.floor(pct) + '%' : ''}</span>
+                </div>
+                <div class="w-full h-[6px] bg-line rounded-full overflow-hidden">
+                  <div class="h-full bg-accent rounded-full transition-[width] duration-300 {pct === null ? 'progress-live w-full' : ''}" style={pct !== null ? `width: ${pct}%` : ''}></div>
+                </div>
+                <div class="flex items-center justify-between gap-3 mono text-[11px] text-muted">
+                  <span>{bytes(p.downloaded)}{p.total ? ' / ' + bytes(p.total) : ''}</span>
+                  <span>{speed(p.speed)}{p.total && p.speed > 0 ? ' · ' + t('{time} left', { time: duration((p.total - p.downloaded) / p.speed) }) : ''}</span>
+                </div>
               </div>
             {/if}
             <button class="btn btn-accent mt-2" disabled={checking} onclick={checkUpdates}><Icon name="refresh" size={13} />{checking ? '…' : t('Check for updates')}</button>

@@ -5,6 +5,7 @@
   import { t } from './lib/i18n.svelte';
   import { api, errorText } from './lib/api';
   import { applyAppearance } from './lib/theme';
+  import { bytes, speed } from './lib/format';
   import Sidebar from './components/Sidebar.svelte';
   import Icon from './components/Icon.svelte';
   import Header from './components/Header.svelte';
@@ -132,7 +133,7 @@
         <div class="w-full h-[6px] bg-line rounded-full overflow-hidden">
           <div class="h-full bg-accent rounded-full transition-[width] duration-300 {pct === null || u.phase === 'installing' ? 'progress-live w-full' : ''}" style={pct !== null && u.phase !== 'installing' ? `width: ${pct}%` : ''}></div>
         </div>
-        <p class="text-[11.5px] text-dim">{u.phase === 'installing' ? '' : pct !== null ? pct + '%' : ''}{u.error ? ' · ' + t('Retrying…') : ''}</p>
+        <p class="text-[11.5px] text-dim mono">{u.phase === 'installing' || !p ? '' : (pct !== null ? pct + '% · ' : '') + bytes(p.downloaded) + (p.total ? ' / ' + bytes(p.total) : '') + ' · ' + speed(p.speed)}{u.error ? ' · ' + t('Retrying…') : ''}</p>
       {/if}
     </div>
   </div>

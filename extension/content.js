@@ -403,6 +403,24 @@
     return wrap;
   }
 
+  let dismissed = null;
+
+  function closeButton() {
+    const close = document.createElement('button');
+    close.className = 'multron-close';
+    close.type = 'button';
+    close.title = 'Hide on this page';
+    close.setAttribute('aria-label', 'Hide on this page');
+    close.textContent = '×';
+    close.addEventListener('click', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      dismissed = location.href;
+      refresh();
+    });
+    return close;
+  }
+
   let fab = null;
   let fabKind = null;
 
@@ -421,6 +439,7 @@
       main.addEventListener('click', () => send({ url: location.href, kind: 'http', pageTitle: resolveName({ url: location.href }, 'file') }));
       fab.appendChild(main);
     }
+    fab.appendChild(closeButton());
     document.documentElement.appendChild(fab);
     updateFabLabel();
   }
@@ -478,7 +497,7 @@
   }
 
   function updateOverlay() {
-    const target = enabled ? mainVideo() : null;
+    const target = enabled && dismissed !== location.href ? mainVideo() : null;
     if (!target || document.fullscreenElement) {
       overlay?.remove();
       overlay = null;
@@ -489,6 +508,7 @@
       overlay = document.createElement('div');
       overlay.className = 'multron-video';
       overlay.appendChild(qualityButton('Download video', (q) => overlayTarget && sendItem(videoItem(overlayTarget), q)));
+      overlay.appendChild(closeButton());
       document.documentElement.appendChild(overlay);
     }
     overlayTarget = target;
@@ -505,7 +525,7 @@
   let enabled = true;
   function refresh() {
     updateOverlay();
-    const kind = !enabled ? null : filePage() ? 'file' : mediaPage() && !overlay ? 'media' : null;
+    const kind = !enabled || dismissed === location.href ? null : filePage() ? 'file' : mediaPage() && !overlay ? 'media' : null;
     if (kind) {
       showFab(kind);
       updateFabLabel();

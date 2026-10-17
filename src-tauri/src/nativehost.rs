@@ -223,6 +223,51 @@ pub fn unregister(data_dir: &Path) {
             let _ = std::fs::remove_file(path);
         }
     }
+    if cfg!(target_os = "linux") {
+        if let Some(home) = crate::flatpak::home() {
+            unregister_flatpaks(&home);
+        }
+    }
+}
+
+fn unregister_flatpaks(home: &Path) {
+    let file = format!("{HOST_NAME}.json");
+    for app in crate::flatpak::APPS {
+        for path in crate::flatpak::manifest_paths(home, app, &file) {
+            let _ = std::fs::remove_file(path);
+        }
+        let _ = std::fs::remove_file(crate::flatpak::wrapper_path(home, app.id));
+    }
+}
+
+fn register_flatpaks(home: &Path, exe: &Path, trusted: &[String]) {
+    use crate::flatpak::Hosts;
+    let file = format!("{HOST_NAME}.json");
+    let apps = crate::flatpak::installed(&crate::flatpak::roots(home));
+    for app in &apps {
+        let wrapper = crate::flatpak::wrapper_path(home, app.id);
+        write_if_changed(&wrapper, &crate::flatpak::wrapper_script(exe));
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let _ = std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o755));
+        }
+        let (chromium, firefox) = manifests(&wrapper, trusted);
+        let body = match app.hosts {
+            Hosts::Chromium(_) => &chromium,
+            Hosts::Firefox(_) => &firefox,
+        };
+        for path in crate::flatpak::manifest_paths(home, app, &file) {
+            write_if_changed(&path, body);
+        }
+    }
+    if apps.iter().any(|a| matches!(a.hosts, Hosts::Firefox(_))) {
+        let (_, firefox) = manifests(exe, trusted);
+        write_if_changed(
+            &home.join(".mozilla/native-messaging-hosts").join(&file),
+            &firefox,
+        );
+    }
 }
 
 pub fn register(data_dir: &Path, trusted: &[String]) {
@@ -305,6 +350,11 @@ pub fn register(data_dir: &Path, trusted: &[String]) {
             write_if_changed(&firefox_dir.join(&file), &firefox);
         }
     }
+    if cfg!(target_os = "linux") {
+        if let Some(home) = crate::flatpak::home() {
+            register_flatpaks(&home, &exe, trusted);
+        }
+    }
 }
 
 #[cfg(windows)]
@@ -342,6 +392,52 @@ mod tests {
         ])));
         assert!(!is_invocation(&s(&["mdm.exe", "--minimized"])));
         assert!(!is_invocation(&s(&["mdm.exe", "magnet:?xt=urn:btih:1"])));
+    }
+
+    #[test]
+    fn registers_flatpak_browsers_inside_their_sandbox() {
+        let home = std::env::temp_dir().join(format!("mdm-nativehost-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&home);
+        for id in ["org.mozilla.firefox", "com.google.Chrome"] {
+            std::fs::create_dir_all(
+                home.join(".local/share/flatpak/app")
+                    .join(id)
+                    .join("current"),
+            )
+            .unwrap();
+        }
+        let exe = Path::new("/opt/mdm/multron-download-manager");
+        register_flatpaks(&home, exe, &[]);
+        let wrapper = crate::flatpak::wrapper_path(&home, "com.google.Chrome");
+        assert!(std::fs::read_to_string(&wrapper)
+            .unwrap()
+            .contains("flatpak-spawn --host '/opt/mdm/multron-download-manager'"));
+        let chrome: Value = serde_json::from_str(
+            &std::fs::read_to_string(home.join(".var/app/com.google.Chrome/config/google-chrome/NativeMessagingHosts/com.multron.downloadmanager.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(chrome["path"], wrapper.to_string_lossy().as_ref());
+        assert_eq!(
+            chrome["allowed_origins"][0],
+            format!("chrome-extension://{CHROMIUM_ID}/")
+        );
+        let sandboxed: Value = serde_json::from_str(
+            &std::fs::read_to_string(home.join(".var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts/com.multron.downloadmanager.json")).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(sandboxed["allowed_extensions"][0], FIREFOX_ID);
+        let host: Value = serde_json::from_str(
+            &std::fs::read_to_string(
+                home.join(".mozilla/native-messaging-hosts/com.multron.downloadmanager.json"),
+            )
+            .unwrap(),
+        )
+        .unwrap();
+        assert_eq!(host["path"], "/opt/mdm/multron-download-manager");
+        unregister_flatpaks(&home);
+        assert!(!wrapper.exists());
+        assert!(!home.join(".var/app/org.mozilla.firefox/.mozilla/native-messaging-hosts/com.multron.downloadmanager.json").exists());
+        let _ = std::fs::remove_dir_all(&home);
     }
 
     #[test]

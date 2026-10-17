@@ -49,7 +49,36 @@ pub struct ToolProgress {
     pub tool: String,
     pub downloaded: u64,
     pub total: Option<u64>,
+    pub speed: u64,
     pub done: bool,
+}
+
+#[derive(Default)]
+pub struct SpeedMeter {
+    last: Option<(u64, std::time::Instant)>,
+    speed: f64,
+}
+
+impl SpeedMeter {
+    pub fn sample(&mut self, bytes: u64) -> u64 {
+        let now = std::time::Instant::now();
+        match self.last {
+            Some((before, at)) => {
+                let secs = now.duration_since(at).as_secs_f64();
+                if secs >= 0.2 {
+                    let current = bytes.saturating_sub(before) as f64 / secs;
+                    self.speed = if self.speed == 0.0 {
+                        current
+                    } else {
+                        self.speed * 0.6 + current * 0.4
+                    };
+                    self.last = Some((bytes, now));
+                }
+            }
+            None => self.last = Some((bytes, now)),
+        }
+        self.speed as u64
+    }
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -428,11 +457,16 @@ impl Tools {
         });
         let mut run = tokio::spawn(engine::run(job));
         let mut tick = tokio::time::interval(Duration::from_millis(250));
-        let report = |done: bool| ToolProgress {
-            tool: label.to_string(),
-            downloaded: progress.downloaded(),
-            total: progress.total(),
-            done,
+        let mut meter = SpeedMeter::default();
+        let mut report = |done: bool| {
+            let downloaded = progress.downloaded();
+            ToolProgress {
+                tool: label.to_string(),
+                downloaded,
+                total: progress.total(),
+                speed: meter.sample(downloaded),
+                done,
+            }
         };
         let finished = loop {
             tokio::select! {

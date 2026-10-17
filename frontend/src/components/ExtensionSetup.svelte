@@ -98,7 +98,7 @@
           <Icon name="check" size={18} class="text-ok" />
           <div class="text-[12.5px]">
             <div class="font-medium">{t('The extension is connected')}</div>
-            <div class="text-muted">{t('Downloads from your browser now go to Multron. Look for the Multron Download Manager button next to videos.')}</div>
+            <div class="text-muted">{t('Downloads from your browser now go to Multron Download Manager. Look for the Multron Download Manager button next to videos.')}</div>
           </div>
         </div>
         <div class="flex justify-end"><button class="btn btn-accent" onclick={close}>{t('Done')}</button></div>
@@ -178,6 +178,16 @@
                 <p class="text-[11px] text-dim leading-relaxed">
                   {t('Firefox removes temporary add-ons when it closes. Run this assistant again after restarting Firefox.')}
                 </p>
+              {/if}
+
+              {#if browser.flatpak && !browser.flatpakAutostart && browser.flatpakGrant}
+                <div class="rounded-[9px] border border-warn/40 bg-warn/10 p-2.5 space-y-2 text-[11.5px] leading-relaxed">
+                  <p>{t('{name} is a Flatpak app. Downloads work right away. To let the extension also start Multron Download Manager when it is closed, run this command once and restart the browser:', { name: browser.name })}</p>
+                  <div class="flex items-center gap-2">
+                    <input class="field mono flex-1 !text-[11px]" readonly value={browser.flatpakGrant} onfocus={(e) => e.currentTarget.select()} />
+                    <button class="btn" onclick={() => copy(browser.flatpakGrant ?? '')}><Icon name="copy" size={13} />{t('Copy')}</button>
+                  </div>
+                </div>
               {/if}
 
               <div class="flex items-center gap-2 text-[12px] text-muted pt-1">

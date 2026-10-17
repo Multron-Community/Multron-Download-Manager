@@ -165,6 +165,8 @@ Click **Browser extension** in the sidebar (it also opens on the first start):
    - **Firefox:** click **Load Temporary Add-on…** and paste the path to `manifest.json`. Firefox removes temporary add-ons when it closes; run the assistant again after a restart.
 4. The extension connects by itself — press **Allow** in Multron. The assistant shows when it is connected.
 
+**Flatpak browsers on Linux** (Flathub: Chrome, Chromium, Ungoogled Chromium, Edge, Brave, Opera, Vivaldi, Yandex, Firefox, LibreWolf, Waterfox, Floorp and Zen) are found too and listed as *(Flatpak)*. The assistant opens them with `flatpak run` and copies the extension into the browser's own folder (`~/.var/app/<app id>/`), which the sandboxed browser can always read. Downloads work right away, because the extension reaches the app over `127.0.0.1`. To let the extension also start Multron Download Manager when it is closed, the browser needs permission to start programs outside its sandbox; the assistant shows the command, for example `flatpak override --user --talk-name=org.freedesktop.Flatpak org.mozilla.firefox`, and you run it yourself once, because it loosens the browser's sandbox.
+
 Browsers do not let other programs install unpacked extensions silently, so the browser's own *Load unpacked* step stays manual. The extension zip from each release (`multron-browser-extension-chromium-v<version>.zip` / `-firefox-`) works the same way.
 
 The extension talks to the app over `http://127.0.0.1:6801` only (port configurable on both sides).
