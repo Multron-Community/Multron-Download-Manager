@@ -37,7 +37,7 @@ jobs:
       version: ${{ steps.version.outputs.version }}
       skip: ${{ steps.create.outputs.skip }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Read version
         id: version
@@ -53,7 +53,7 @@ jobs:
 
       - name: Create draft release
         id: create
-        uses: actions/github-script@v7
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           VERSION: ${{ steps.version.outputs.version }}
           PRERELEASE: ${{ github.event.inputs.prerelease || 'false' }}
@@ -78,6 +78,11 @@ jobs:
               } catch (e) {
                 if (e.status !== 404) throw e;
               }
+            }
+            const key = fs.readFileSync('src-tauri/update-key.pub', 'utf8').trim();
+            if (Buffer.from(key, 'base64').length !== 32) {
+              core.setFailed('src-tauri/update-key.pub has no Ed25519 public key. Run node scripts/update-keys.mjs and commit the public key before releasing.');
+              return;
             }
             const notesFile = `release-notes/${tag}.md`;
             let notes;
@@ -111,7 +116,7 @@ jobs:
               '| Any Linux | `*.AppImage` |',
               '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` |',
               '',
-              'Verify downloads with `SHA256SUMS.txt`.',
+              'Every file is listed with its SHA-256 in `update.json`, which is signed with the Multron Download Manager release key (`update.json.sig`). Verify a download with `node scripts/verify-update.mjs update.json update.json.sig <file>` from the repository, or check its build provenance with `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager`. `SHA256SUMS.txt` lists the same hashes without a signature.',
               '',
               'macOS builds are not notarized: right-click → Open the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.'
             ].join('\n');
@@ -139,25 +144,37 @@ jobs:
       matrix:
         include:
           - name: macOS (Apple Silicon)
+            key: macos-aarch64
             platform: macos-latest
-            args: --target aarch64-apple-darwin --bundles app,dmg
+            args: --target aarch64-apple-darwin --bundles dmg
             rust_targets: aarch64-apple-darwin
+            outputs: src-tauri/target/aarch64-apple-darwin/release/bundle/dmg/*.dmg
           - name: macOS (Intel)
+            key: macos-x64
             platform: macos-latest
-            args: --target x86_64-apple-darwin --bundles app,dmg
+            args: --target x86_64-apple-darwin --bundles dmg
             rust_targets: x86_64-apple-darwin
+            outputs: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
           - name: Linux (x86_64)
+            key: linux-x86_64
             platform: ubuntu-24.04
             args: --bundles deb,appimage
             rust_targets: ''
+            outputs: |
+              src-tauri/target/release/bundle/deb/*.deb
+              src-tauri/target/release/bundle/appimage/*.AppImage
           - name: Linux (arm64)
+            key: linux-arm64
             platform: ubuntu-24.04-arm
             args: --bundles deb,appimage
             rust_targets: ''
             rustflags: -C link-arg=-fuse-ld=lld
+            outputs: |
+              src-tauri/target/release/bundle/deb/*.deb
+              src-tauri/target/release/bundle/appimage/*.AppImage
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
       - name: Install Linux dependencies
         if: startsWith(matrix.platform, 'ubuntu')
@@ -165,7 +182,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file xdg-utils lld libfuse2t64
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -173,11 +190,12 @@ jobs:
             package-lock.json
             frontend/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
         with:
+          toolchain: stable
           targets: ${{ matrix.rust_targets }}
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.platform }}-${{ matrix.rust_targets }}
@@ -186,13 +204,17 @@ jobs:
       - name: Install npm packages
         run: npm ci && npm ci --prefix frontend
 
-      - uses: tauri-apps/tauri-action@v0
+      - name: Build
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUSTFLAGS: ${{ matrix.rustflags }}
+        run: npm run tauri -- build ${{ matrix.args }}
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
-          args: ${{ matrix.args }}
+          name: release-${{ matrix.key }}
+          path: ${{ matrix.outputs }}
+          if-no-files-found: error
+          retention-days: 7
 
   build-distro:
     name: Build ${{ matrix.name }}
@@ -272,9 +294,9 @@ jobs:
             echo "RUSTFLAGS=-C link-arg=-fuse-ld=lld" >> "$GITHUB_ENV"
           fi
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -282,9 +304,11 @@ jobs:
             package-lock.json
             frontend/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: src-tauri -> target
           key: ${{ matrix.flavor }}-${{ matrix.arch }}
@@ -298,35 +322,28 @@ jobs:
           MULTRON_PACKAGE_FLAVOR: ${{ matrix.flavor }}
         run: npm run tauri -- build --bundles ${{ matrix.bundle }}
 
-      - name: Upload package
-        uses: actions/github-script@v7
+      - name: Name the package
         env:
-          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           VERSION: ${{ needs.create-release.outputs.version }}
           FLAVOR: ${{ matrix.flavor }}
           BUNDLE: ${{ matrix.bundle }}
           ARCH: ${{ matrix.arch }}
+        run: |
+          set -e
+          count=$(find "src-tauri/target/release/bundle/$BUNDLE" -maxdepth 1 -name "*.$BUNDLE" | wc -l)
+          if [ "$count" -ne 1 ]; then
+            echo "::error::expected one .$BUNDLE package, found $count"
+            exit 1
+          fi
+          mkdir -p dist
+          cp "src-tauri/target/release/bundle/$BUNDLE/"*."$BUNDLE" "dist/Multron-Download-Manager_${VERSION}_${FLAVOR}_${ARCH}.${BUNDLE}"
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { owner, repo } = context.repo;
-            const { RELEASE_ID, VERSION, FLAVOR, BUNDLE, ARCH } = process.env;
-            const release_id = Number(RELEASE_ID);
-            const dir = `src-tauri/target/release/bundle/${BUNDLE}`;
-            const built = fs.readdirSync(dir).filter((n) => n.endsWith(`.${BUNDLE}`));
-            if (built.length !== 1) throw new Error(`expected one .${BUNDLE} in ${dir}, found: ${built.join(', ') || 'none'}`);
-            const name = `Multron-Download-Manager_${VERSION}_${FLAVOR}_${ARCH}.${BUNDLE}`;
-            const type = BUNDLE === 'deb' ? 'application/vnd.debian.binary-package' : 'application/x-rpm';
-            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
-            const old = existing.find((a) => a.name === name);
-            if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
-            await github.rest.repos.uploadReleaseAsset({
-              owner, repo, release_id, name,
-              headers: { 'content-type': type },
-              data: fs.readFileSync(path.join(dir, built[0])),
-            });
-            core.info(`uploaded ${name}`);
+          name: release-${{ matrix.flavor }}-${{ matrix.arch }}
+          path: dist/*.${{ matrix.bundle }}
+          if-no-files-found: error
+          retention-days: 7
 
   build-windows:
     name: Build Windows (Inno Setup)
@@ -334,9 +351,9 @@ jobs:
     if: needs.create-release.outputs.skip != 'true'
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: 22
           cache: npm
@@ -344,9 +361,11 @@ jobs:
             package-lock.json
             frontend/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
+        with:
+          toolchain: stable
 
-      - uses: swatinem/rust-cache@v2
+      - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:
           workspaces: src-tauri -> target
           cache-on-failure: true
@@ -359,36 +378,26 @@ jobs:
         run: |
           if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
 
-      - name: Download WebView2 bootstrapper
+      - name: Download WebView2 bootstrapper and check its Microsoft signature
         shell: pwsh
-        run: Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile MicrosoftEdgeWebview2Setup.exe
+        run: |
+          Invoke-WebRequest -Uri "https://go.microsoft.com/fwlink/p/?LinkId=2124703" -OutFile MicrosoftEdgeWebview2Setup.exe
+          $sig = Get-AuthenticodeSignature MicrosoftEdgeWebview2Setup.exe
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Microsoft Corporation') {
+            throw "MicrosoftEdgeWebview2Setup.exe is not signed by Microsoft ($($sig.Status), $($sig.SignerCertificate.Subject))"
+          }
 
       - name: Build installer
         env:
           ISCC: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
         run: node scripts/build-windows.mjs --webview2 MicrosoftEdgeWebview2Setup.exe
 
-      - name: Upload installer
-        uses: actions/github-script@v7
-        env:
-          RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          script: |
-            const fs = require('fs');
-            const path = require('path');
-            const { owner, repo } = context.repo;
-            const release_id = Number(process.env.RELEASE_ID);
-            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
-            for (const name of fs.readdirSync('dist').filter((n) => n.endsWith('-Setup.exe'))) {
-              const old = existing.find((a) => a.name === name);
-              if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
-              await github.rest.repos.uploadReleaseAsset({
-                owner, repo, release_id, name,
-                headers: { 'content-type': 'application/vnd.microsoft.portable-executable' },
-                data: fs.readFileSync(path.join('dist', name)),
-              });
-              core.info(`uploaded ${name}`);
-            }
+          name: release-windows-x64
+          path: dist/*-Setup.exe
+          if-no-files-found: error
+          retention-days: 7
 
   extension:
     name: Package browser extension
@@ -396,68 +405,121 @@ jobs:
     if: needs.create-release.outputs.skip != 'true'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: node scripts/package-extension.mjs
-      - name: Upload extension
-        uses: actions/github-script@v7
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: release-extension
+          path: dist/*.zip
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Sign, attest & publish
+    needs: [create-release, build-unix, build-distro, build-windows, extension]
+    if: needs.create-release.outputs.skip != 'true'
+    runs-on: ubuntu-latest
+    environment: release-signing
+    permissions:
+      contents: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          pattern: release-*
+          path: built
+          merge-multiple: true
+
+      - name: Sign what this run built and upload it
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
         with:
           script: |
+            const crypto = require('crypto');
             const fs = require('fs');
             const path = require('path');
             const { owner, repo } = context.repo;
             const release_id = Number(process.env.RELEASE_ID);
-            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
-            for (const name of fs.readdirSync('dist').filter((n) => n.endsWith('.zip'))) {
-              const old = existing.find((a) => a.name === name);
-              if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
-              await github.rest.repos.uploadReleaseAsset({
-                owner, repo, release_id, name,
-                headers: { 'content-type': 'application/zip' },
-                data: fs.readFileSync(path.join('dist', name)),
-              });
+            const secret = (process.env.UPDATE_SIGNING_KEY || '').trim();
+            if (!secret) throw new Error('UPDATE_SIGNING_KEY is not set in the release-signing environment');
+            const privateKey = crypto.createPrivateKey({ key: Buffer.from(secret, 'base64'), format: 'der', type: 'pkcs8' });
+            const pinned = Buffer.from(fs.readFileSync('src-tauri/update-key.pub', 'utf8').trim(), 'base64');
+            const publicKey = crypto.createPublicKey({
+              key: Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), pinned]),
+              format: 'der',
+              type: 'spki',
+            });
+            const types = { '.exe': 'application/vnd.microsoft.portable-executable', '.dmg': 'application/x-apple-diskimage', '.deb': 'application/vnd.debian.binary-package', '.rpm': 'application/x-rpm', '.zip': 'application/zip', '.AppImage': 'application/octet-stream' };
+            fs.mkdirSync('release', { recursive: true });
+            const files = {};
+            for (const entry of fs.readdirSync('built').sort()) {
+              const name = entry.replace(/ /g, '.');
+              if (!types[path.extname(name)]) throw new Error(`unexpected build output ${entry}`);
+              if (files[name]) throw new Error(`two build outputs are named ${name}`);
+              fs.copyFileSync(path.join('built', entry), path.join('release', name));
+              files[name] = crypto.createHash('sha256').update(fs.readFileSync(path.join('release', name))).digest('hex');
             }
+            if (!Object.keys(files).length) throw new Error('nothing was built');
+            const sums = Object.entries(files).map(([name, hash]) => `${hash}  ${name}`).join('\n') + '\n';
+            const manifest = Buffer.from(JSON.stringify({ name: 'multron-download-manager', version: process.env.VERSION, files }, null, 2) + '\n');
+            const signature = crypto.sign(null, manifest, privateKey);
+            if (!crypto.verify(null, manifest, publicKey, signature)) {
+              throw new Error('UPDATE_SIGNING_KEY does not match src-tauri/update-key.pub');
+            }
+            fs.writeFileSync('SHA256SUMS.txt', sums);
+            const setup = Object.keys(files).find((n) => n.endsWith('-Setup.exe'));
+            if (!setup) throw new Error('the Windows installer was not built');
+            require('child_process').execFileSync(process.execPath, [
+              'scripts/pad.mjs', '--version', process.env.VERSION, '--installer', path.join('release', setup), '--out', 'multron-download-manager.xml',
+            ], { stdio: 'inherit' });
+            const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            for (const a of existing) {
+              core.info(`removing ${a.name} that was on the draft before signing`);
+              await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: a.id });
+            }
+            const uploads = Object.keys(files).map((name) => [name, types[path.extname(name)], fs.readFileSync(path.join('release', name))]);
+            uploads.push(
+              ['SHA256SUMS.txt', 'text/plain', Buffer.from(sums)],
+              ['update.json', 'application/json', manifest],
+              ['update.json.sig', 'text/plain', Buffer.from(signature.toString('base64') + '\n')],
+              ['multron-download-manager.xml', 'application/xml', fs.readFileSync('multron-download-manager.xml')],
+            );
+            for (const [name, type, data] of uploads) {
+              await github.rest.repos.uploadReleaseAsset({ owner, repo, release_id, name, headers: { 'content-type': type }, data });
+            }
+            const after = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
+            const expected = new Set(uploads.map(([name]) => name));
+            const extra = after.filter((a) => !expected.has(a.name)).map((a) => a.name);
+            if (extra.length || after.length !== expected.size) {
+              throw new Error(`the draft changed while it was being signed: ${extra.join(', ') || 'missing files'}`);
+            }
+            core.info(`signed and uploaded ${Object.keys(files).length} files for ${process.env.VERSION}`);
 
-  publish:
-    name: Checksums & publish
-    needs: [create-release, build-unix, build-distro, build-windows, extension]
-    if: needs.create-release.outputs.skip != 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Write SHA256SUMS.txt and publish
-        uses: actions/github-script@v7
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
+        with:
+          subject-path: release/*
+
+      - name: Publish the release
+        if: github.event.inputs.draft != 'true'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
-          KEEP_DRAFT: ${{ github.event.inputs.draft || 'false' }}
           PRERELEASE: ${{ github.event.inputs.prerelease || 'false' }}
         with:
           script: |
-            const crypto = require('crypto');
             const { owner, repo } = context.repo;
-            const release_id = Number(process.env.RELEASE_ID);
-            const assets = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
-            const lines = [];
-            for (const a of assets.filter((a) => a.name !== 'SHA256SUMS.txt').sort((x, y) => x.name.localeCompare(y.name))) {
-              const res = await github.request('GET /repos/{owner}/{repo}/releases/assets/{asset_id}', {
-                owner, repo, asset_id: a.id, headers: { accept: 'application/octet-stream' },
-              });
-              const hash = crypto.createHash('sha256').update(Buffer.from(res.data)).digest('hex');
-              lines.push(`${hash}  ${a.name}`);
-            }
-            const old = assets.find((a) => a.name === 'SHA256SUMS.txt');
-            if (old) await github.rest.repos.deleteReleaseAsset({ owner, repo, asset_id: old.id });
-            await github.rest.repos.uploadReleaseAsset({
-              owner, repo, release_id, name: 'SHA256SUMS.txt',
-              headers: { 'content-type': 'text/plain' },
-              data: Buffer.from(lines.join('\n') + '\n'),
+            const prerelease = process.env.PRERELEASE === 'true';
+            await github.rest.repos.updateRelease({
+              owner, repo,
+              release_id: Number(process.env.RELEASE_ID),
+              draft: false,
+              prerelease: prerelease || undefined,
+              make_latest: prerelease ? 'false' : 'true',
             });
-            if (process.env.KEEP_DRAFT !== 'true') {
-              const prerelease = process.env.PRERELEASE === 'true';
-              await github.rest.repos.updateRelease({
-                owner, repo, release_id,
-                draft: false,
-                prerelease: prerelease || undefined,
-                make_latest: prerelease ? 'false' : 'true',
-              });
-            }

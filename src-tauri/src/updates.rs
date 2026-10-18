@@ -14,7 +14,9 @@ pub struct AppUpdate {
     pub error: Option<String>,
     pub asset: Option<ReleaseAsset>,
     #[serde(skip)]
-    pub sums_url: Option<String>,
+    pub manifest_url: Option<String>,
+    #[serde(skip)]
+    pub signature_url: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -57,14 +59,18 @@ pub fn test_mode() -> bool {
 }
 
 pub async fn check_app(client: &reqwest::Client) -> AppUpdate {
-    let current = env!("CARGO_PKG_VERSION").to_string();
+    check_app_at(client, &releases_api(), env!("CARGO_PKG_VERSION")).await
+}
+
+pub async fn check_app_at(client: &reqwest::Client, api: &str, current: &str) -> AppUpdate {
+    let current = current.to_string();
     let mut out = AppUpdate {
         current: current.clone(),
         url: format!("https://github.com/{REPO}/releases"),
         ..Default::default()
     };
     let resp = client
-        .get(releases_api())
+        .get(api)
         .header("Accept", "application/vnd.github+json")
         .send()
         .await;
@@ -88,7 +94,10 @@ pub async fn check_app(client: &reqwest::Client) -> AppUpdate {
                 out.notes = rel.body;
                 out.published_at = rel.published_at;
                 out.asset = crate::selfupdate::pick_asset(&rel.assets).cloned();
-                out.sums_url = crate::selfupdate::sums_url(&rel.assets);
+                out.manifest_url =
+                    crate::selfupdate::asset_url(&rel.assets, crate::selfupdate::MANIFEST_NAME);
+                out.signature_url =
+                    crate::selfupdate::asset_url(&rel.assets, crate::selfupdate::SIGNATURE_NAME);
             }
             Err(e) => out.error = Some(e.to_string()),
         },

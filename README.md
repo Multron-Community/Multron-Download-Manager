@@ -98,7 +98,7 @@
 - **Start with the system** — *Start with Windows*, *Open at login* on macOS (Login Items) or an autostart entry on Linux (GNOME, KDE, Xfce…), starting hidden in the tray.
 - **Progress on the taskbar** — while files download, the Multron Download Manager button on the Windows taskbar (the Dock icon on macOS) fills with the overall progress and gets a spinning ring in its bottom-right corner (in your accent color); the tray icon gets the same ring and its tooltip shows the percentage and speed. When a download finishes, fails or a threat is found while Multron Download Manager is in the background, its taskbar button flashes.
 - Notifications, drag & drop of .torrent files, paste a link anywhere to add it.
-- **Mandatory updates** — when Multron Download Manager starts it checks GitHub Releases; if a new version exists it shows *Updating Multron Download Manager to x.y.z* with the download progress, verifies the file against `SHA256SUMS.txt`, installs it and restarts before the app can be used. Without an internet connection Multron Download Manager starts normally and tries again next time; if the download fails three times it lets you continue and retries at the next start. Releases found while Multron Download Manager runs are downloaded in the background and installed when it quits. Development builds never update themselves.
+- **Mandatory updates** — when Multron Download Manager starts it checks GitHub Releases; if a new version exists it shows *Updating Multron Download Manager to x.y.z* with the download progress, checks the release's signed `update.json` and the file's SHA-256 (see [How updates are verified](#how-updates-are-verified)), installs it and restarts before the app can be used. Without an internet connection Multron Download Manager starts normally and tries again next time; if the download fails three times it lets you continue and retries at the next start. Releases found while Multron Download Manager runs are downloaded in the background and installed when it quits. Development builds never update themselves.
 - **Version check** for the app and for yt-dlp from inside the app (Settings → Updates & About).
 - **Community links** — the Discord and Patreon buttons in the toolbar (also in *Settings → Updates & About*) open the [Multron Download Manager Discord server](https://discord.gg/xXmQw3MUAR) and [Multron Download Manager on Patreon](https://www.patreon.com/cw/multron).
 - **Languages from language files** — follows the Windows / macOS / Linux language by default (English when there is no translation) — English, Turkish, German, French, Spanish, Italian, Portuguese (Brazil), Russian, Japanese, Chinese (Simplified), Chinese (Traditional) and Korean; a language can also be picked by hand. Translations live in `frontend/src/lang/<code>.json` (see [Translating](#translating)).
@@ -121,7 +121,7 @@ Download the file for your system from the [latest release](https://github.com/M
 | Any Linux | `*_amd64.AppImage` (or `*_aarch64.AppImage`) | `chmod +x <file>.AppImage && ./<file>.AppImage` |
 | Browser extension | `multron-browser-extension-chromium-v<version>.zip` (Chrome, Edge, Brave, Opera, Vivaldi) or `multron-browser-extension-firefox-v<version>.zip` | See [Browser extension](#browser-extension). |
 
-Verify any file with the `SHA256SUMS.txt` attached to the release.
+Every release has a signed `update.json` that lists the SHA-256 of each file. Check a download with `node scripts/verify-update.mjs update.json update.json.sig <file>` from this repository, or check where it was built with `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager` (see [How updates are verified](#how-updates-are-verified)).
 
 > **Linux:** every package is built on the distribution it is meant for. The plain `.deb` and the AppImage are built on Ubuntu 24.04 and need glibc 2.39 or newer (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). Debian 12 (bookworm) and LMDE 6 have their own `.deb` built on Debian 12, Fedora has its own `.rpm` built on Fedora 43, and openSUSE has its own `.rpm` built on Leap 16 (it also runs on Tumbleweed). Automatic updates keep each installation on the package built for its distribution. Older releases such as Ubuntu 22.04 or Linux Mint 21 are not supported.
 
@@ -326,9 +326,17 @@ Version numbers count each part up to 10, and the release after that carries ove
 1. Commit your changes. Write the release notes in `release-notes/v<version>.md` (optional) — the workflow puts them at the top of the GitHub release, above the download table. Without that file it generates the notes from the commits and pull requests since the previous release. Rerunning the workflow refreshes the notes of a release that is still a draft. `npm run release -- --dry-run` prints the version that comes next.
 2. `npm run release` — picks the next version by the rule above (the first release is `0.0.1`), sets it in `package.json`, `frontend/package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `extension/manifest.json`, commits and creates the tag `v<version>` **locally** (nothing is pushed). `npm run release -- 0.2.0` releases a specific version instead.
 3. Push when you are ready: `git push origin HEAD --follow-tags`.
-4. The **Release** workflow runs on every push to `main` (and on `v*` tags). If the version in `src-tauri/tauri.conf.json` is not released yet it builds and publishes it, otherwise it stops right away with a notice to raise the version. So pushing a commit that raises the version is enough, a tag is optional. **Actions → Release → Run workflow** builds the current version by hand: *draft* keeps the release as a draft, *pre-release* publishes it without marking it as Latest. The workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer, macOS DMGs (Apple Silicon + Intel), Linux `.deb` and `.AppImage` built on Ubuntu 24.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip and `SHA256SUMS.txt`, then publishes the release.
+4. The **Release** workflow runs on every push to `main` (and on `v*` tags). If the version in `src-tauri/tauri.conf.json` is not released yet it builds and publishes it, otherwise it stops right away with a notice to raise the version. So pushing a commit that raises the version is enough, a tag is optional. **Actions → Release → Run workflow** builds the current version by hand: *draft* keeps the release as a draft, *pre-release* publishes it without marking it as Latest. The workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer, macOS DMGs (Apple Silicon + Intel), Linux `.deb` and `.AppImage` built on Ubuntu 24.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip, `SHA256SUMS.txt`, the signed `update.json` and a PAD file for software download sites (`multron-download-manager.xml`, always at `https://github.com/Multron-Community/Multron-Download-Manager/releases/latest/download/multron-download-manager.xml`), then publishes the release.
 
-Installed copies pick the new release up through automatic updates: each one downloads the file for its own platform and package format and only installs it when its SHA-256 matches `SHA256SUMS.txt`.
+Installed copies pick the new release up through automatic updates: each one downloads the file for its own platform and package format and only installs it when the signed `update.json` and the file's SHA-256 check out.
+
+**Update signing (one-time setup).** Releases are signed with an Ed25519 key whose public half is built into the app (`src-tauri/update-key.pub`). The Release workflow refuses to run while that file is empty.
+
+1. Run `node scripts/update-keys.mjs`. It writes the public key to `src-tauri/update-key.pub` and the private key to `~/multron-update-signing-key.txt` (never inside the repository). Commit the public key.
+2. In GitHub, open *Settings → Environments*, create **`release-signing`**, add yourself as a **required reviewer** and limit it to the `main` branch and `v*` tags.
+3. Add the private key as the environment secret **`UPDATE_SIGNING_KEY`**, keep an offline backup and delete the file from your computer.
+
+Each release then waits for your approval before the signing job can read the key. Keep the key safe: installed copies accept only updates signed with it, so a new key (`--rotate`) means every user has to install the next version by hand once.
 
 The **CI** workflow runs svelte-check, the frontend build, `cargo fmt`, clippy and the Rust tests on Windows, macOS and Linux for every push and pull request.
 
@@ -385,9 +393,24 @@ Multron-Download-Manager/
   - When the antivirus blocks a file while it downloads ("access denied") or removes it right after, the download is marked **Threat found** and a notification appears.
   - Threats are shown on the download and in a notification; files that could not be scanned are marked *Not scanned* with the reason. Files of multi-file torrents and media downloads are all marked and scanned.
 - Nothing of this runs on Linux yet.
-- Automatic updates only come from this repository's GitHub releases and are installed only when the file's SHA-256 matches the release's `SHA256SUMS.txt`.
+- Automatic updates only come from this repository's GitHub releases and are installed only after their signature checks out (see below).
 - Torrent privacy options include SOCKS5 proxying, interface binding, IP filters and disabling DHT / LSD / trackers.
 
+
+### How updates are verified
+
+- **Signed manifest.** The Release workflow writes `update.json`, with the version and the SHA-256 of every file, and signs it with an Ed25519 key (`update.json.sig`). The public key is built into the app, so an update is installed only if the signature matches. Someone who can change files on the GitHub release, for example with a stolen token, cannot produce a valid signature without the private key.
+- **SHA-256 of the file.** The downloaded package must match its SHA-256 in the signed manifest. The hash is checked again right before installing, so a file changed on disk in the meantime is refused.
+- **No rollback.** The signed version must be exactly the release being installed and newer than the installed one, so an old signed manifest cannot be replayed to install an older version.
+- **Official source only.** The release information, the package, the manifest and the signature must come from `https://github.com` or `https://api.github.com` over TLS 1.2+, with certificates always checked and HTTPS → HTTP redirects refused, even if *Accept invalid TLS certificates* is turned on for downloads.
+- **Fail closed.** A release without `update.json` or a valid signature is not installed, and a build without a public key installs no updates at all.
+- **Private folder.** Updates are downloaded into the app's own cache folder (only your user can open it on Linux and macOS), not into a shared temporary folder, because `.deb` and `.rpm` packages are installed with administrator rights.
+- **Protected key.** The private key is stored only as a secret of the `release-signing` GitHub environment, which needs the maintainer's approval for every release; the build jobs never see it.
+- **Only what was built gets signed.** Build jobs keep their output as artifacts of the workflow run and never touch the release. The signing job removes everything that is on the draft, signs and uploads exactly the files built in that run, and fails if the draft changes in the meantime.
+- **Pinned build tools.** Every GitHub Action in the Release workflow is pinned to a commit, and the bundled WebView2 installer must carry a valid Microsoft signature.
+- **Build provenance.** Every file gets a GitHub build attestation that records which workflow run and commit built it: `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager`.
+- **Reproducible builds.** The builds are not yet bit-for-bit reproducible (installers and packages contain timestamps), so rebuilding from source gives a working app but not identical files. The attestation shows which commit a file was built from, and [Building from source](#building-from-source) builds that commit yourself.
+- Copies older than v0.0.5 check updates against `SHA256SUMS.txt` only; it is still published for them and for manual checks.
 ---
 
 ## Translating

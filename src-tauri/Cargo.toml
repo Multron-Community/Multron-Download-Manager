@@ -1,6 +1,6 @@
 [package]
 name = "multron-download-manager"
-version = "0.0.4"
+version = "0.0.5"
 description = "Multron Download Manager - fast multi-connection, media and torrent downloader"
 authors = ["Multron Community"]
 license-file = "../LICENSE"
@@ -46,6 +46,7 @@ quick-xml = "0.41"
 regex = "1"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 sha2 = "0.10"
+ed25519-dalek = "2"
 hex = "0.4"
 base64 = "0.22"
 aes = "0.8"
