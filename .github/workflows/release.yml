@@ -514,6 +514,7 @@ jobs:
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b
         env:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
+          VERSION: ${{ needs.create-release.outputs.version }}
           PRERELEASE: ${{ github.event.inputs.prerelease || 'false' }}
         with:
           script: |
@@ -522,6 +523,8 @@ jobs:
             await github.rest.repos.updateRelease({
               owner, repo,
               release_id: Number(process.env.RELEASE_ID),
+              tag_name: `v${process.env.VERSION}`,
+              target_commitish: context.sha,
               draft: false,
               prerelease: prerelease || undefined,
               make_latest: prerelease ? 'false' : 'true',
