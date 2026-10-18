@@ -458,11 +458,14 @@ jobs:
             const types = { '.exe': 'application/vnd.microsoft.portable-executable', '.dmg': 'application/x-apple-diskimage', '.deb': 'application/vnd.debian.binary-package', '.rpm': 'application/x-rpm', '.zip': 'application/zip', '.AppImage': 'application/octet-stream' };
             fs.mkdirSync('release', { recursive: true });
             const files = {};
-            for (const entry of fs.readdirSync('built').sort()) {
+            const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true })
+              .flatMap((e) => (e.isDirectory() ? walk(path.join(dir, e.name)) : [path.join(dir, e.name)]));
+            for (const full of walk('built').sort()) {
+              const entry = path.basename(full);
               const name = entry.replace(/ /g, '.');
-              if (!types[path.extname(name)]) throw new Error(`unexpected build output ${entry}`);
+              if (!types[path.extname(name)]) throw new Error(`unexpected build output ${full}`);
               if (files[name]) throw new Error(`two build outputs are named ${name}`);
-              fs.copyFileSync(path.join('built', entry), path.join('release', name));
+              fs.copyFileSync(full, path.join('release', name));
               files[name] = crypto.createHash('sha256').update(fs.readFileSync(path.join('release', name))).digest('hex');
             }
             if (!Object.keys(files).length) throw new Error('nothing was built');
