@@ -305,9 +305,24 @@ jobs:
             package-lock.json
             frontend/package-lock.json
 
-      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec
-        with:
-          toolchain: stable
+      - name: Install Rust
+        env:
+          RUSTUP_MAX_RETRIES: 10
+        run: |
+          for attempt in 1 2 3 4 5; do
+            if curl --proto '=https' --tlsv1.2 -sSf --retry 5 --retry-all-errors --retry-delay 5 --connect-timeout 20 https://sh.rustup.rs -o /tmp/rustup-init.sh               && sh /tmp/rustup-init.sh -y --profile minimal --default-toolchain stable --no-modify-path; then
+              break
+            fi
+            if [ "$attempt" = 5 ]; then
+              echo "Rust could not be installed after 5 attempts" >&2
+              exit 1
+            fi
+            echo "Installing Rust failed (attempt $attempt), trying again in $((attempt * 20)) seconds"
+            sleep $((attempt * 20))
+          done
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          echo "CARGO_INCREMENTAL=0" >> "$GITHUB_ENV"
+          echo "CARGO_TERM_COLOR=always" >> "$GITHUB_ENV"
 
       - uses: swatinem/rust-cache@6323deb102c322ba6fcbdcafc7e3dddab59af2b6
         with:

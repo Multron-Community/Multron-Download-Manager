@@ -119,7 +119,12 @@ pub fn replace_files(source: &Path, target: &Path) -> Result<()> {
 }
 
 pub fn cleanup(dir: &Path) {
-    for file in files(dir) {
+    let entries = std::fs::read_dir(dir).into_iter().flatten().flatten();
+    let candidates = entries
+        .map(|e| e.path())
+        .filter(|p| p.file_name().is_none_or(|n| n != DATA))
+        .flat_map(|p| if p.is_dir() { files(&p) } else { vec![p] });
+    for file in candidates {
         if file.to_string_lossy().ends_with(OLD_SUFFIX) {
             let _ = std::fs::remove_file(file);
         }

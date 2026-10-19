@@ -486,11 +486,15 @@ hdiutil detach -quiet "$mnt"
 fn relaunch_later(exe: &Path) -> Result<()> {
     use std::os::windows::process::CommandExt;
     const CREATE_NO_WINDOW: u32 = 0x0800_0000;
-    let mut cmd = Command::new("cmd");
-    cmd.raw_arg(format!(
-        "/C ping -n 3 127.0.0.1 >nul & start \"\" \"{}\"",
-        exe.display()
-    ));
+    let mut cmd = Command::new("powershell");
+    cmd.args([
+        "-NoProfile",
+        "-NonInteractive",
+        "-WindowStyle",
+        "Hidden",
+        "-Command",
+        &relaunch_script(std::process::id(), exe),
+    ]);
     detach(&mut cmd);
     cmd.creation_flags(CREATE_NO_WINDOW);
     cmd.spawn()
@@ -501,6 +505,18 @@ fn relaunch_later(exe: &Path) -> Result<()> {
 #[cfg(not(windows))]
 fn relaunch_later(_exe: &Path) -> Result<()> {
     Ok(())
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+fn relaunch_script(pid: u32, exe: &Path) -> String {
+    let path = exe.to_string_lossy();
+    let path = path
+        .strip_prefix(r"\\?\")
+        .unwrap_or(&path)
+        .replace('\'', "''");
+    format!(
+        "Wait-Process -Id {pid} -Timeout 120 -ErrorAction SilentlyContinue; Start-Process -FilePath '{path}'"
+    )
 }
 
 fn sh_quote(s: &str) -> String {
@@ -1413,6 +1429,18 @@ mod tests {
         assert_eq!(
             pick(PackageKind::AppImage, x64, None),
             Some("Multron.Download.Manager_0.0.2_amd64.AppImage")
+        );
+    }
+
+    #[test]
+    fn relaunch_waits_for_the_old_process() {
+        let script = relaunch_script(
+            4242,
+            Path::new(r"\\?\C:\Users\o'neil\Desktop\Multron\multron-download-manager.exe"),
+        );
+        assert_eq!(
+            script,
+            r"Wait-Process -Id 4242 -Timeout 120 -ErrorAction SilentlyContinue; Start-Process -FilePath 'C:\Users\o''neil\Desktop\Multron\multron-download-manager.exe'"
         );
     }
 
