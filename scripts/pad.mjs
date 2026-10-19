@@ -6,7 +6,9 @@ import { appVersion, root } from './lib.mjs';
 const REPO = 'https://github.com/Multron-Community/Multron-Download-Manager';
 const RAW = 'https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main';
 const EMAIL = 'winball501@gmail.com';
+
 export const PAD_NAME = 'multron-download-manager.xml';
+export const PAD_URL = `${RAW}/${PAD_NAME}`;
 
 const DESCRIPTIONS = {
   Char_Desc_45: 'Fast download manager for files and videos',
@@ -170,7 +172,7 @@ export function padXml({ version, date, size }) {
         tag('Application_Order_URL'),
         tag('Application_Screenshot_URL', `${RAW}/docs/screenshots/downloads-dark.png`),
         tag('Application_Icon_URL', `${RAW}/src-tauri/icons/32x32.png`),
-        tag('Application_XML_File_URL', `${REPO}/releases/latest/download/${PAD_NAME}`)
+        tag('Application_XML_File_URL', PAD_URL)
       ),
       block(
         'Download_URLs',
@@ -201,13 +203,13 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     return i === -1 ? undefined : args[i + 1];
   };
   const version = opt('version') ?? appVersion();
-  const installer = opt('installer');
-  if (!installer || !fs.existsSync(installer)) {
-    console.error('Usage: node scripts/pad.mjs --installer <path to the Windows setup> [--version x.y.z] [--date YYYY-MM-DD] [--out file]');
+  const installer = opt('installer') ?? path.join(root, 'dist', `Multron-Download-Manager-${version}-x64-Setup.exe`);
+  if (!fs.existsSync(installer)) {
+    console.error('Usage: node scripts/pad.mjs [--installer <path to the Windows setup>] [--version x.y.z] [--date YYYY-MM-DD] [--out file]');
     process.exit(2);
   }
   const date = opt('date') ?? new Date().toISOString().slice(0, 10);
-  const out = opt('out') ?? path.join(root, 'dist', PAD_NAME);
+  const out = opt('out') ?? path.join(root, PAD_NAME);
   fs.mkdirSync(path.dirname(out), { recursive: true });
   fs.writeFileSync(out, padXml({ version, date, size: fs.statSync(installer).size }));
   console.log(`PAD file for ${version}: ${out}`);

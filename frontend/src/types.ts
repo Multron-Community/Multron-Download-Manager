@@ -60,6 +60,8 @@ export interface Download {
   hashState: HashState;
   scanState: '' | 'scanning' | 'clean' | 'threat' | 'skipped';
   scanDetail?: string | null;
+  cloudState: '' | 'scanning' | 'clean' | 'threat' | 'suspicious' | 'skipped' | 'error';
+  cloudDetail?: string | null;
   speed: number;
   eta: number | null;
   connections: number;
@@ -136,6 +138,10 @@ export interface Settings {
   onCompleteCommand: string;
   markDownloads: boolean;
   scanDownloads: boolean;
+  cloudScan: boolean;
+  openProgramsOnDoubleClick: boolean;
+  cloudScanAccepted: boolean;
+  cloudScanLimitMb: number;
   whenDone: 'nothing' | 'sleep' | 'shutdown' | 'quit';
   extraTrackers: string[];
   torrentProxy: string;

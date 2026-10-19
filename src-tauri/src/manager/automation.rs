@@ -542,6 +542,9 @@ fn collect_files(path: &Path, out: &mut Vec<PathBuf>, limit: usize) {
 impl Manager {
     pub(super) fn after_download(self: &Arc<Self>, rec: DownloadRecord) {
         let s = self.settings();
+        if s.cloud_scan && s.cloud_scan_accepted {
+            self.cloud_scan(&rec, s.cloud_scan_limit_mb);
+        }
         if cfg!(all(unix, not(target_os = "macos"))) || (!s.mark_downloads && !s.scan_downloads) {
             return;
         }
@@ -595,6 +598,34 @@ impl Manager {
             if let crate::security::Verdict::Threat(what) = verdict {
                 this.notify("threat", &format!("{}: {what}", rec.name));
                 this.toast("error", format!("{}: {what}", rec.name));
+            }
+            this.mark_dirty();
+            this.save_needed.store(true, Ordering::Relaxed);
+        });
+    }
+
+    fn cloud_scan(self: &Arc<Self>, rec: &DownloadRecord, limit_mb: u32) {
+        let files = downloaded_files(rec);
+        if files.is_empty() {
+            return;
+        }
+        let id = rec.id.clone();
+        let name = rec.name.clone();
+        self.with_entry(&id, |e| {
+            e.rec.cloud_state = "scanning".into();
+            e.rec.cloud_detail = None;
+        });
+        self.mark_dirty();
+        let this = self.clone();
+        tauri::async_runtime::spawn(async move {
+            let summary = crate::cloudscan::scan(&files, limit_mb).await;
+            this.with_entry(&id, |e| {
+                e.rec.cloud_state = summary.state.into();
+                e.rec.cloud_detail = Some(summary.detail.clone());
+            });
+            if matches!(summary.state, "threat" | "suspicious") {
+                this.notify("threat", &format!("{name}: {}", summary.detail));
+                this.toast("error", format!("{name}: {}", summary.detail));
             }
             this.mark_dirty();
             this.save_needed.store(true, Ordering::Relaxed);

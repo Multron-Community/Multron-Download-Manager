@@ -1,6 +1,7 @@
 mod appearance;
 mod bridge;
 mod browsers;
+mod cloudscan;
 mod commands;
 mod engine;
 mod flatpak;
@@ -10,6 +11,7 @@ mod manager;
 mod media;
 mod model;
 pub mod nativehost;
+mod portable;
 mod resolver;
 mod rss;
 mod security;
@@ -88,6 +90,9 @@ pub fn run() {
             tray::start_animation(&handle);
             let refresh = handle.clone();
             std::thread::spawn(move || browsers::refresh_copies(&refresh));
+            if let Some(dir) = portable::dir() {
+                std::thread::spawn(move || portable::cleanup(&dir));
+            }
             if let Some(w) = handle.get_webview_window("main") {
                 appearance::apply_settings(&w, &settings);
             }

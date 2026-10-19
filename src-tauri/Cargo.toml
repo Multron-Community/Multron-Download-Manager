@@ -1,6 +1,6 @@
 [package]
 name = "multron-download-manager"
-version = "0.0.5"
+version = "0.0.6"
 description = "Multron Download Manager - fast multi-connection, media and torrent downloader"
 authors = ["Multron Community"]
 license-file = "../LICENSE"
@@ -29,6 +29,10 @@ tokio-util = { version = "0.7", features = ["io"] }
 futures-util = "0.3"
 bytes = "1"
 reqwest = { version = "0.13", features = ["stream", "json"] }
+tokio-tungstenite = { version = "0.28", default-features = false, features = ["handshake"] }
+tokio-rustls = { version = "0.26", default-features = false, features = ["aws_lc_rs", "tls12"] }
+rustls = { version = "0.23", default-features = false, features = ["aws_lc_rs", "std", "tls12"] }
+rustls-platform-verifier = "0.7"
 axum = "0.8"
 librqbit = "9"
 

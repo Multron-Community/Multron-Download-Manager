@@ -1,7 +1,8 @@
 import { execFileSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { appVersion, root } from './lib.mjs';
+import { appVersion, root, zipDirectory } from './lib.mjs';
+import { PAD_NAME, padXml } from './pad.mjs';
 
 if (process.platform !== 'win32') {
   console.error('The Inno Setup installer can only be built on Windows.');
@@ -40,3 +41,28 @@ if (wv !== -1 && args[wv + 1]) defines.push(`/DWebView2Bootstrapper=${path.resol
 
 execFileSync(iscc, [...defines, path.join(root, 'installer', 'windows', 'multron.iss')], { stdio: 'inherit' });
 console.log(`\nInstaller: dist/Multron-Download-Manager-${version}-x64-Setup.exe`);
+
+const setup = path.join(root, 'dist', `Multron-Download-Manager-${version}-x64-Setup.exe`);
+fs.writeFileSync(
+  path.join(root, PAD_NAME),
+  padXml({ version, date: new Date().toISOString().slice(0, 10), size: fs.statSync(setup).size })
+);
+console.log(`PAD file: ${PAD_NAME}`);
+
+const staging = path.join(root, 'dist', 'portable');
+const folder = path.join(staging, 'Multron-Download-Manager');
+fs.rmSync(staging, { recursive: true, force: true });
+fs.mkdirSync(folder, { recursive: true });
+fs.copyFileSync(exe, path.join(folder, 'multron-download-manager.exe'));
+for (const file of ['LICENSE', 'THIRD-PARTY-NOTICES.md']) fs.copyFileSync(path.join(root, file), path.join(folder, file));
+fs.cpSync(path.join(root, 'extension'), path.join(folder, 'browser-extension'), { recursive: true });
+fs.cpSync(path.join(root, 'extension-build', 'firefox'), path.join(folder, 'browser-extension-firefox'), { recursive: true });
+fs.writeFileSync(
+  path.join(folder, 'portable.txt'),
+  'This copy of Multron Download Manager is portable.\r\nSettings, the download list and updates are kept in the data folder next to the program.\r\nDelete this file to use the normal per-user folders instead.\r\n'
+);
+const portable = path.join(root, 'dist', `Multron-Download-Manager-${version}-x64-portable.zip`);
+fs.rmSync(portable, { force: true });
+zipDirectory(staging, portable);
+fs.rmSync(staging, { recursive: true, force: true });
+console.log(`Portable: dist/Multron-Download-Manager-${version}-x64-portable.zip`);

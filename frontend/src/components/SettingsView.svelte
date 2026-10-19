@@ -769,6 +769,23 @@
               {@render group('Antivirus scan')}
               {@render toggle('Scan finished downloads with the antivirus', 'Uses Microsoft Defender, or the antivirus installed on this PC through Windows AMSI (files up to 50 MB). A found threat is shown on the download and in a notification.', draft.scanDownloads, (v) => (draft!.scanDownloads = v))}
             {/if}
+            <h4 class="text-[12px] font-semibold text-white/90 mt-5 mb-1 pb-1 border-b border-line flex items-center gap-2">{t('Multron Cloud scan')}<span class="px-1.5 rounded bg-warn/15 text-warn text-[10px] font-semibold uppercase tracking-wide">{t('Testing')}</span></h4>
+            <div class="rounded-[10px] border border-warn/40 bg-warn/10 p-3 text-[12px] flex gap-2 items-start mb-2">
+              <Icon name="alert" size={14} class="text-warn mt-[1px] flex-shrink-0" />
+              <span>{t('Multron Cloud scans each finished download separately from your antivirus, with the viruskov.com OPEN-EDR engine. The file hash is checked first; a file the cloud has not seen yet is uploaded for analysis and may be reviewed by viruskov.com analysts. The cloud scan is a test version and may report false positives, so check a detection before you delete a file.')}</span>
+            </div>
+            <label class="flex items-start gap-2 py-[5px] text-[12px] cursor-pointer">
+              <input type="checkbox" class="check mt-[2px]" checked={draft.cloudScanAccepted} onchange={(e) => { draft!.cloudScanAccepted = e.currentTarget.checked; if (!e.currentTarget.checked) draft!.cloudScan = false; }} />
+              <span>{t('I have read and accept the Cloud Malware Scan License Agreement.')}</span>
+            </label>
+            <button class="btn mb-1" onclick={() => api.openUrl('https://github.com/Multron-Community/MultronWcleaner/blob/beta/MALWARE_SCAN_EULA.md')}><Icon name="globe" size={13} />{t('Read the agreement')}</button>
+            <div class={draft.cloudScanAccepted ? '' : 'opacity-45 pointer-events-none'}>
+              {@render toggle('Scan finished downloads with Multron Cloud', 'Off by default. The result is shown on the download as “Multron Cloud”, next to the antivirus result.', draft.cloudScanAccepted && draft.cloudScan, (v) => (draft!.cloudScan = v))}
+              {@render row('Upload limit (MB)', 'Larger files are only checked by their hash and are never uploaded. Default 15 MB, at most 100 MB.')}
+              <input type="number" min="1" max="100" class="field !w-[100px] mt-1" bind:value={draft.cloudScanLimitMb} />
+            </div>
+            {@render group('Opening downloaded programs')}
+            {@render toggle('Start programs with a double-click', 'Off by default, so a program you downloaded never starts by accident. When it is off, double-clicking a program (.exe, .msi, scripts, installers) does nothing; the open button still opens it. Other files open as usual.', draft.openProgramsOnDoubleClick, (v) => (draft!.openProgramsOnDoubleClick = v))}
             {@render toggle('Require approval for browser extensions', 'Each browser extension must be approved once before it can add downloads. Web pages can never use the bridge.', draft.bridgeRequirePairing, (v) => (draft!.bridgeRequirePairing = v))}
             {@render group('Trusted extensions')}
             {#if app.settings?.trustedExtensions.length}

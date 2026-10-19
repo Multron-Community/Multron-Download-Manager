@@ -84,6 +84,22 @@
     app.run(() => api.moveInQueue(item.id, to));
   }
 
+  function explain(e: MouseEvent, kind: 'info' | 'success' | 'warning' | 'error', text: string) {
+    e.stopPropagation();
+    app.toast(kind, text);
+  }
+
+  const PROGRAM = /\.(exe|msi|msix|msixbundle|appx|appxbundle|bat|cmd|com|scr|pif|ps1|vbs|vbe|js|jse|wsf|hta|cpl|lnk|reg|jar|appimage|run|sh|deb|rpm|pkg|dmg)$/i;
+
+  function openOnDoubleClick() {
+    if (item.status !== 'completed') return;
+    if (PROGRAM.test(item.name) && !app.settings?.openProgramsOnDoubleClick) {
+      app.toast('info', t('Programs are not started with a double-click. Use the open button, or turn this on in Options › Security.'));
+      return;
+    }
+    app.run(() => api.openFile(item.id));
+  }
+
   async function primary(e: MouseEvent) {
     e.stopPropagation();
     if (item.status === 'active' || item.status === 'queued') await app.run(() => api.pause(item.id));
@@ -102,7 +118,7 @@
   onclick={(e) => app.pick(item.id, e)}
   onmousedown={(e) => e.shiftKey && e.preventDefault()}
   onkeydown={(e) => e.key === 'Enter' && (app.selectedId = item.id)}
-  ondblclick={() => item.status === 'completed' && app.run(() => api.openFile(item.id))}
+  ondblclick={openOnDoubleClick}
   class="w-full p-[12px_14px] border rounded-[12px] transition-all group flex flex-col gap-[10px] cursor-default outline-none
     {selected ? 'border-accent/50 bg-raised' : item.status === 'active' ? 'border-line bg-panel' : 'border-card-line bg-bg hover:bg-subtle'}"
 >
@@ -153,13 +169,24 @@
             </span>
           {/if}
           {#if item.scanState === 'threat'}
-            <span class="flex items-center gap-1 text-bad" title={item.scanDetail ?? ''}><Icon name="alert" size={11} />{t('Threat found')}</span>
+            <button type="button" class="flex items-center gap-1 text-bad hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'error', t('Antivirus') + ': ' + (item.scanDetail || t('No details')))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Threat found')}</button>
           {:else if item.scanState === 'clean'}
-            <span class="flex items-center gap-1 text-ok" title={t('Scanned by {engine}', { engine: item.scanDetail ?? '' })}><Icon name="shield" size={11} />{t('Scanned')}</span>
+            <button type="button" class="flex items-center gap-1 text-ok hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'success', t('Antivirus') + ': ' + (item.scanDetail || t('No details')))} ondblclick={(e) => e.stopPropagation()}><Icon name="shield" size={11} />{t('Scanned')}</button>
           {:else if item.scanState === 'scanning'}
             <span class="flex items-center gap-1 text-dim"><Icon name="shield" size={11} />{t('Scanning…')}</span>
           {:else if item.scanState === 'skipped'}
-            <span class="flex items-center gap-1 text-warn" title={item.scanDetail ?? ''}><Icon name="alert" size={11} />{t('Not scanned')}</span>
+            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'warning', t('Antivirus') + ': ' + (item.scanDetail || t('No details')))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Not scanned')}</button>
+          {/if}
+          {#if item.cloudState === 'threat'}
+            <button type="button" class="flex items-center gap-1 text-bad hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'error', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Multron Cloud: threat')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
+          {:else if item.cloudState === 'suspicious'}
+            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'warning', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Multron Cloud: suspicious')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
+          {:else if item.cloudState === 'clean'}
+            <button type="button" class="flex items-center gap-1 text-ok hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'success', t('Scanned separately by Multron Cloud'))} ondblclick={(e) => e.stopPropagation()}><Icon name="shield" size={11} />{t('Multron Cloud: clean')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
+          {:else if item.cloudState === 'scanning'}
+            <span class="flex items-center gap-1 text-dim"><Icon name="shield" size={11} />{t('Multron Cloud: scanning…')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></span>
+          {:else if item.cloudState === 'skipped' || item.cloudState === 'error'}
+            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explain(e, 'warning', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Multron Cloud: not scanned')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
           {/if}
           {#if item.hashState === 'ok'}
             <span class="flex items-center gap-1 text-ok" title={item.sha256Actual ?? ''}><Icon name="shield" size={11} />SHA-256</span>

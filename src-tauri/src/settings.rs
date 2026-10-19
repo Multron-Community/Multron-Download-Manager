@@ -77,6 +77,10 @@ pub struct Settings {
     pub when_done: String,
     pub mark_downloads: bool,
     pub scan_downloads: bool,
+    pub cloud_scan: bool,
+    pub open_programs_on_double_click: bool,
+    pub cloud_scan_accepted: bool,
+    pub cloud_scan_limit_mb: u32,
     #[serde(default)]
     pub settings_version: u32,
     pub extra_trackers: Vec<String>,
@@ -176,6 +180,10 @@ impl Default for Settings {
             when_done: "nothing".into(),
             mark_downloads: true,
             scan_downloads: true,
+            cloud_scan: false,
+            open_programs_on_double_click: false,
+            cloud_scan_accepted: false,
+            cloud_scan_limit_mb: crate::cloudscan::DEFAULT_LIMIT_MB,
             settings_version: SETTINGS_VERSION,
             extra_trackers: Vec::new(),
 
@@ -234,6 +242,10 @@ impl Settings {
         self.check_updates_on_startup = true;
         self.ytdlp_auto_update = true;
         self.threads = self.threads.clamp(1, MAX_THREADS);
+        self.cloud_scan_limit_mb = self
+            .cloud_scan_limit_mb
+            .clamp(1, crate::cloudscan::MAX_LIMIT_MB);
+        self.cloud_scan &= self.cloud_scan_accepted;
         self.max_concurrent = self.max_concurrent.clamp(1, 32);
         self.retries = self.retries.clamp(0, 50);
         if self.language != "en"

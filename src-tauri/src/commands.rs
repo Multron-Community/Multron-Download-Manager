@@ -513,7 +513,8 @@ pub async fn browser_list() -> Vec<crate::browsers::Browser> {
 }
 
 #[tauri::command]
-pub async fn setup_extension(app: AppHandle, browser: String) -> R<String> {
+pub async fn setup_extension(app: AppHandle, mgr: Mgr<'_>, browser: String) -> R<String> {
+    mgr.pair_asked.lock().clear();
     tauri::async_runtime::spawn_blocking(move || {
         let b = crate::browsers::detect()
             .into_iter()

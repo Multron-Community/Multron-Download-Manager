@@ -93,8 +93,15 @@
 - **Nine accent colors** — Blue (default), Cyan, Green, Orange, Purple, Red, Pink, Teal and Gray — used for buttons, progress bars and the tint of transparent backgrounds.
 - **Transparency effects** with three strengths (Light, Medium, Strong): **Acrylic** or **Mica** on Windows 11, Blur on Windows 10, vibrancy on macOS. Linux keeps solid backgrounds; theme and colors still apply.
 
+**Safety**
+- **Antivirus and SmartScreen** — finished files get the "downloaded from the internet" mark and are scanned with Microsoft Defender or the installed antivirus (Windows); see [Security & privacy](#security--privacy).
+- **Multron Cloud scan (testing)** — optional and off by default: finished downloads are also scanned separately in the cloud and shown with their own **Multron Cloud** badge. Only files the cloud has not seen are uploaded, up to 15 MB by default (adjustable up to 100 MB).
+- **Click a scan badge to see why** a file was not scanned, or what was found.
+- **No accidental program starts** — double-clicking a downloaded program does not run it unless you turn that on.
+
 **Desktop integration**
 - Runs in the **background** with a tray icon; closing the window keeps downloads, seeding and the browser bridge alive.
+- **Portable Windows version** — extract the portable zip anywhere (also a USB stick); settings and the download list stay in its `data` folder, and it updates itself in place.
 - **Start with the system** — *Start with Windows*, *Open at login* on macOS (Login Items) or an autostart entry on Linux (GNOME, KDE, Xfce…), starting hidden in the tray.
 - **Progress on the taskbar** — while files download, the Multron Download Manager button on the Windows taskbar (the Dock icon on macOS) fills with the overall progress and gets a spinning ring in its bottom-right corner (in your accent color); the tray icon gets the same ring and its tooltip shows the percentage and speed. When a download finishes, fails or a threat is found while Multron Download Manager is in the background, its taskbar button flashes.
 - Notifications, drag & drop of .torrent files, paste a link anywhere to add it.
@@ -112,6 +119,7 @@ Download the file for your system from the [latest release](https://github.com/M
 | Platform | File | Install |
 | --- | --- | --- |
 | Windows 10/11 x64 | `Multron-Download-Manager-<version>-x64-Setup.exe` | Run the installer (Inno Setup). It installs WebView2 if it is missing, and can associate `.torrent` files and `magnet:` links. |
+| Windows 10/11 x64, portable | `Multron-Download-Manager-<version>-x64-portable.zip` | Extract it anywhere (also a USB stick) and run `multron-download-manager.exe`. Settings and the download list stay in the `data` folder next to it, and it updates itself in place. Needs WebView2, which Windows 10/11 normally already have. |
 | macOS Apple Silicon | `*_aarch64.dmg` | Open the DMG and drag the app to Applications. |
 | macOS Intel | `*_x64.dmg` | Same as above. |
 | Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` (or `*_arm64.deb`) | `sudo apt install ./<file>.deb` |
@@ -268,7 +276,7 @@ The Options window is organised like a classic torrent client, with a searchable
 | Torrent | Listen port, UPnP, uTP, DHT, LSD, peer limit |
 | Trackers · Seeding & Limits · Privacy · IP Filters | See [Torrents](#torrents) |
 | Components | Turn the torrent engine, media engine, bridge, scraper, UPnP, uTP, DHT, LSD and IP filter on or off |
-| Security | Extension approval and trusted extensions, TLS certificate policy, HTTPS → HTTP redirect blocking, clear stored cookies |
+| Security | SmartScreen / Gatekeeper mark, antivirus scan, Multron Cloud scan (testing) and its upload limit, starting programs with a double-click, extension approval and trusted extensions, TLS certificate policy, HTTPS → HTTP redirect blocking, clear stored cookies |
 | Updates & About | How mandatory updates work, *Download and install*, app and yt-dlp version check |
 
 ---
@@ -300,7 +308,7 @@ npm run dev        # starts Vite + the Rust app with hot reload
 
 | Command | Output (in `src-tauri/target/release/bundle/` or `dist/`) |
 | --- | --- |
-| `npm run build:windows` | Windows Inno Setup installer in `dist/` |
+| `npm run build:windows` | Windows Inno Setup installer and the portable zip (`-x64-portable.zip`) in `dist/` |
 | `npm run build:mac` | `.app` and `.dmg` |
 | `npm run build:linux` | `.deb` (apt), `.rpm` (dnf, zypper) and `.AppImage` |
 | `npm run package:extension` | `dist/multron-browser-extension-chromium-v<version>.zip` and `-firefox-` (Firefox gets its own manifest with `background.scripts`) |
@@ -326,7 +334,7 @@ Version numbers count each part up to 10, and the release after that carries ove
 1. Commit your changes. Write the release notes in `release-notes/v<version>.md` (optional) — the workflow puts them at the top of the GitHub release, above the download table. Without that file it generates the notes from the commits and pull requests since the previous release. Rerunning the workflow refreshes the notes of a release that is still a draft. `npm run release -- --dry-run` prints the version that comes next.
 2. `npm run release` — picks the next version by the rule above (the first release is `0.0.1`), sets it in `package.json`, `frontend/package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `extension/manifest.json`, commits and creates the tag `v<version>` **locally** (nothing is pushed). `npm run release -- 0.2.0` releases a specific version instead.
 3. Push when you are ready: `git push origin HEAD --follow-tags`.
-4. The **Release** workflow runs on every push to `main` (and on `v*` tags). If the version in `src-tauri/tauri.conf.json` is not released yet it builds and publishes it, otherwise it stops right away with a notice to raise the version. So pushing a commit that raises the version is enough, a tag is optional. **Actions → Release → Run workflow** builds the current version by hand: *draft* keeps the release as a draft, *pre-release* publishes it without marking it as Latest. The workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer, macOS DMGs (Apple Silicon + Intel), Linux `.deb` and `.AppImage` built on Ubuntu 24.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip, `SHA256SUMS.txt`, the signed `update.json` and a PAD file for software download sites (`multron-download-manager.xml`, always at `https://github.com/Multron-Community/Multron-Download-Manager/releases/latest/download/multron-download-manager.xml`), then publishes the release.
+4. The **Release** workflow runs on every push to `main` (and on `v*` tags). If the version in `src-tauri/tauri.conf.json` is not released yet it builds and publishes it, otherwise it stops right away with a notice to raise the version. So pushing a commit that raises the version is enough, a tag is optional. **Actions → Release → Run workflow** builds the current version by hand: *draft* keeps the release as a draft, *pre-release* publishes it without marking it as Latest. The workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer and portable zip, macOS DMGs (Apple Silicon + Intel), Linux `.deb` and `.AppImage` built on Ubuntu 24.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip, `SHA256SUMS.txt` and the signed `update.json`, then publishes the release. The PAD file for software download sites is not attached to the release: it is the `multron-download-manager.xml` file in the repository, at `https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml`. `npm run build:windows` rewrites it for the current version (`node scripts/pad.mjs` does the same from an installer in `dist/`); commit it together with the version change.
 
 Installed copies pick the new release up through automatic updates: each one downloads the file for its own platform and package format and only installs it when the signed `update.json` and the file's SHA-256 check out.
 
@@ -392,7 +400,11 @@ Multron-Download-Manager/
   - Multron Download Manager asks Windows Security Center which antivirus is actually turned on. When none is (for example a third-party antivirus is installed but switched off, which also keeps Defender off), the file is marked **Not scanned — no antivirus is turned on** instead of being reported as clean.
   - When the antivirus blocks a file while it downloads ("access denied") or removes it right after, the download is marked **Threat found** and a notification appears.
   - Threats are shown on the download and in a notification; files that could not be scanned are marked *Not scanned* with the reason. Files of multi-file torrents and media downloads are all marked and scanned.
-- Nothing of this runs on Linux yet.
+- The SmartScreen mark and the antivirus scan do not run on Linux yet.
+- **Multron Cloud scan (testing, off by default, all platforms):** after you accept the Cloud Malware Scan License Agreement, finished downloads are also scanned separately with Multron Cloud (viruskov.com OPEN-EDR engine), shown as its own **Multron Cloud** badge. The SHA-256 is checked first and only files the cloud has not seen are uploaded, up to 15 MB by default (adjustable up to 100 MB); larger files are checked by hash only. The full path is not sent and the user name in the folder is replaced with `%USERPROFILE%`.
+  - It is a test version and may report false positives, so check a detection before you delete a file. Turn it on in *Settings → Security → Multron Cloud scan*.
+- **See why a file was not scanned:** click the antivirus or Multron Cloud badge on a download to see the reason (for example *no antivirus is turned on*, *larger than the upload limit* or a server error). The details panel at the bottom shows both results too.
+- **Programs do not start with a double-click (off by default):** double-clicking a downloaded program (`.exe`, `.msi`, scripts, installers, `.AppImage`, `.deb`, `.dmg` …) does nothing, so nothing you downloaded runs by accident. The open button still opens it, other files open with a double-click as usual, and *Settings → Security → Start programs with a double-click* brings the old behaviour back.
 - Automatic updates only come from this repository's GitHub releases and are installed only after their signature checks out (see below).
 - Torrent privacy options include SOCKS5 proxying, interface binding, IP filters and disabling DHT / LSD / trackers.
 

@@ -106,6 +106,14 @@
           {/if}
           <span class="text-muted">{t('Added')}</span>
           <span>{date(item.createdAt, i18n.lang)}{item.completedAt ? ' · ' + t('Finished {date}', { date: date(item.completedAt, i18n.lang) }) : ''}</span>
+          {#if item.scanState && item.scanState !== 'scanning'}
+            <span class="text-muted">{t('Antivirus')}</span>
+            <span class="whitespace-pre-wrap select-text {item.scanState === 'threat' ? 'text-bad' : item.scanState === 'clean' ? 'text-ok' : 'text-warn'}">{item.scanDetail || t('No details')}</span>
+          {/if}
+          {#if item.cloudState && item.cloudState !== 'scanning'}
+            <span class="text-muted">Multron Cloud</span>
+            <span class="whitespace-pre-wrap select-text {item.cloudState === 'threat' ? 'text-bad' : item.cloudState === 'clean' ? 'text-ok' : 'text-warn'}">{item.cloudDetail || t('No details')}</span>
+          {/if}
           {#if item.error}
             <span class="text-muted">{t('Error')}</span>
             <span class="text-bad whitespace-pre-wrap select-text">{item.error}</span>

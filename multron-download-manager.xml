@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<XML_DIZ_INFO>
+<MASTER_PAD_VERSION_INFO>
+<MASTER_PAD_VERSION>4.0</MASTER_PAD_VERSION>
+<MASTER_PAD_EDITOR>Multron Community</MASTER_PAD_EDITOR>
+<MASTER_PAD_INFO>Portable Application Description, or PAD for short, is a data set that is used by shareware authors to disseminate information to anyone interested in their software products. To find out more go to http://pad.asp-software.org</MASTER_PAD_INFO>
+</MASTER_PAD_VERSION_INFO>
+<Company_Info>
+<Company_Name>Multron Community</Company_Name>
+<Address_1></Address_1>
+<Address_2></Address_2>
+<City_Town></City_Town>
+<State_Province></State_Province>
+<Zip_Postal_Code></Zip_Postal_Code>
+<Country></Country>
+<Company_WebSite_URL>https://github.com/Multron-Community/Multron-Download-Manager</Company_WebSite_URL>
+<Contact_Info>
+<Author_First_Name>Multron</Author_First_Name>
+<Author_Last_Name>Community</Author_Last_Name>
+<Author_Email>winball501@gmail.com</Author_Email>
+<Contact_First_Name>Multron</Contact_First_Name>
+<Contact_Last_Name>Community</Contact_Last_Name>
+<Contact_Email>winball501@gmail.com</Contact_Email>
+</Contact_Info>
+<Support_Info>
+<Sales_Email>winball501@gmail.com</Sales_Email>
+<Support_Email>winball501@gmail.com</Support_Email>
+<General_Email>winball501@gmail.com</General_Email>
+<Sales_Phone></Sales_Phone>
+<Support_Phone></Support_Phone>
+<General_Phone></General_Phone>
+<Fax_Phone></Fax_Phone>
+</Support_Info>
+</Company_Info>
+<Program_Info>
+<Program_Name>Multron Download Manager</Program_Name>
+<Program_Version>0.0.6</Program_Version>
+<Program_Release_Month>10</Program_Release_Month>
+<Program_Release_Day>19</Program_Release_Day>
+<Program_Release_Year>2026</Program_Release_Year>
+<Program_Cost_Dollars>0</Program_Cost_Dollars>
+<Program_Cost_Other_Code>USD</Program_Cost_Other_Code>
+<Program_Cost_Other>0</Program_Cost_Other>
+<Program_Type>Freeware</Program_Type>
+<Program_Release_Status>Minor Update</Program_Release_Status>
+<Program_Install_Support>Install and Uninstall</Program_Install_Support>
+<Program_OS_Support>Windows 10,Windows 11,Mac OS X,Linux</Program_OS_Support>
+<Program_Language>English,Turkish,German,French,Spanish,Italian,Portuguese,Russian,Japanese,Korean,ChineseSimplified,ChineseTraditional</Program_Language>
+<Program_Change_Info>A portable Windows version and the Multron Cloud scan. Portable Windows version. Multron Cloud scan (testing): off by default, hash first, upload limit, private folders stay private. Safer opening and clearer scan results: programs no longer start with a double-click, see why a file was not scanned.</Program_Change_Info>
+<Program_Specific_Category>Download Managers</Program_Specific_Category>
+<Program_Category_Class>Internet::Download Managers</Program_Category_Class>
+<Program_System_Requirements>Windows 10 or 11 (x64), macOS 11 or later (Apple Silicon or Intel), or Linux with glibc 2.36 or newer (x86_64 or arm64). WebView2 on Windows is installed automatically.</Program_System_Requirements>
+<File_Info>
+<File_Size_Bytes>9644006</File_Size_Bytes>
+<File_Size_K>9418</File_Size_K>
+<File_Size_MB>9.20</File_Size_MB>
+</File_Info>
+<Expire_Info>
+<Has_Expire_Info>N</Has_Expire_Info>
+<Expire_Count></Expire_Count>
+<Expire_Based_On>Days</Expire_Based_On>
+<Expire_Other_Info></Expire_Other_Info>
+<Expire_Month></Expire_Month>
+<Expire_Day></Expire_Day>
+<Expire_Year></Expire_Year>
+</Expire_Info>
+</Program_Info>
+<Program_Descriptions>
+<English>
+<Keywords>download manager,downloader,download accelerator,video downloader,youtube downloader,torrent client,bittorrent,magnet,yt-dlp,multi-connection,resume downloads,browser extension,google drive,mega,sha-256</Keywords>
+<Char_Desc_45>Fast download manager for files and videos</Char_Desc_45>
+<Char_Desc_80>Fast multi-connection download manager for files, videos and torrents</Char_Desc_80>
+<Char_Desc_250>Fast multi-connection download manager for Windows, macOS and Linux. Downloads files, videos and music from 1,800+ sites, cloud drives and torrents, with a browser extension, SHA-256 checks and signed automatic updates.</Char_Desc_250>
+<Char_Desc_450>Multron Download Manager is a fast, modern download manager for Windows, macOS and Linux. It splits every file across up to 64 connections and writes straight to disk, resumes safely and survives VPN and network changes. It downloads videos and music from 1,800+ sites, Google Drive and MEGA files and torrents, and its extension for 35+ browsers sends downloads to it automatically. SHA-256 checks, antivirus scans and 12 languages.</Char_Desc_450>
+<Char_Desc_2000>Multron Download Manager is a fast, modern download manager for Windows, macOS and Linux, for direct links, videos, cloud-drive files and torrents in one app.
+
+Speed: every file is split across 8 connections by default (1 to 64, changeable while the download runs). Connections that finish early take over the slowest parts, and data is written straight into the final file, so there is no merge step. Disk space is checked before a download starts, and global, per-download and scheduled speed limits are available.
+
+Reliability: downloads resume after a pause, crash or restart, and the app notices when a file changed on the server. Turning a VPN on or off or losing the connection does not fail a download; it waits for the network and continues.
+
+Videos and music: YouTube, Reddit, Instagram, X, TikTok, Facebook, Vimeo, Twitch, SoundCloud and 1,800+ other sites through yt-dlp, in 4K, 1080p, 720p or as MP3. yt-dlp and FFmpeg are installed and updated automatically. Google Drive, MEGA, Dropbox, MediaFire and Pixeldrain links are downloaded directly.
+
+Torrents: magnet links and .torrent files, file selection, play while downloading, DHT, uTP, UPnP, trackers, seeding rules, RSS feeds, a watch folder, torrent creation, SOCKS5 proxy and IP filters.
+
+Browser extension: for Chrome, Edge, Brave, Opera, Vivaldi, Firefox and 35+ browsers. It takes over browser downloads with their cookies, adds a download button to videos, can download everything on a page and starts the app when it is closed.
+
+Security: SHA-256 verification, antivirus scans of finished files on Windows, the SmartScreen mark and file-name spoofing protection. Updates are signed and verified before they are installed.
+
+Also: queue control, bulk actions, categories, tray icon, taskbar progress, light and dark themes and 12 languages.</Char_Desc_2000>
+</English>
+</Program_Descriptions>
+<Web_Info>
+<Application_URLs>
+<Application_Info_URL>https://github.com/Multron-Community/Multron-Download-Manager</Application_Info_URL>
+<Application_Order_URL></Application_Order_URL>
+<Application_Screenshot_URL>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/docs/screenshots/downloads-dark.png</Application_Screenshot_URL>
+<Application_Icon_URL>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/src-tauri/icons/32x32.png</Application_Icon_URL>
+<Application_XML_File_URL>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml</Application_XML_File_URL>
+</Application_URLs>
+<Download_URLs>
+<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.6/Multron-Download-Manager-0.0.6-x64-Setup.exe</Primary_Download_URL>
+<Secondary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/latest</Secondary_Download_URL>
+<Additional_Download_URL_1></Additional_Download_URL_1>
+<Additional_Download_URL_2></Additional_Download_URL_2>
+</Download_URLs>
+</Web_Info>
+<Permissions>
+<Distribution_Permissions>You may share the official, unchanged installers of Multron Download Manager free of charge. Selling them, bundling them with other software or changing them is not allowed. The full terms are in the license: https://github.com/Multron-Community/Multron-Download-Manager/blob/main/LICENSE</Distribution_Permissions>
+<EULA>Multron Download Manager is source-available, proprietary software. You may install and use it, and share the official installers unchanged and free of charge. The source code may be read but not copied, reused or modified. Full license: https://github.com/Multron-Community/Multron-Download-Manager/blob/main/LICENSE</EULA>
+</Permissions>
+</XML_DIZ_INFO>

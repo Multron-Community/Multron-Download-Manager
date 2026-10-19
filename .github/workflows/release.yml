@@ -107,6 +107,7 @@ jobs:
               '| Platform | File |',
               '| --- | --- |',
               '| Windows 10/11 (x64) | `Multron-Download-Manager-*-x64-Setup.exe` |',
+              '| Windows 10/11 (x64), portable | `Multron-Download-Manager-*-x64-portable.zip` → extract anywhere (for example a USB stick) and run `multron-download-manager.exe`; settings stay in its `data` folder |',
               '| macOS Apple Silicon | `*_aarch64.dmg` |',
               '| macOS Intel | `*_x64.dmg` |',
               '| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
@@ -395,7 +396,9 @@ jobs:
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-windows-x64
-          path: dist/*-Setup.exe
+          path: |
+            dist/*-Setup.exe
+            dist/*-portable.zip
           if-no-files-found: error
           retention-days: 7
 
@@ -478,9 +481,6 @@ jobs:
             fs.writeFileSync('SHA256SUMS.txt', sums);
             const setup = Object.keys(files).find((n) => n.endsWith('-Setup.exe'));
             if (!setup) throw new Error('the Windows installer was not built');
-            require('child_process').execFileSync(process.execPath, [
-              'scripts/pad.mjs', '--version', process.env.VERSION, '--installer', path.join('release', setup), '--out', 'multron-download-manager.xml',
-            ], { stdio: 'inherit' });
             const existing = await github.paginate(github.rest.repos.listReleaseAssets, { owner, repo, release_id, per_page: 100 });
             for (const a of existing) {
               core.info(`removing ${a.name} that was on the draft before signing`);
@@ -491,7 +491,6 @@ jobs:
               ['SHA256SUMS.txt', 'text/plain', Buffer.from(sums)],
               ['update.json', 'application/json', manifest],
               ['update.json.sig', 'text/plain', Buffer.from(signature.toString('base64') + '\n')],
-              ['multron-download-manager.xml', 'application/xml', fs.readFileSync('multron-download-manager.xml')],
             );
             for (const [name, type, data] of uploads) {
               await github.rest.repos.uploadReleaseAsset({ owner, repo, release_id, name, headers: { 'content-type': type }, data });

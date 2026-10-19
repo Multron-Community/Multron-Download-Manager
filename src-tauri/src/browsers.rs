@@ -772,13 +772,26 @@ pub fn open_page(browser: &Browser) -> Result<()> {
     Ok(())
 }
 
+fn plain_path(path: PathBuf) -> PathBuf {
+    let plain = path
+        .to_str()
+        .and_then(|t| t.strip_prefix(r"\\?\"))
+        .filter(|rest| rest.as_bytes().get(1) == Some(&b':'))
+        .map(PathBuf::from);
+    plain.unwrap_or(path)
+}
+
 fn bundled_extension(app: &AppHandle, firefox: bool) -> Option<PathBuf> {
     let folder = if firefox {
         "browser-extension-firefox"
     } else {
         "browser-extension"
     };
-    let bundled = app.path().resource_dir().ok().map(|d| d.join(folder));
+    let bundled = app
+        .path()
+        .resource_dir()
+        .ok()
+        .map(|d| plain_path(d).join(folder));
     if let Some(dir) = bundled.filter(|d| d.join("manifest.json").is_file()) {
         return Some(dir);
     }
@@ -879,6 +892,18 @@ fn copy_dir(src: &Path, dest: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn drops_the_verbatim_prefix_from_local_paths() {
+        assert_eq!(
+            plain_path(PathBuf::from(r"\\?\C:\Users\me\Desktop\Multron")),
+            PathBuf::from(r"C:\Users\me\Desktop\Multron")
+        );
+        assert_eq!(
+            plain_path(PathBuf::from(r"\\?\UNC\server\share")),
+            PathBuf::from(r"\\?\UNC\server\share")
+        );
+    }
 
     #[cfg(windows)]
     #[test]

@@ -139,11 +139,22 @@ async fn ping(State(mgr): State<Arc<Manager>>, headers: HeaderMap) -> Json<Value
         .as_deref()
         .map(|o| mgr.uninstall_requests.lock().remove(o))
         .unwrap_or(false);
+    let is_paired = paired(&mgr, o.as_deref());
+    if let Some(o) = o
+        .as_deref()
+        .filter(|o| !is_paired && !uninstall && is_extension(o))
+    {
+        if mgr.pair_asked.lock().insert(o.to_string()) {
+            mgr.push_pending(Pending::Pair {
+                origin: o.to_string(),
+            });
+        }
+    }
     Json(json!({
         "name": "multron",
         "version": env!("CARGO_PKG_VERSION"),
         "uninstall": uninstall,
-        "paired": paired(&mgr, o.as_deref()),
+        "paired": is_paired,
         "askSha256": s.ask_sha256,
         "mediaEnabled": s.media_enabled,
         "torrentEnabled": s.torrent_enabled,

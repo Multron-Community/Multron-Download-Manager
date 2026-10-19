@@ -139,6 +139,10 @@ pub struct DownloadRecord {
     #[serde(default)]
     pub scan_detail: Option<String>,
     #[serde(default)]
+    pub cloud_state: String,
+    #[serde(default)]
+    pub cloud_detail: Option<String>,
+    #[serde(default)]
     pub queue_order: i64,
     #[serde(default)]
     pub media: Option<MediaOptions>,

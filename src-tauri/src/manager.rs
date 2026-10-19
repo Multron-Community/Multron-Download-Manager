@@ -132,6 +132,7 @@ pub struct Manager {
     torrent_error: Mutex<Option<String>>,
     pending: Mutex<Vec<Pending>>,
     pub uninstall_requests: Mutex<std::collections::HashSet<String>>,
+    pub pair_asked: Mutex<std::collections::HashSet<String>>,
     pub filter_status: Mutex<FilterStatus>,
     pub bridge: Mutex<BridgeStatus>,
     pub bridge_cancel: Mutex<CancellationToken>,
@@ -232,8 +233,15 @@ pub fn sha256_file(path: &Path) -> Result<String> {
 
 impl Manager {
     pub fn new(app: AppHandle) -> Result<Arc<Self>> {
-        let data = app.path().app_data_dir().context("no app data dir")?;
-        let config = app.path().app_config_dir().unwrap_or_else(|_| data.clone());
+        let portable = crate::portable::data_dir();
+        let data = match &portable {
+            Some(dir) => dir.clone(),
+            None => app.path().app_data_dir().context("no app data dir")?,
+        };
+        let config = match portable {
+            Some(dir) => dir,
+            None => app.path().app_config_dir().unwrap_or_else(|_| data.clone()),
+        };
         std::fs::create_dir_all(&data)?;
         restrict_to_user(&data);
         restrict_to_user(&config);
@@ -310,6 +318,7 @@ impl Manager {
             torrent_error: Mutex::new(None),
             pending: Mutex::new(Vec::new()),
             uninstall_requests: Mutex::new(std::collections::HashSet::new()),
+            pair_asked: Mutex::new(std::collections::HashSet::new()),
             filter_status: Mutex::new(FilterStatus::default()),
             bridge: Mutex::new(BridgeStatus::default()),
             bridge_cancel: Mutex::new(CancellationToken::new()),
@@ -2416,6 +2425,8 @@ fn blank_record(url: &str) -> DownloadRecord {
         speed_limit: 0,
         scan_state: String::new(),
         scan_detail: None,
+        cloud_state: String::new(),
+        cloud_detail: None,
         queue_order: now_ms(),
         media: None,
         torrent: None,

@@ -30,6 +30,7 @@ const TRUSTED_HOSTS: &[&str] = &["github.com", "api.github.com"];
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum PackageKind {
     WindowsSetup,
+    WindowsPortable,
     Dmg,
     AppImage,
     Deb,
@@ -40,6 +41,8 @@ fn kind_of(name: &str) -> Option<PackageKind> {
     let n = name.to_ascii_lowercase();
     if n.ends_with("-setup.exe") {
         Some(PackageKind::WindowsSetup)
+    } else if n.ends_with("-portable.zip") {
+        Some(PackageKind::WindowsPortable)
     } else if n.ends_with(".dmg") {
         Some(PackageKind::Dmg)
     } else if n.ends_with(".appimage") {
@@ -54,7 +57,9 @@ fn kind_of(name: &str) -> Option<PackageKind> {
 }
 
 fn wanted_kind() -> Option<PackageKind> {
-    if cfg!(windows) {
+    if cfg!(windows) && crate::portable::dir().is_some() {
+        Some(PackageKind::WindowsPortable)
+    } else if cfg!(windows) {
         Some(PackageKind::WindowsSetup)
     } else if cfg!(target_os = "macos") {
         Some(PackageKind::Dmg)
@@ -392,6 +397,30 @@ pub fn install(update: &ReadyUpdate, relaunch: bool) -> Result<()> {
             detach(&mut cmd);
             cmd.spawn().context("could not start the installer")?;
         }
+        PackageKind::WindowsPortable => {
+            let target = crate::portable::dir().ok_or_else(|| {
+                anyhow!("Multron Download Manager is not running as a portable copy")
+            })?;
+            let exe = std::env::current_exe()?;
+            let exe_name = exe
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            let staging = update.path.with_extension("staging");
+            let _ = std::fs::remove_dir_all(&staging);
+            let installed = (|| -> Result<()> {
+                crate::portable::extract(&update.path, &staging)?;
+                let root = crate::portable::package_root(&staging, &exe_name).ok_or_else(|| {
+                    anyhow!("the portable package does not contain Multron Download Manager")
+                })?;
+                crate::portable::replace_files(&root, &target)
+            })();
+            let _ = std::fs::remove_dir_all(&staging);
+            installed?;
+            if relaunch {
+                relaunch_later(&exe)?;
+            }
+        }
         PackageKind::Dmg => {
             let exe = std::env::current_exe()?;
             let bundle = exe
@@ -450,6 +479,27 @@ hdiutil detach -quiet "$mnt"
             spawn_sh(&script)?;
         }
     }
+    Ok(())
+}
+
+#[cfg(windows)]
+fn relaunch_later(exe: &Path) -> Result<()> {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    let mut cmd = Command::new("cmd");
+    cmd.raw_arg(format!(
+        "/C ping -n 3 127.0.0.1 >nul & start \"\" \"{}\"",
+        exe.display()
+    ));
+    detach(&mut cmd);
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd.spawn()
+        .context("could not restart Multron Download Manager")?;
+    Ok(())
+}
+
+#[cfg(not(windows))]
+fn relaunch_later(_exe: &Path) -> Result<()> {
     Ok(())
 }
 
@@ -628,12 +678,15 @@ pub async fn fetch_latest(
         current: env!("CARGO_PKG_VERSION"),
         official_only: !crate::updates::test_mode(),
     };
-    let dir = {
-        use tauri::Manager as _;
-        app.path()
-            .app_cache_dir()
-            .context("no cache folder for the update")?
-            .join("update")
+    let dir = match crate::portable::data_dir() {
+        Some(data) => data.join("update"),
+        None => {
+            use tauri::Manager as _;
+            app.path()
+                .app_cache_dir()
+                .context("no cache folder for the update")?
+                .join("update")
+        }
     };
     if BUSY.swap(true, Ordering::SeqCst) {
         bail!("the update is already downloading");
@@ -1360,6 +1413,26 @@ mod tests {
         assert_eq!(
             pick(PackageKind::AppImage, x64, None),
             Some("Multron.Download.Manager_0.0.2_amd64.AppImage")
+        );
+    }
+
+    #[test]
+    fn portable_copies_pick_the_portable_zip() {
+        let assets = [
+            asset("multron-browser-extension-chromium-v0.0.6.zip"),
+            asset("Multron-Download-Manager-0.0.6-x64-Setup.exe"),
+            asset("Multron-Download-Manager-0.0.6-x64-portable.zip"),
+            asset("multron-browser-extension-firefox-v0.0.6.zip"),
+        ];
+        let x64 = arch_names_for("x86_64");
+        assert_eq!(
+            pick_asset_for(&assets, PackageKind::WindowsPortable, x64, None)
+                .map(|a| a.name.as_str()),
+            Some("Multron-Download-Manager-0.0.6-x64-portable.zip")
+        );
+        assert_eq!(
+            pick_asset_for(&assets, PackageKind::WindowsSetup, x64, None).map(|a| a.name.as_str()),
+            Some("Multron-Download-Manager-0.0.6-x64-Setup.exe")
         );
     }
 
