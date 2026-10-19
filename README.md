@@ -49,8 +49,8 @@
 |---|---|
 | <img src="docs/screenshots/downloads-dark.png" alt="Downloads with the segment view" /> | <img src="docs/screenshots/torrent-dark.png" alt="Torrent seeding with tracker, DHT and LSD sources" /> |
 | **Downloads** — every connection writes to its own range; the progress bar fills from start to end, and the *Segments* tab shows each connection’s range live. | **Torrents** — seeding with tracker, DHT and LSD sources, peers, pieces and more. |
-| <img src="docs/screenshots/settings-light.png" alt="Appearance settings in the light theme" /> | <img src="docs/screenshots/security-dark.png" alt="Security settings with SmartScreen, antivirus and TLS options" /> |
-| **Appearance** — light, dark or system theme, accent colours and transparency. | **Security** — SmartScreen mark, antivirus scan, extension approval, TLS and redirect rules. |
+| <img src="docs/screenshots/settings-light.png" alt="Appearance settings in the light theme" /> | <img src="docs/screenshots/security-dark.png" alt="Security settings with SmartScreen, antivirus, Multron Cloud scan and TLS options" /> |
+| **Appearance** — light, dark or system theme, accent colours and transparency. | **Security** — SmartScreen mark, antivirus scan, Multron Cloud scan (testing), safe opening of programs, extension approval, TLS and redirect rules. |
 | <img src="docs/screenshots/downloads-light-tr.png" alt="The app in Turkish with the light theme" /> | |
 | **12 languages** — follows the system language (Turkish shown here). | |
 
