@@ -17,6 +17,21 @@
   <img src="https://img.shields.io/badge/License-Source--available-red" alt="Source-available license" />
 </p>
 
+<div align="center">
+
+---
+
+[![Latest Release](https://img.shields.io/github/v/release/Multron-Community/Multron-Download-Manager?style=for-the-badge&color=2ea44f)](https://github.com/Multron-Community/Multron-Download-Manager/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/Multron-Community/Multron-Download-Manager/total?style=for-the-badge&color=2ea44f)](https://github.com/Multron-Community/Multron-Download-Manager/releases)
+
+[![Download Windows](https://img.shields.io/badge/DOWNLOAD-Windows_x64-0078D4?style=for-the-badge&logo=windows&logoColor=white&labelColor=1a1a1a)](https://github.com/Multron-Community/Multron-Download-Manager/releases/latest)
+[![Download macOS](https://img.shields.io/badge/DOWNLOAD-macOS-000000?style=for-the-badge&logo=apple&logoColor=white&labelColor=1a1a1a)](https://github.com/Multron-Community/Multron-Download-Manager/releases/latest)
+[![Download Linux](https://img.shields.io/badge/DOWNLOAD-Linux-FCC624?style=for-the-badge&logo=linux&logoColor=black&labelColor=1a1a1a)](https://github.com/Multron-Community/Multron-Download-Manager/releases/latest)
+
+---
+
+</div>
+
 <p align="center">
   <img src="docs/screenshots/downloads-dark.png" alt="Multron Download Manager: downloads list with the live 8-connection segment view" width="900" />
 </p>
@@ -53,6 +68,7 @@
 | **Appearance** — light, dark or system theme, accent colours and transparency. | **Security** — SmartScreen mark, Multron Cloud scan (testing), safe opening of programs, extension approval, TLS and redirect rules. |
 | <img src="docs/screenshots/downloads-light-tr.png" alt="The app in Turkish with the light theme" /> | |
 | **12 languages** — follows the system language (Turkish shown here). | |
+
 
 ---
 
