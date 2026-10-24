@@ -533,7 +533,19 @@ jobs:
             if (extra.length || after.length !== expected.size) {
               throw new Error(`the draft changed while it was being signed: ${extra.join(', ') || 'missing files'}`);
             }
-            core.info(`signed and uploaded ${Object.keys(files).length} files for ${process.env.VERSION}`);
+
+            // VirusTotal Linklerini Otomatik Oluşturup Release Metnine Ekle
+            let vtSection = '\n\n### 🛡️ VirusTotal Scans\n\n| File | VirusTotal Link |\n| --- | --- |\n';
+            for (const [name, hash] of Object.entries(files)) {
+              vtSection += `| \`${name}\` | [View Report](https://www.virustotal.com/gui/file/${hash}) |\n`;
+            }
+            const currentRelease = await github.rest.repos.getRelease({ owner, repo, release_id });
+            await github.rest.repos.updateRelease({
+              owner, repo, release_id,
+              body: currentRelease.data.body + vtSection,
+            });
+
+            core.info(`signed, uploaded, and added VirusTotal links for ${Object.keys(files).length} files (${process.env.VERSION})`);
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
