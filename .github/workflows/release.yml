@@ -43,6 +43,23 @@ jobs:
         id: version
         run: echo "version=$(node -p "require('./src-tauri/tauri.conf.json').version")" >> "$GITHUB_OUTPUT"
 
+      - name: Check every version file matches
+        run: |
+          node -e '
+            const fs = require("fs");
+            const want = require("./src-tauri/tauri.conf.json").version;
+            const cargo = fs.readFileSync("src-tauri/Cargo.toml", "utf8").match(/^version\s*=\s*"([^"]+)"/m)[1];
+            const found = {
+              "src-tauri/Cargo.toml": cargo,
+              "package.json": require("./package.json").version,
+              "frontend/package.json": require("./frontend/package.json").version,
+              "extension/manifest.json": require("./extension/manifest.json").version,
+            };
+            const wrong = Object.entries(found).filter(([, v]) => v !== want);
+            for (const [file, v] of wrong) console.log(`::error file=${file}::${file} says ${v}, but src-tauri/tauri.conf.json says ${want}. The app would report the wrong version and keep updating itself.`);
+            if (wrong.length) process.exit(1);
+          '
+
       - name: Check tag matches version
         if: startsWith(github.ref, 'refs/tags/')
         run: |

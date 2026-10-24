@@ -20,7 +20,7 @@ use crate::settings::{Settings, MAX_THREADS};
 use crate::torrent::{EngineConfig, TorrentEngine, TorrentSource};
 use crate::util::{self, now_ms};
 
-mod automation;
+pub mod automation;
 pub use automation::FeedView;
 
 pub const EVT_DOWNLOADS: &str = "downloads://changed";
@@ -28,6 +28,7 @@ pub const EVT_STATS: &str = "stats://global";
 pub const EVT_PENDING: &str = "app://pending";
 pub const EVT_TOOLS: &str = "tools://progress";
 pub const EVT_TOAST: &str = "app://toast";
+pub const EVT_CLOUD: &str = "cloud://report";
 
 pub struct Paths {
     pub data: PathBuf,
@@ -59,10 +60,22 @@ struct Entry {
 #[derive(Serialize, Clone, Debug)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Pending {
-    Add { request: Box<AddRequest> },
-    Batch { batch: Box<crate::model::PageBatch> },
-    Pair { origin: String },
-    OpenTorrent { path: String },
+    Add {
+        request: Box<AddRequest>,
+    },
+    Duplicate {
+        request: Box<AddRequest>,
+        existing: crate::model::Duplicate,
+    },
+    Batch {
+        batch: Box<crate::model::PageBatch>,
+    },
+    Pair {
+        origin: String,
+    },
+    OpenTorrent {
+        path: String,
+    },
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -133,6 +146,8 @@ pub struct Manager {
     pending: Mutex<Vec<Pending>>,
     pub uninstall_requests: Mutex<std::collections::HashSet<String>>,
     pub pair_asked: Mutex<std::collections::HashSet<String>>,
+    pub cloud_reports: Mutex<std::collections::HashMap<String, automation::CloudReport>>,
+    pub cloud_stops: Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>,
     pub filter_status: Mutex<FilterStatus>,
     pub bridge: Mutex<BridgeStatus>,
     pub bridge_cancel: Mutex<CancellationToken>,
@@ -287,6 +302,10 @@ impl Manager {
                 if rec.hash_state == HashState::Verifying {
                     rec.hash_state = HashState::Pending;
                 }
+                if rec.cloud_state == "scanning" {
+                    rec.cloud_state.clear();
+                    rec.cloud_detail = None;
+                }
                 if rec.queue_order == 0 {
                     rec.queue_order = rec.created_at;
                 }
@@ -319,6 +338,8 @@ impl Manager {
             pending: Mutex::new(Vec::new()),
             uninstall_requests: Mutex::new(std::collections::HashSet::new()),
             pair_asked: Mutex::new(std::collections::HashSet::new()),
+            cloud_reports: Mutex::new(std::collections::HashMap::new()),
+            cloud_stops: Mutex::new(std::collections::HashMap::new()),
             filter_status: Mutex::new(FilterStatus::default()),
             bridge: Mutex::new(BridgeStatus::default()),
             bridge_cancel: Mutex::new(CancellationToken::new()),
@@ -383,7 +404,8 @@ impl Manager {
             || old.extra_trackers != new.extra_trackers
             || old.ip_filter_enabled != new.ip_filter_enabled
             || old.ip_filter_allow_mode != new.ip_filter_allow_mode
-            || old.torrent_scrape != new.torrent_scrape;
+            || old.torrent_scrape != new.torrent_scrape
+            || old.torrent_public_trackers != new.torrent_public_trackers;
         let filter_changed = old.ip_filter_source != new.ip_filter_source
             || old.ip_filter_source_v6 != new.ip_filter_source_v6
             || old.ip_filter_manual != new.ip_filter_manual;
@@ -479,7 +501,30 @@ impl Manager {
         );
     }
 
-    fn notify(&self, title_key: &str, body: &str) {
+    pub(crate) fn word(&self, key: &str) -> String {
+        crate::i18n::t(&self.settings().language, key)
+    }
+
+    fn in_background(&self) -> bool {
+        self.app.get_webview_window("main").is_none_or(|w| {
+            !w.is_visible().unwrap_or(false)
+                || w.is_minimized().unwrap_or(false)
+                || !w.is_focused().unwrap_or(false)
+        })
+    }
+
+    fn notify(&self, download: Option<&str>, title_key: &str, body: &str) {
+        let s = self.settings();
+        let finished = matches!(title_key, "done" | "failed");
+        if (title_key == "started" || finished)
+            && !s.download_notices
+            && !(finished && self.in_background())
+        {
+            return;
+        }
+        if title_key == "scan_cloud" && !s.scan_notices {
+            return;
+        }
         if matches!(title_key, "done" | "failed" | "threat" | "hash_bad") {
             if let Some(w) = self.app.get_webview_window("main") {
                 if !w.is_focused().unwrap_or(false) {
@@ -492,18 +537,22 @@ impl Manager {
                 }
             }
         }
-        let s = self.settings();
         if !s.notifications {
             return;
         }
-        use tauri_plugin_notification::NotificationExt;
-        let _ = self
-            .app
-            .notification()
-            .builder()
-            .title(crate::i18n::t(&s.language, title_key))
-            .body(body)
-            .show();
+        let card_in_window = matches!(title_key, "started" | "done" | "failed" | "scan_cloud");
+        if card_in_window && s.in_app_notices && !self.in_background() {
+            return;
+        }
+        let ok = body.contains(&self.word("no_threat"));
+        crate::notice::push(
+            &self.app,
+            title_key,
+            crate::i18n::t(&s.language, title_key),
+            body,
+            download,
+            ok,
+        );
     }
 
     pub fn persist(&self) {
@@ -632,6 +681,36 @@ impl Manager {
             }
         }
         info
+    }
+
+    pub fn find_duplicate(&self, req: &AddRequest) -> Option<crate::model::Duplicate> {
+        if req.allow_duplicate {
+            return None;
+        }
+        let url = util::reddit_video_url(req.url.trim());
+        let hash = req
+            .info_hash
+            .clone()
+            .or_else(|| crate::trackers::magnet_info_hash(&url))
+            .map(|h| h.to_ascii_lowercase());
+        let entries = self.entries.lock();
+        entries
+            .iter()
+            .find(|e| {
+                let same_hash = hash.as_deref().is_some_and(|h| {
+                    e.rec
+                        .torrent
+                        .as_ref()
+                        .and_then(|t| t.info_hash.as_deref())
+                        .is_some_and(|x| x.eq_ignore_ascii_case(h))
+                });
+                same_hash || (!url.is_empty() && crate::model::same_link(&e.rec.url, &url))
+            })
+            .map(|e| crate::model::Duplicate {
+                id: e.rec.id.clone(),
+                name: e.rec.name.clone(),
+                status: e.rec.status,
+            })
     }
 
     pub async fn add(self: &Arc<Self>, req: AddRequest) -> Result<String> {
@@ -838,6 +917,14 @@ impl Manager {
             self.schedule();
         }
         self.emit_now();
+        if let Ok(rec) = self.record(&id) {
+            let name = if rec.name.is_empty() {
+                rec.url.clone()
+            } else {
+                rec.name.clone()
+            };
+            self.notify(Some(&id), "started", &name);
+        }
         Ok(id)
     }
 
@@ -1062,6 +1149,10 @@ impl Manager {
                             e.rec.scan_state = "threat".into();
                             e.rec.scan_detail = Some(why.to_string());
                             notify = Some(("threat", format!("{}: {why}", e.rec.name)));
+                        } else if crate::security::access_denied(err) {
+                            let why = "access denied: the file or folder may be open in another program or protected, or your antivirus may have blocked it";
+                            e.rec.error = Some(format!("{why} ({err:#})"));
+                            notify = Some(("failed", format!("{}: {why}", e.rec.name)));
                         } else {
                             e.rec.error = Some(format!("{err:#}"));
                             notify = Some(("failed", format!("{}: {err}", e.rec.name)));
@@ -1082,7 +1173,7 @@ impl Manager {
             }
         }
         if let Some((key, body)) = notify {
-            self.notify(key, &body);
+            self.notify(Some(id), key, &body);
         }
         self.mark_dirty();
         self.persist();
@@ -1265,7 +1356,7 @@ impl Manager {
             }
         });
         if let Some((k, body)) = message {
-            self.notify(k, &body);
+            self.notify(Some(id), k, &body);
         }
         self.mark_dirty();
     }
@@ -1591,6 +1682,7 @@ impl Manager {
             disable_trackers: s.torrent_disable_trackers,
             hide_client: s.torrent_hide_client,
             scrape: s.torrent_scrape,
+            public_trackers: s.torrent_public_trackers,
         }
     }
 
@@ -1855,7 +1947,7 @@ impl Manager {
             });
         }
         for rec in finished_now {
-            self.notify("done", &rec.name);
+            self.notify(Some(&rec.id), "done", &rec.name);
             self.run_on_complete(&rec);
             self.after_download(rec);
             self.save_needed.store(true, Ordering::Relaxed);

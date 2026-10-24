@@ -1,8 +1,11 @@
 import { listen } from '@tauri-apps/api/event';
 import { api, errorText } from './api';
 import { setLanguage, t } from './i18n.svelte';
+import { message } from '@tauri-apps/plugin-dialog';
 import { applyAppearance, resolveTheme, type Appearance } from './theme';
 import type {
+  Duplicate,
+  CloudReport,
   AddRequest,
   AppUpdate,
   CategoryFilter,
@@ -16,6 +19,19 @@ import type {
   StatusFilter,
   ToolProgress
 } from '../types';
+
+export interface Notice {
+  id: number;
+  kind: 'started' | 'finished' | 'failed' | 'scan';
+  downloadId: string;
+  name: string;
+  engine?: 'cloud';
+  result?: string;
+  detail?: string | null;
+}
+
+import { PROGRAM_FILE } from './files';
+export { PROGRAM_FILE };
 
 export interface Toast {
   id: number;
@@ -53,9 +69,18 @@ class AppState {
   appearancePreview = $state<Appearance | null>(null);
   materials = $state<string[]>([]);
   removeTargets = $state<Download[]>([]);
+  cloudEulaFor = $state<string | null>(null);
+  cloudPasswordFor = $state<string | null>(null);
+  startTarget = $state<Download | null>(null);
+  get confirmingOpen() {
+    return this.startTarget !== null;
+  }
+  cloudReports = $state<Record<string, CloudReport>>({});
+  cloudReportFor = $state<string | null>(null);
   checked = $state<string[]>([]);
   checkAnchor: string | null = null;
   toasts = $state<Toast[]>([]);
+  notices = $state<Notice[]>([]);
   toolProgress = $state<ToolProgress | null>(null);
   appUpdate = $state<AppUpdate | null>(null);
   updateReady = $state<ReadyUpdate | null>(null);
@@ -137,6 +162,7 @@ class AppState {
     this.settings = boot.settings;
     await setLanguage(boot.settings.language);
     await applyAppearance(boot.settings);
+    if (boot.settings.cloudScan && !boot.settings.cloudScanAccepted) this.cloudEulaFor = 'launch';
     api
       .appearanceSupport()
       .then((s) => (this.materials = s.materials))
@@ -153,6 +179,21 @@ class AppState {
       this.uploadHistory = [...this.uploadHistory.slice(-119), e.payload.uploadSpeed];
     });
     await listen('app://pending', () => this.drainPending());
+    await listen<{ id: string | null; start: boolean }>('app://select', (e) => {
+      this.view = 'downloads';
+      const d = e.payload.id ? this.downloads.find((x) => x.id === e.payload.id) : undefined;
+      if (!d) return;
+      this.selectedId = d.id;
+      if (e.payload.start) this.confirmStart(d);
+    });
+    await listen<CloudReport>('cloud://report', (e) => {
+      const before = this.cloudReports[e.payload.id];
+      this.cloudReports = { ...this.cloudReports, [e.payload.id]: e.payload };
+      if (e.payload.id === 'all' && before?.running && !e.payload.running && this.settings?.scanNotices !== false) {
+        const all = { id: 'all', name: t('All downloads'), url: '' } as Download;
+        this.notice('scan', all, 'cloud', e.payload.state, e.payload.summary);
+      }
+    });
     await listen<ToolProgress>('tools://progress', (e) => {
       this.toolProgress = e.payload.done ? null : e.payload;
     });
@@ -195,10 +236,21 @@ class AppState {
       };
       const o = old.get(d.id);
       if (!o) {
+        if (this.settings?.downloadNotices !== false) this.notice('started', d);
         this.log(d.id, 'Added: ' + (d.url || d.name));
         continue;
       }
       if (o.status !== d.status) this.log(d.id, 'Status: ' + o.status + ' → ' + d.status);
+      if (this.settings?.downloadNotices !== false) {
+        if (o.status !== d.status && d.status === 'completed') this.notice('finished', d);
+        if (o.status !== d.status && d.status === 'failed') this.notice('failed', d);
+      }
+      if (this.settings?.scanNotices !== false) {
+        const inBulk = this.cloudReports.all?.ids.includes(d.id) ?? false;
+        if (!inBulk && o.cloudState !== d.cloudState && d.cloudState && d.cloudState !== 'scanning' && d.cloudState !== 'locked') {
+          this.notice('scan', d, 'cloud', d.cloudState, d.cloudDetail);
+        }
+      }
       if (o.phase !== d.phase && d.phase) this.log(d.id, 'Phase: ' + d.phase);
       if (o.error !== d.error && d.error) this.log(d.id, 'Error: ' + d.error);
       if (o.hashState !== d.hashState) {
@@ -207,6 +259,9 @@ class AppState {
       if (o.threads !== d.threads) this.log(d.id, 'Connections set to ' + d.threads);
       if (o.name !== d.name) this.log(d.id, 'File: ' + d.name);
       if (d.seeding && !o.seeding) this.log(d.id, 'Seeding started');
+      if (d.cloudState === 'locked' && o.cloudState === 'scanning' && !this.cloudPasswordFor && !this.cloudEulaFor) {
+        this.cloudPasswordFor = d.id;
+      }
     }
   }
 
@@ -222,6 +277,12 @@ class AppState {
     const items = await api.takePending();
     for (const p of items) {
       if (p.type === 'add') this.openAdd(p.request);
+      else if (p.type === 'duplicate') {
+        const request = p.request;
+        this.askDuplicate(request, p.existing).then((again) => {
+          if (again) this.run(() => api.add({ ...request, allowDuplicate: true }));
+        });
+      }
       else if (p.type === 'batch') this.batch = p.batch;
       else if (p.type === 'openTorrent') this.openAdd({ url: '', kind: 'torrent' }, p.path);
       else if (p.type === 'pair' && !this.pairOrigins.includes(p.origin)) {
@@ -234,6 +295,101 @@ class AppState {
     this.addPrefill = prefill;
     this.addTorrentFile = torrentFile;
     this.addOpen = true;
+  }
+
+  notice(kind: Notice['kind'], d: Download, engine?: Notice['engine'], result?: string, detail?: string | null) {
+    if (!this.settings?.inAppNotices) return;
+    const id = ++this.toastSeq;
+    const same = (n: Notice) =>
+      n.downloadId === d.id && (kind === 'scan' ? n.kind === 'scan' && n.engine === engine : n.kind !== 'scan');
+    this.notices = [
+      ...this.notices.filter((n) => !same(n)).slice(-3),
+      { id, kind, downloadId: d.id, name: d.name || d.url, engine, result, detail }
+    ];
+    const bad = result === 'threat' || result === 'suspicious';
+    setTimeout(() => this.dismissNotice(id), bad ? 20000 : kind === 'started' ? 6000 : 9000);
+  }
+
+  async scanInCloud(d: Download) {
+    const ok = await this.run(() => api.cloudScan(d.id));
+    if (ok) this.cloudReportFor = d.id;
+  }
+
+  async scanAllInCloud() {
+    if (!this.settings?.cloudScanAccepted) {
+      this.cloudEulaFor = 'all';
+      return;
+    }
+    if (this.cloudReports.all?.running) {
+      this.cloudReportFor = 'all';
+      return;
+    }
+    if (await this.run(() => api.cloudScanAll())) this.cloudReportFor = 'all';
+  }
+
+  async showCloudReport(d: Download) {
+    if (!this.cloudReports[d.id]) {
+      const r = await api.cloudScanReport(d.id).catch(() => null);
+      if (r) this.cloudReports = { ...this.cloudReports, [d.id]: r };
+    }
+    if (this.cloudReports[d.id]) {
+      this.cloudReportFor = d.id;
+      return true;
+    }
+    return false;
+  }
+
+  async askDuplicate(request: AddRequest, existing: Duplicate): Promise<boolean> {
+    const running = existing.status === 'active' || existing.status === 'queued' || existing.status === 'paused';
+    const title = running
+      ? t('This file is already downloading')
+      : existing.status === 'completed'
+        ? t('This file was already downloaded')
+        : t('This file is already in the list');
+    const again = t('Download again');
+    const show = t('Show existing');
+    const answer = await message(`${existing.name}\n\n${t('Do you want to download it again?')}`, {
+      title,
+      kind: 'warning',
+      buttons: { yes: again, no: show, cancel: t('Cancel') }
+    }).catch(() => 'Cancel');
+    if (answer === again || answer === 'Yes') return true;
+    if (answer === show || answer === 'No') {
+      this.view = 'downloads';
+      this.selectedId = existing.id;
+    }
+    return false;
+  }
+
+  async addChecked(request: AddRequest) {
+    const existing = await api.findDuplicate(request).catch(() => null);
+    if (existing && !(await this.askDuplicate(request, existing))) return false;
+    return this.run(() => api.add({ ...request, allowDuplicate: !!existing }));
+  }
+
+  confirmStart(d: Download) {
+    this.startTarget = d;
+  }
+
+  async startConfirmed() {
+    const d = this.startTarget;
+    this.startTarget = null;
+    if (d) await this.run(() => api.openFile(d.id, true));
+  }
+
+  openDownload(d: Download) {
+    if (PROGRAM_FILE.test(d.name) && this.settings?.askBeforeStartingPrograms !== false) {
+      this.confirmStart(d);
+      return;
+    }
+    api.openFile(d.id).catch((e) => {
+      if (String(e).includes('confirm_start')) this.confirmStart(d);
+      else this.toast('error', errorText(e));
+    });
+  }
+
+  dismissNotice(id: number) {
+    this.notices = this.notices.filter((n) => n.id !== id);
   }
 
   toast(kind: Toast['kind'], message: string) {

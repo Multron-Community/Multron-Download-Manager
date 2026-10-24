@@ -212,7 +212,7 @@
         trackers: trackersText.split('\n').map((s) => s.trim()).filter(Boolean)
       };
     }
-    const ok = await app.run(() => api.add(req));
+    const ok = await app.addChecked(req);
     busy = false;
     if (ok) app.addOpen = false;
   }

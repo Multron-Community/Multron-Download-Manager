@@ -22,6 +22,9 @@ pub struct Settings {
     pub start_minimized: bool,
     pub launch_at_startup: bool,
     pub notifications: bool,
+    pub download_notices: bool,
+    pub scan_notices: bool,
+    pub in_app_notices: bool,
     pub resume_on_startup: bool,
     pub check_updates_on_startup: bool,
     pub auto_update: bool,
@@ -52,6 +55,7 @@ pub struct Settings {
     pub torrent_upnp: bool,
     pub torrent_utp: bool,
     pub torrent_peer_limit: u32,
+    pub torrent_public_trackers: bool,
     pub torrent_download_limit: u64,
     pub torrent_upload_limit: u64,
     pub seed_after_complete: bool,
@@ -76,11 +80,17 @@ pub struct Settings {
     pub on_complete_command: String,
     pub when_done: String,
     pub mark_downloads: bool,
-    pub scan_downloads: bool,
     pub cloud_scan: bool,
-    pub open_programs_on_double_click: bool,
+    pub cloud_scan_button: bool,
+    pub cloud_scan_all_button: bool,
+    pub ask_before_starting_programs: bool,
     pub cloud_scan_accepted: bool,
     pub cloud_scan_limit_mb: u32,
+    pub cloud_scan_manual_limit_mb: u32,
+    pub cloud_compress_uploads: bool,
+    pub cloud_connections: u32,
+    pub cloud_fingerprint_cache: bool,
+    pub cloud_scan_extensions: Vec<String>,
     #[serde(default)]
     pub settings_version: u32,
     pub extra_trackers: Vec<String>,
@@ -125,6 +135,9 @@ impl Default for Settings {
             start_minimized: false,
             launch_at_startup: false,
             notifications: true,
+            download_notices: true,
+            scan_notices: true,
+            in_app_notices: false,
             resume_on_startup: true,
             check_updates_on_startup: true,
             auto_update: true,
@@ -154,7 +167,8 @@ impl Default for Settings {
             torrent_dht: true,
             torrent_upnp: true,
             torrent_utp: true,
-            torrent_peer_limit: 200,
+            torrent_peer_limit: DEFAULT_PEER_LIMIT,
+            torrent_public_trackers: true,
             torrent_download_limit: 0,
             torrent_upload_limit: 0,
             seed_after_complete: true,
@@ -179,11 +193,20 @@ impl Default for Settings {
             on_complete_command: String::new(),
             when_done: "nothing".into(),
             mark_downloads: true,
-            scan_downloads: true,
-            cloud_scan: false,
-            open_programs_on_double_click: false,
+            cloud_scan: true,
+            cloud_scan_button: true,
+            cloud_scan_all_button: true,
+            ask_before_starting_programs: true,
             cloud_scan_accepted: false,
             cloud_scan_limit_mb: crate::cloudscan::DEFAULT_LIMIT_MB,
+            cloud_scan_manual_limit_mb: crate::cloudscan::MAX_LIMIT_MB,
+            cloud_compress_uploads: true,
+            cloud_connections: crate::cloudscan::DEFAULT_CONNECTIONS,
+            cloud_fingerprint_cache: true,
+            cloud_scan_extensions: DEFAULT_CLOUD_EXTENSIONS
+                .iter()
+                .map(|e| e.to_string())
+                .collect(),
             settings_version: SETTINGS_VERSION,
             extra_trackers: Vec::new(),
 
@@ -237,6 +260,18 @@ impl Settings {
         if self.settings_version < 1 {
             self.confirm_browser_downloads = false;
         }
+        if self.settings_version < 2 {
+            if self.torrent_peer_limit == 200 {
+                self.torrent_peer_limit = DEFAULT_PEER_LIMIT;
+            }
+            self.notifications = true;
+        }
+        if self.settings_version < 3 {
+            self.ask_before_starting_programs = true;
+        }
+        if self.settings_version < 4 {
+            self.cloud_scan = true;
+        }
         self.settings_version = SETTINGS_VERSION;
         self.auto_update = true;
         self.check_updates_on_startup = true;
@@ -245,7 +280,24 @@ impl Settings {
         self.cloud_scan_limit_mb = self
             .cloud_scan_limit_mb
             .clamp(1, crate::cloudscan::MAX_LIMIT_MB);
-        self.cloud_scan &= self.cloud_scan_accepted;
+        self.cloud_connections = self
+            .cloud_connections
+            .clamp(1, crate::cloudscan::MAX_CONNECTIONS as u32);
+        self.cloud_scan_manual_limit_mb = self
+            .cloud_scan_manual_limit_mb
+            .clamp(1, crate::cloudscan::MAX_LIMIT_MB);
+        let mut extensions: Vec<String> = Vec::new();
+        for ext in &self.cloud_scan_extensions {
+            let ext = ext.trim().trim_start_matches('.').to_lowercase();
+            let valid = ext == ALL_FILES
+                || (!ext.is_empty()
+                    && ext.len() <= 16
+                    && ext.chars().all(|c| c.is_ascii_alphanumeric()));
+            if valid && !extensions.contains(&ext) {
+                extensions.push(ext);
+            }
+        }
+        self.cloud_scan_extensions = extensions;
         self.max_concurrent = self.max_concurrent.clamp(1, 32);
         self.retries = self.retries.clamp(0, 50);
         if self.language != "en"
@@ -325,10 +377,118 @@ pub struct RssRule {
     pub start_paused: bool,
 }
 
-pub const SETTINGS_VERSION: u32 = 1;
+pub const SETTINGS_VERSION: u32 = 4;
+pub const DEFAULT_PEER_LIMIT: u32 = 500;
+pub const ALL_FILES: &str = "*";
+#[cfg(windows)]
+pub const DEFAULT_CLOUD_EXTENSIONS: &[&str] = &[
+    "exe", "msi", "msix", "appx", "dll", "scr", "com", "bat", "cmd", "ps1", "vbs", "js", "jar",
+    "lnk", "hta", "reg",
+];
+#[cfg(target_os = "macos")]
+pub const DEFAULT_CLOUD_EXTENSIONS: &[&str] = &[
+    "dmg", "pkg", "mpkg", "command", "tool", "sh", "zsh", "py", "jar", "scpt", "dylib",
+];
+#[cfg(all(unix, not(target_os = "macos")))]
+pub const DEFAULT_CLOUD_EXTENSIONS: &[&str] = &[
+    "appimage",
+    "deb",
+    "rpm",
+    "run",
+    "bin",
+    "sh",
+    "py",
+    "pl",
+    "jar",
+    "flatpakref",
+    "snap",
+    "desktop",
+];
 
 pub fn parse_hhmm(s: &str) -> Option<u32> {
     let (h, m) = s.trim().split_once(':')?;
     let (h, m): (u32, u32) = (h.parse().ok()?, m.parse().ok()?);
     (h < 24 && m < 60).then_some(h * 60 + m)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn raises_the_old_default_peer_limit_once() {
+        let old = Settings {
+            settings_version: 1,
+            torrent_peer_limit: 200,
+            ..Default::default()
+        };
+        assert_eq!(old.normalized().torrent_peer_limit, DEFAULT_PEER_LIMIT);
+        let chosen = Settings {
+            settings_version: 1,
+            torrent_peer_limit: 80,
+            ..Default::default()
+        };
+        assert_eq!(chosen.normalized().torrent_peer_limit, 80);
+        let current = Settings {
+            settings_version: SETTINGS_VERSION,
+            torrent_peer_limit: 200,
+            ..Default::default()
+        };
+        assert_eq!(current.normalized().torrent_peer_limit, 200);
+        let quiet = Settings {
+            settings_version: 1,
+            notifications: false,
+            ..Default::default()
+        };
+        assert!(quiet.normalized().notifications);
+        let chosen_quiet = Settings {
+            settings_version: SETTINGS_VERSION,
+            notifications: false,
+            ..Default::default()
+        };
+        assert!(!chosen_quiet.normalized().notifications);
+        assert!(Settings::default().notifications);
+    }
+
+    #[test]
+    fn scans_downloads_in_the_cloud_by_default() {
+        let fresh = Settings::default();
+        assert!(fresh.cloud_scan && !fresh.cloud_scan_accepted);
+        assert!(fresh.cloud_compress_uploads && fresh.cloud_fingerprint_cache);
+        let old = Settings {
+            settings_version: 3,
+            cloud_scan: false,
+            ..Default::default()
+        };
+        assert!(old.normalized().cloud_scan);
+        let chosen = Settings {
+            settings_version: SETTINGS_VERSION,
+            cloud_scan: false,
+            cloud_connections: 40,
+            ..Default::default()
+        };
+        let chosen = chosen.normalized();
+        assert!(!chosen.cloud_scan);
+        assert_eq!(
+            chosen.cloud_connections,
+            crate::cloudscan::MAX_CONNECTIONS as u32
+        );
+    }
+
+    #[test]
+    fn asks_before_starting_programs_by_default() {
+        assert!(Settings::default().ask_before_starting_programs);
+        let old = Settings {
+            settings_version: 2,
+            ask_before_starting_programs: false,
+            ..Default::default()
+        };
+        assert!(old.normalized().ask_before_starting_programs);
+        let chosen = Settings {
+            settings_version: SETTINGS_VERSION,
+            ask_before_starting_programs: false,
+            ..Default::default()
+        };
+        assert!(!chosen.normalized().ask_before_starting_programs);
+    }
 }

@@ -49,20 +49,20 @@
 
 <header class="h-[58px] px-5 border-b border-line flex items-center justify-between flex-shrink-0 bg-bg gap-4">
   <div class="flex items-center gap-3 min-w-0">
-    <h1 class="text-[15px] font-semibold tracking-tight truncate">{title}</h1>
-    <div class="h-[24px] px-[8px] bg-line rounded-[6px] flex items-center gap-2 text-[11px] font-medium">
+    <h1 class="text-[15px] font-semibold tracking-tight truncate min-w-[40px]">{title}</h1>
+    <div class="h-[24px] px-[8px] bg-line rounded-[6px] flex items-center gap-2 text-[11px] font-medium whitespace-nowrap flex-shrink-0">
       <span class="flex items-center gap-1 text-accent"><Icon name="down" size={12} />{speed(app.stats.downloadSpeed)}</span>
       {#if app.stats.uploadSpeed > 0}
         <span class="flex items-center gap-1 text-seed"><Icon name="up" size={12} />{speed(app.stats.uploadSpeed)}</span>
       {/if}
     </div>
-    <div class="hidden lg:block">
+    <div class="hidden xl:block">
       <SpeedGraph values={app.speedHistory} secondary={app.uploadHistory} width={140} height={26} />
     </div>
   </div>
 
-  <div class="flex items-center gap-2">
-    <div class="w-[200px] h-[30px] px-[10px] bg-panel border border-line rounded-[8px] flex items-center gap-[8px] focus-within:border-muted/60">
+  <div class="flex items-center gap-2 flex-shrink-0">
+    <div class="w-[150px] xl:w-[200px] h-[30px] px-[10px] bg-panel border border-line rounded-[8px] flex items-center gap-[8px] focus-within:border-muted/60">
       <Icon name="search" size={12} class="text-muted flex-shrink-0" />
       <input
         type="text"
@@ -87,12 +87,22 @@
     </button>
     <button
       type="button"
-      class="h-[28px] px-[10px] rounded-full text-[11.5px] font-medium flex items-center gap-1.5 cursor-pointer transition-colors {app.settings?.sequential ? 'bg-accent-strong/25 text-accent' : 'text-muted hover:bg-line hover:text-white'}"
+      class="h-[28px] px-[10px] rounded-full text-[11.5px] font-medium flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap cursor-pointer transition-colors {app.settings?.sequential ? 'bg-accent-strong/25 text-accent' : 'text-muted hover:bg-line hover:text-white'}"
       title={t('Sequential download: one at a time, in queue order. Turn off to download in parallel.')}
       onclick={() => app.toggleSequential()}
     >
-      <Icon name="queue" size={14} />{app.settings?.sequential ? t('One at a time') : t('Parallel')}
+      <Icon name="queue" size={14} /><span class="hidden xl:inline">{app.settings?.sequential ? t('One at a time') : t('Parallel')}</span>
     </button>
+    {#if app.settings?.cloudScanAllButton !== false}
+      <button
+        class="h-[28px] px-[10px] rounded-full text-[11.5px] font-medium flex items-center gap-1.5 flex-shrink-0 whitespace-nowrap cursor-pointer transition-colors {app.cloudReports.all?.running ? 'bg-accent-strong/30 text-accent' : 'bg-accent/10 text-accent hover:bg-accent/20'}"
+        title={t('Scan every finished download with Multron Cloud')}
+        aria-label={t('Scan all')}
+        onclick={() => app.scanAllInCloud()}
+      >
+        <Icon name="shield" size={14} /><span class="hidden lg:inline">{app.cloudReports.all?.running ? t('Scanning {done}/{total}', { done: app.cloudReports.all.done, total: app.cloudReports.all.total }) : t('Scan all')}</span>
+      </button>
+    {/if}
     <button class="icon-btn" title={t('Pause all')} onclick={() => app.run(api.pauseAll)}><Icon name="pause" size={14} /></button>
     <button class="icon-btn" title={t('Resume all')} onclick={() => app.run(api.resumeAll)}><Icon name="play" size={14} /></button>
     <div class="relative">

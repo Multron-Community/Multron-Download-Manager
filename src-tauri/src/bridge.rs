@@ -294,6 +294,13 @@ async fn download(
             Json(json!({ "error": "missing url" })),
         );
     }
+    if let Some(existing) = mgr.find_duplicate(&req) {
+        mgr.push_pending(Pending::Duplicate {
+            request: Box::new(req),
+            existing,
+        });
+        return (StatusCode::OK, Json(json!({ "ok": true, "confirm": true })));
+    }
     let s = mgr.settings();
     if s.confirm_browser_downloads || s.ask_sha256 {
         mgr.push_pending(Pending::Add {

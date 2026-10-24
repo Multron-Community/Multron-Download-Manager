@@ -539,93 +539,594 @@ fn collect_files(path: &Path, out: &mut Vec<PathBuf>, limit: usize) {
     }
 }
 
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudFinding {
+    pub download: String,
+    pub path: String,
+    pub name: String,
+    pub verdict: String,
+    pub detail: String,
+    pub route: String,
+    pub size: u64,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CloudReport {
+    pub id: String,
+    pub name: String,
+    pub running: bool,
+    pub stopped: bool,
+    pub total: usize,
+    pub done: usize,
+    pub current: Option<String>,
+    pub clean: usize,
+    pub threats: usize,
+    pub suspicious: usize,
+    pub unknown: usize,
+    pub not_checked: usize,
+    pub findings: Vec<CloudFinding>,
+    pub summary: Option<String>,
+    pub state: String,
+    pub ids: Vec<String>,
+    pub stage: String,
+    pub stage_sent: u64,
+    pub stage_total: u64,
+    pub started_ms: i64,
+    pub finished_ms: i64,
+    pub known: usize,
+    pub uploaded: usize,
+    pub uploaded_bytes: u64,
+    pub recent: Vec<CloudFinding>,
+}
+
+const RECENT_FILES: usize = 300;
+
+pub const ALL_REPORT: &str = "all";
+const MAX_ALL_FILES: usize = 5000;
+
+impl CloudReport {
+    pub fn add(
+        &mut self,
+        download: &str,
+        shown: String,
+        path: &Path,
+        v: &crate::cloudscan::FileVerdict,
+    ) {
+        self.done += 1;
+        self.stage.clear();
+        self.stage_sent = 0;
+        self.stage_total = 0;
+        match v.route {
+            "hash" => self.known += 1,
+            "upload" => {
+                self.uploaded += 1;
+                self.uploaded_bytes += v.uploaded;
+            }
+            _ => {}
+        }
+        let row = CloudFinding {
+            download: download.to_string(),
+            path: path.to_string_lossy().into_owned(),
+            name: shown.clone(),
+            verdict: v.verdict.clone(),
+            detail: v.detail.clone(),
+            route: v.route.to_string(),
+            size: v.size,
+        };
+        self.recent.push(row.clone());
+        if self.recent.len() > RECENT_FILES {
+            self.recent.remove(0);
+        }
+        match v.verdict.as_str() {
+            "clean" | "possible_clean" => self.clean += 1,
+            "unknown" => self.unknown += 1,
+            "malicious" => self.threats += 1,
+            "suspicious" => self.suspicious += 1,
+            _ => self.not_checked += 1,
+        }
+        if !matches!(v.verdict.as_str(), "clean" | "possible_clean" | "unknown") {
+            self.findings.push(row);
+        }
+    }
+
+    pub fn stage(&mut self, stage: crate::cloudscan::Stage) {
+        use crate::cloudscan::Stage;
+        let (name, sent, total) = match stage {
+            Stage::Hashing { done, total } => ("hashing", done as u64, total as u64),
+            Stage::Checking { count } => ("checking", 0, count as u64),
+            Stage::Waiting { count } => ("waiting", 0, count as u64),
+            Stage::Uploading { sent, total } => ("uploading", sent, total),
+            Stage::Analyzing => ("analyzing", 0, 0),
+            Stage::Reconnecting => ("reconnecting", 0, 0),
+        };
+        self.stage = name.into();
+        self.stage_sent = sent;
+        self.stage_total = total;
+    }
+}
+
+fn all_name(download: &str, base: &Path, path: &Path) -> String {
+    let inner = shown_name(base, path, false);
+    if inner == download || inner.is_empty() {
+        download.to_string()
+    } else {
+        let rest = Path::new(&inner)
+            .strip_prefix(download)
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or(inner);
+        format!("{download} › {rest}")
+    }
+}
+
+fn shown_name(base: &Path, path: &Path, unpacked: bool) -> String {
+    if unpacked {
+        return path
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+    }
+    path.strip_prefix(base)
+        .unwrap_or(path)
+        .to_string_lossy()
+        .into_owned()
+}
+
+pub(super) fn matches_extension(path: &Path, wanted: &[String]) -> bool {
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_lowercase())
+        .unwrap_or_default();
+    wanted
+        .iter()
+        .any(|ext| ext == crate::settings::ALL_FILES || name.ends_with(&format!(".{ext}")))
+}
+
 impl Manager {
     pub(super) fn after_download(self: &Arc<Self>, rec: DownloadRecord) {
         let s = self.settings();
         if s.cloud_scan && s.cloud_scan_accepted {
-            self.cloud_scan(&rec, s.cloud_scan_limit_mb);
+            let files: Vec<PathBuf> = downloaded_files(&rec)
+                .into_iter()
+                .filter(|f| matches_extension(f, &s.cloud_scan_extensions))
+                .collect();
+            self.cloud_scan(&rec, files, s.cloud_scan_limit_mb, None);
         }
-        if cfg!(all(unix, not(target_os = "macos"))) || (!s.mark_downloads && !s.scan_downloads) {
+        if cfg!(all(unix, not(target_os = "macos"))) || !s.mark_downloads {
             return;
         }
         let files = downloaded_files(&rec);
         if files.is_empty() {
-            if s.scan_downloads && rec.kind == Kind::Http && cfg!(windows) {
-                let why = "the file was removed right after it was downloaded, most likely by your antivirus";
-                self.with_entry(&rec.id, |e| {
-                    e.rec.scan_state = "threat".into();
-                    e.rec.scan_detail = Some(why.into());
-                });
-                self.notify("threat", &format!("{}: {why}", rec.name));
-                self.mark_dirty();
-            }
             return;
         }
         let this = self.clone();
-        tauri::async_runtime::spawn(async move {
-            let (mark, scan) = (
-                s.mark_downloads && crate::security::smartscreen_status() == "on",
-                s.scan_downloads && cfg!(windows),
-            );
-            if scan {
-                this.with_entry(&rec.id, |e| e.rec.scan_state = "scanning".into());
-                this.mark_dirty();
+        tauri::async_runtime::spawn_blocking(move || {
+            if crate::security::smartscreen_status() != "on" {
+                return;
             }
-            let url = rec.url.clone();
-            let referrer = rec.referrer.clone();
-            let list = files.clone();
-            let verdict = tauri::async_runtime::spawn_blocking(move || {
-                if mark {
-                    for f in &list {
-                        crate::security::mark_from_internet(f, &url, referrer.as_deref());
-                    }
+            let mut marked = 0;
+            for f in &files {
+                if crate::security::mark_from_internet(f, &rec.url, rec.referrer.as_deref()) {
+                    marked += 1;
                 }
-                scan.then(|| crate::security::scan(&list))
-            })
-            .await
-            .ok()
-            .flatten();
-            let Some(verdict) = verdict else { return };
-            let (state, detail) = match &verdict {
-                crate::security::Verdict::Clean(by) => ("clean", Some(by.clone())),
-                crate::security::Verdict::Threat(what) => ("threat", Some(what.clone())),
-                crate::security::Verdict::Unavailable(why) => ("skipped", Some(why.clone())),
-            };
-            this.with_entry(&rec.id, |e| {
-                e.rec.scan_state = state.into();
-                e.rec.scan_detail = detail.clone();
-            });
-            if let crate::security::Verdict::Threat(what) = verdict {
-                this.notify("threat", &format!("{}: {what}", rec.name));
-                this.toast("error", format!("{}: {what}", rec.name));
             }
+            if marked == 0 {
+                return;
+            }
+            this.with_entry(&rec.id, |e| {
+                if e.rec.scan_state != "threat" {
+                    e.rec.scan_state = "marked".into();
+                    e.rec.scan_detail = None;
+                }
+            });
             this.mark_dirty();
             this.save_needed.store(true, Ordering::Relaxed);
         });
     }
 
-    fn cloud_scan(self: &Arc<Self>, rec: &DownloadRecord, limit_mb: u32) {
-        let files = downloaded_files(rec);
+    fn emit_cloud(&self, id: &str) {
+        use tauri::Emitter;
+        if let Some(r) = self.cloud_reports.lock().get(id).cloned() {
+            let _ = self.app.emit(super::EVT_CLOUD, r);
+        }
+    }
+
+    pub fn cloud_report(&self, id: &str) -> Option<CloudReport> {
+        self.cloud_reports.lock().get(id).cloned()
+    }
+
+    pub fn stop_cloud_scan(&self, id: &str) {
+        if let Some(stop) = self.cloud_stops.lock().get(id) {
+            stop.store(true, Ordering::Relaxed);
+        }
+    }
+
+    pub fn reveal_path_of(&self, id: &str, path: &str) -> Result<PathBuf> {
+        let rec = self.record(id)?;
+        let base = std::fs::canonicalize(&rec.dir).context("the download folder was not found")?;
+        let target = std::fs::canonicalize(path).context("the file was not found")?;
+        if !target.starts_with(&base) {
+            bail!("the file is not inside the download folder");
+        }
+        Ok(target)
+    }
+
+    fn cloud_scanning(&self) -> HashSet<String> {
+        let stops = self.cloud_stops.lock();
+        let mut ids: HashSet<String> = stops.keys().cloned().collect();
+        if stops.contains_key(ALL_REPORT) {
+            if let Some(r) = self.cloud_reports.lock().get(ALL_REPORT) {
+                ids.extend(r.ids.iter().cloned());
+            }
+        }
+        ids
+    }
+
+    fn cloud_options(&self) -> crate::cloudscan::Options {
+        let s = self.settings();
+        crate::cloudscan::Options {
+            compress: s.cloud_compress_uploads,
+            connections: s.cloud_connections as usize,
+            cache: s
+                .cloud_fingerprint_cache
+                .then(|| self.paths.data.join("cloud-fingerprints.json")),
+        }
+    }
+
+    pub fn scan_all_in_cloud(self: &Arc<Self>) -> Result<usize> {
+        let s = self.settings();
+        if !s.cloud_scan_accepted {
+            bail!("accept the Cloud Malware Scan License Agreement first");
+        }
+        if self.cloud_stops.lock().contains_key(ALL_REPORT) {
+            bail!("Multron Cloud is already scanning all downloads");
+        }
+        let busy = self.cloud_scanning();
+        let records: Vec<DownloadRecord> = self
+            .entries
+            .lock()
+            .iter()
+            .filter(|e| e.rec.status == Status::Completed && !busy.contains(&e.rec.id))
+            .map(|e| e.rec.clone())
+            .collect();
+        let mut seen = HashSet::new();
+        let mut jobs: Vec<(PathBuf, String, String, PathBuf)> = Vec::new();
+        let mut ids: Vec<String> = Vec::new();
+        for rec in &records {
+            if jobs.len() >= MAX_ALL_FILES {
+                break;
+            }
+            let mut added = false;
+            for f in downloaded_files(rec) {
+                if jobs.len() >= MAX_ALL_FILES {
+                    break;
+                }
+                if seen.insert(f.clone()) {
+                    jobs.push((f, rec.id.clone(), rec.name.clone(), PathBuf::from(&rec.dir)));
+                    added = true;
+                }
+            }
+            if added {
+                ids.push(rec.id.clone());
+            }
+        }
+        if jobs.is_empty() {
+            bail!("there are no finished downloads to scan");
+        }
+        let limit_mb = s.cloud_scan_manual_limit_mb;
+        let stop = Arc::new(AtomicBool::new(false));
+        self.cloud_stops
+            .lock()
+            .insert(ALL_REPORT.into(), stop.clone());
+        self.cloud_reports.lock().insert(
+            ALL_REPORT.into(),
+            CloudReport {
+                id: ALL_REPORT.into(),
+                name: "All downloads".into(),
+                running: true,
+                total: jobs.len(),
+                current: jobs.first().map(|(p, _, n, b)| all_name(n, b, p)),
+                state: "scanning".into(),
+                ids: ids.clone(),
+                started_ms: now_ms(),
+                ..Default::default()
+            },
+        );
+        for id in &ids {
+            self.with_entry(id, |e| {
+                e.rec.cloud_state = "scanning".into();
+                e.rec.cloud_detail = None;
+            });
+        }
+        self.emit_cloud(ALL_REPORT);
+        self.mark_dirty();
+        let count = jobs.len();
+        let this = self.clone();
+        let options = self.cloud_options();
+        tauri::async_runtime::spawn(async move {
+            let files: Vec<PathBuf> = jobs.iter().map(|j| j.0.clone()).collect();
+            let mut per: HashMap<String, Vec<(PathBuf, crate::cloudscan::FileVerdict)>> =
+                HashMap::new();
+            let summary = crate::cloudscan::scan(
+                &files,
+                limit_mb,
+                &options,
+                &stop,
+                |index, stage| {
+                    if let Some(r) = this.cloud_reports.lock().get_mut(ALL_REPORT) {
+                        r.stage(stage);
+                        r.current = jobs.get(index).map(|(p, _, n, b)| all_name(n, b, p));
+                    }
+                    this.emit_cloud(ALL_REPORT);
+                },
+                |index, verdict| {
+                    if let Some((path, id, name, base)) = jobs.get(index) {
+                        per.entry(id.clone())
+                            .or_default()
+                            .push((path.clone(), verdict.clone()));
+                        if let Some(r) = this.cloud_reports.lock().get_mut(ALL_REPORT) {
+                            r.add(id, all_name(name, base, path), path, verdict);
+                        }
+                    }
+                    this.emit_cloud(ALL_REPORT);
+                },
+            )
+            .await;
+            let stopped = stop.load(Ordering::Relaxed);
+            this.cloud_stops.lock().remove(ALL_REPORT);
+            for id in &ids {
+                let result = per
+                    .get(id)
+                    .map(|list| crate::cloudscan::summarize(list, limit_mb));
+                this.with_entry(id, |e| match &result {
+                    Some(r) => {
+                        e.rec.cloud_state = r.state.into();
+                        e.rec.cloud_detail = Some(r.detail.clone());
+                    }
+                    None => {
+                        e.rec.cloud_state = if summary.state == "error" {
+                            "error".into()
+                        } else {
+                            String::new()
+                        };
+                        e.rec.cloud_detail =
+                            (summary.state == "error").then(|| summary.detail.clone());
+                    }
+                });
+            }
+            let done = this
+                .cloud_reports
+                .lock()
+                .get(ALL_REPORT)
+                .map(|r| r.done)
+                .unwrap_or(0);
+            let mut detail = summary.detail.clone();
+            if stopped {
+                detail = format!("{detail} (stopped after {done} of {} files)", files.len());
+            }
+            if let Some(r) = this.cloud_reports.lock().get_mut(ALL_REPORT) {
+                r.running = false;
+                r.finished_ms = now_ms();
+                r.stopped = stopped;
+                r.current = None;
+                r.summary = Some(detail.clone());
+                r.state = summary.state.to_string();
+            }
+            this.emit_cloud(ALL_REPORT);
+            match summary.state {
+                "threat" | "suspicious" => this.notify(None, "threat", &detail),
+                "clean" | "unknown" => this.notify(None, "scan_cloud", &this.word("no_threat")),
+                _ => this.notify(None, "scan_cloud", &detail),
+            }
+            this.mark_dirty();
+            this.save_needed.store(true, Ordering::Relaxed);
+        });
+        Ok(count)
+    }
+
+    pub fn scan_in_cloud(self: &Arc<Self>, id: &str) -> Result<()> {
+        let s = self.settings();
+        if !s.cloud_scan_accepted {
+            bail!("accept the Cloud Malware Scan License Agreement first");
+        }
+        let rec = self.record(id)?;
+        if rec.status != Status::Completed {
+            bail!("the download is not finished yet");
+        }
+        if self.cloud_scanning().contains(&rec.id) {
+            bail!("Multron Cloud is already scanning this download");
+        }
+        let files = downloaded_files(&rec);
+        if files.is_empty() {
+            bail!("the downloaded files were not found");
+        }
+        self.cloud_scan(&rec, files, s.cloud_scan_manual_limit_mb, None);
+        Ok(())
+    }
+
+    pub async fn scan_locked_in_cloud(self: &Arc<Self>, id: &str, password: String) -> Result<()> {
+        let s = self.settings();
+        if !s.cloud_scan_accepted {
+            bail!("accept the Cloud Malware Scan License Agreement first");
+        }
+        let rec = self.record(id)?;
+        if self.cloud_scanning().contains(&rec.id) {
+            bail!("Multron Cloud is already scanning this download");
+        }
+        let archives: Vec<PathBuf> = downloaded_files(&rec)
+            .into_iter()
+            .filter(|f| {
+                matches!(
+                    crate::archive::locked(f),
+                    Some(crate::archive::Kind::Zip | crate::archive::Kind::SevenZip)
+                )
+            })
+            .collect();
+        if archives.is_empty() {
+            bail!("no password-protected ZIP or 7z archive was found in this download");
+        }
+        let work = self
+            .paths
+            .data
+            .join("cloud-scan")
+            .join(uuid::Uuid::new_v4().to_string());
+        let dir = work.clone();
+        let extracted = tauri::async_runtime::spawn_blocking(move || {
+            let mut out = crate::archive::Extracted::default();
+            for (i, archive) in archives.iter().enumerate() {
+                let part = crate::archive::extract(archive, &password, &dir.join(i.to_string()))?;
+                out.files.extend(part.files);
+                out.skipped += part.skipped;
+            }
+            Ok::<_, anyhow::Error>(out)
+        })
+        .await
+        .map_err(|e| anyhow!("{e}"))?;
+        let extracted = match extracted {
+            Ok(x) => x,
+            Err(e) => {
+                let _ = std::fs::remove_dir_all(&work);
+                if crate::archive::is_wrong_password(&e) {
+                    bail!("the password is wrong");
+                }
+                return Err(e);
+            }
+        };
+        if extracted.files.is_empty() {
+            let _ = std::fs::remove_dir_all(&work);
+            bail!("the archive has no files that can be scanned");
+        }
+        self.cloud_scan(
+            &rec,
+            extracted.files,
+            s.cloud_scan_manual_limit_mb,
+            Some((work, extracted.skipped)),
+        );
+        Ok(())
+    }
+
+    fn cloud_scan(
+        self: &Arc<Self>,
+        rec: &DownloadRecord,
+        files: Vec<PathBuf>,
+        limit_mb: u32,
+        unpacked: Option<(PathBuf, usize)>,
+    ) {
         if files.is_empty() {
             return;
         }
         let id = rec.id.clone();
         let name = rec.name.clone();
+        let base = PathBuf::from(&rec.dir);
+        let stop = Arc::new(AtomicBool::new(false));
+        self.cloud_stops.lock().insert(id.clone(), stop.clone());
+        self.cloud_reports.lock().insert(
+            id.clone(),
+            CloudReport {
+                id: id.clone(),
+                name: name.clone(),
+                running: true,
+                total: files.len(),
+                state: "scanning".into(),
+                started_ms: now_ms(),
+                ..Default::default()
+            },
+        );
+        self.emit_cloud(&id);
         self.with_entry(&id, |e| {
             e.rec.cloud_state = "scanning".into();
             e.rec.cloud_detail = None;
         });
         self.mark_dirty();
         let this = self.clone();
+        let options = self.cloud_options();
         tauri::async_runtime::spawn(async move {
-            let summary = crate::cloudscan::scan(&files, limit_mb).await;
+            let is_unpacked = unpacked.is_some();
+            let mut summary = crate::cloudscan::scan(
+                &files,
+                limit_mb,
+                &options,
+                &stop,
+                |index, stage| {
+                    if let Some(r) = this.cloud_reports.lock().get_mut(&id) {
+                        r.stage(stage);
+                        r.current = files.get(index).map(|p| shown_name(&base, p, is_unpacked));
+                    }
+                    this.emit_cloud(&id);
+                },
+                |index, verdict| {
+                    if let (Some(path), Some(r)) =
+                        (files.get(index), this.cloud_reports.lock().get_mut(&id))
+                    {
+                        r.add(&id, shown_name(&base, path, is_unpacked), path, verdict);
+                    }
+                    this.emit_cloud(&id);
+                },
+            )
+            .await;
+            let stopped = stop.load(Ordering::Relaxed);
+            this.cloud_stops.lock().remove(&id);
+            let done = this
+                .cloud_reports
+                .lock()
+                .get(&id)
+                .map(|r| r.done)
+                .unwrap_or(0);
+            if stopped {
+                summary.detail = format!(
+                    "{} (stopped after {done} of {} files)",
+                    summary.detail,
+                    files.len()
+                );
+                if done == 0 {
+                    summary.state = "skipped";
+                }
+            }
+            if let Some(r) = this.cloud_reports.lock().get_mut(&id) {
+                r.running = false;
+                r.finished_ms = now_ms();
+                r.stopped = stopped;
+                r.current = None;
+                r.summary = Some(summary.detail.clone());
+                r.state = summary.state.to_string();
+            }
+            this.emit_cloud(&id);
+            if let Some((work, skipped)) = unpacked {
+                let _ = std::fs::remove_dir_all(&work);
+                summary.detail = if skipped > 0 {
+                    format!(
+                        "{} (inside the archive; {skipped} files over 100 MB were not checked)",
+                        summary.detail
+                    )
+                } else {
+                    format!("{} (inside the archive)", summary.detail)
+                };
+            }
             this.with_entry(&id, |e| {
                 e.rec.cloud_state = summary.state.into();
                 e.rec.cloud_detail = Some(summary.detail.clone());
             });
-            if matches!(summary.state, "threat" | "suspicious") {
-                this.notify("threat", &format!("{name}: {}", summary.detail));
-                this.toast("error", format!("{name}: {}", summary.detail));
+            match summary.state {
+                "threat" | "suspicious" => {
+                    this.notify(Some(&id), "threat", &format!("{name}: {}", summary.detail));
+                    this.toast("error", format!("{name}: {}", summary.detail));
+                }
+                "clean" | "unknown" => {
+                    this.notify(
+                        Some(&id),
+                        "scan_cloud",
+                        &format!("{name}: {}", this.word("no_threat")),
+                    );
+                }
+                "locked" => {}
+                _ => {
+                    this.notify(
+                        Some(&id),
+                        "scan_cloud",
+                        &format!("{name}: {}", summary.detail),
+                    );
+                }
             }
             this.mark_dirty();
             this.save_needed.store(true, Ordering::Relaxed);
@@ -934,6 +1435,83 @@ impl Manager {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn cloud_reports_count_results_and_keep_problems() {
+        use crate::cloudscan::FileVerdict;
+        let base = Path::new("/d/Movie Pack");
+        let mut r = CloudReport {
+            total: 4,
+            ..Default::default()
+        };
+        let v = |verdict: &str, detail: &str| FileVerdict::new(verdict, detail);
+        let files = [
+            base.join("movie.mkv"),
+            base.join("extras").join("setup.exe"),
+            base.join("codec.dll"),
+            base.join("big.iso"),
+        ];
+        let verdicts = [
+            v("clean", ""),
+            v("malicious", "Trojan.Fake"),
+            v("suspicious", "packed"),
+            v("skipped", "larger than the 100 MB upload limit"),
+        ];
+        for (f, verdict) in files.iter().zip(&verdicts) {
+            r.add("x", shown_name(base, f, false), f, verdict);
+        }
+        assert_eq!(
+            (r.done, r.clean, r.threats, r.suspicious, r.not_checked),
+            (4, 1, 1, 1, 1)
+        );
+        assert_eq!(r.findings.len(), 3);
+        assert_eq!(
+            r.findings[0].name,
+            Path::new("extras").join("setup.exe").to_string_lossy()
+        );
+        assert_eq!(r.findings[0].detail, "Trojan.Fake");
+        assert_eq!(
+            shown_name(base, &PathBuf::from("/tmp/x/0001/inner.exe"), true),
+            "inner.exe"
+        );
+    }
+
+    #[test]
+    fn names_files_in_the_all_downloads_report() {
+        let base = Path::new("/d");
+        assert_eq!(
+            all_name("setup.exe", base, &base.join("setup.exe")),
+            "setup.exe"
+        );
+        let inner = base.join("Movie Pack").join("extras").join("x.exe");
+        let shown = all_name("Movie Pack", base, &inner);
+        assert!(shown.starts_with("Movie Pack › "));
+        assert!(shown.ends_with("x.exe"));
+        assert!(!shown.contains("Movie Pack › Movie Pack"));
+    }
+
+    #[test]
+    fn picks_files_for_the_automatic_cloud_scan() {
+        let wanted: Vec<String> = ["exe", "ps1", "dmg", "appimage"]
+            .iter()
+            .map(|e| e.to_string())
+            .collect();
+        assert!(matches_extension(Path::new("C:/d/Setup.EXE"), &wanted));
+        assert!(matches_extension(Path::new("/d/run.ps1"), &wanted));
+        assert!(matches_extension(Path::new("/d/Installer.dmg"), &wanted));
+        assert!(matches_extension(Path::new("/d/tool.AppImage"), &wanted));
+        assert!(!matches_extension(Path::new("/d/movie.mkv"), &wanted));
+        assert!(!matches_extension(Path::new("/d/notes.exe.txt"), &wanted));
+        assert!(!matches_extension(Path::new("/d/exe"), &wanted));
+        assert!(matches_extension(
+            Path::new("/d/photos.zip"),
+            &["zip".to_string()]
+        ));
+        assert!(!crate::settings::DEFAULT_CLOUD_EXTENSIONS.is_empty());
+        let all = vec![crate::settings::ALL_FILES.to_string()];
+        assert!(matches_extension(Path::new("/d/movie.mkv"), &all));
+        assert!(matches_extension(Path::new("/d/README"), &all));
+    }
 
     #[test]
     fn finds_media_files_whose_reported_name_was_mangled() {

@@ -58,9 +58,9 @@ export interface Download {
   sha256Expected: string | null;
   sha256Actual: string | null;
   hashState: HashState;
-  scanState: '' | 'scanning' | 'clean' | 'threat' | 'skipped';
+  scanState: '' | 'scanning' | 'clean' | 'threat' | 'skipped' | 'marked';
   scanDetail?: string | null;
-  cloudState: '' | 'scanning' | 'clean' | 'threat' | 'suspicious' | 'skipped' | 'error';
+  cloudState: '' | 'scanning' | 'clean' | 'threat' | 'suspicious' | 'skipped' | 'error' | 'locked' | 'unknown';
   cloudDetail?: string | null;
   speed: number;
   eta: number | null;
@@ -114,6 +114,7 @@ export interface Settings {
   torrentUpnp: boolean;
   torrentUtp: boolean;
   torrentPeerLimit: number;
+  torrentPublicTrackers: boolean;
   torrentDownloadLimit: number;
   torrentUploadLimit: number;
   seedAfterComplete: boolean;
@@ -137,9 +138,18 @@ export interface Settings {
   rssRules: RssRule[];
   onCompleteCommand: string;
   markDownloads: boolean;
-  scanDownloads: boolean;
   cloudScan: boolean;
-  openProgramsOnDoubleClick: boolean;
+  cloudScanButton: boolean;
+  cloudScanAllButton: boolean;
+  cloudScanManualLimitMb: number;
+  cloudCompressUploads: boolean;
+  cloudConnections: number;
+  cloudFingerprintCache: boolean;
+  cloudScanExtensions: string[];
+  askBeforeStartingPrograms: boolean;
+  downloadNotices: boolean;
+  scanNotices: boolean;
+  inAppNotices: boolean;
   cloudScanAccepted: boolean;
   cloudScanLimitMb: number;
   whenDone: 'nothing' | 'sleep' | 'shutdown' | 'quit';
@@ -177,6 +187,7 @@ export interface BrowserCookie {
 }
 
 export interface AddRequest {
+  allowDuplicate?: boolean;
   url: string;
   kind?: string | null;
   dir?: string | null;
@@ -353,6 +364,7 @@ export interface BridgeStatus {
 
 export type Pending =
   | { type: 'add'; request: AddRequest }
+  | { type: 'duplicate'; request: AddRequest; existing: Duplicate }
   | { type: 'pair'; origin: string }
   | { type: 'openTorrent'; path: string }
   | { type: 'batch'; batch: PageBatch };
@@ -439,4 +451,48 @@ export interface MandatoryUpdate {
   version: string;
   phase: 'downloading' | 'installing' | 'failed';
   error: string | null;
+}
+
+export interface CloudFinding {
+  download: string;
+  path: string;
+  name: string;
+  verdict: string;
+  detail: string;
+  route: string;
+  size: number;
+}
+
+export interface CloudReport {
+  id: string;
+  name: string;
+  running: boolean;
+  stopped: boolean;
+  total: number;
+  done: number;
+  current: string | null;
+  clean: number;
+  threats: number;
+  suspicious: number;
+  unknown: number;
+  notChecked: number;
+  findings: CloudFinding[];
+  summary: string | null;
+  state: string;
+  ids: string[];
+  stage: string;
+  stageSent: number;
+  stageTotal: number;
+  startedMs: number;
+  finishedMs: number;
+  known: number;
+  uploaded: number;
+  uploadedBytes: number;
+  recent: CloudFinding[];
+}
+
+export interface Duplicate {
+  id: string;
+  name: string;
+  status: Status;
 }

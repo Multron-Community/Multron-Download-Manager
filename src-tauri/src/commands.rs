@@ -16,6 +16,8 @@ use crate::updates::{self, AppUpdate};
 type Mgr<'a> = State<'a, Arc<Manager>>;
 type R<T> = Result<T, String>;
 
+pub const CONFIRM_START: &str = "confirm_start";
+
 fn err(e: impl std::fmt::Display) -> String {
     format!("{e:#}")
 }
@@ -178,8 +180,14 @@ pub async fn set_expected_hash(mgr: Mgr<'_>, id: String, hash: Option<String>) -
 }
 
 #[tauri::command]
-pub fn open_file(app: AppHandle, mgr: Mgr<'_>, id: String) -> R<()> {
+pub fn open_file(app: AppHandle, mgr: Mgr<'_>, id: String, confirmed: Option<bool>) -> R<()> {
     let path = mgr.file_path(&id).map_err(anyhow_err)?;
+    if crate::security::is_program(&path)
+        && mgr.settings().ask_before_starting_programs
+        && confirmed != Some(true)
+    {
+        return Err(CONFIRM_START.into());
+    }
     app.opener()
         .open_path(path.to_string_lossy(), None::<&str>)
         .map_err(err)
@@ -221,6 +229,74 @@ pub async fn smartscreen_status() -> String {
         .await
         .unwrap_or("unsupported")
         .to_string()
+}
+
+#[tauri::command]
+pub async fn cloud_scan_with_password(mgr: Mgr<'_>, id: String, password: String) -> R<()> {
+    mgr.inner()
+        .clone()
+        .scan_locked_in_cloud(&id, password)
+        .await
+        .map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn notice_list() -> Vec<crate::notice::Notice> {
+    crate::notice::list()
+}
+
+#[tauri::command]
+pub fn notice_dismiss(app: AppHandle, id: u64) {
+    crate::notice::dismiss(&app, id);
+}
+
+#[tauri::command]
+pub fn notice_layout(app: AppHandle, height: f64) -> R<()> {
+    crate::notice::layout(&app, height).map_err(err)
+}
+
+#[tauri::command]
+pub fn notice_show_download(app: AppHandle, id: Option<String>, start: bool) {
+    crate::show_main_window(&app);
+    let _ = app.emit_to(
+        "main",
+        "app://select",
+        serde_json::json!({ "id": id, "start": start }),
+    );
+}
+
+#[tauri::command]
+pub fn find_duplicate(mgr: Mgr<'_>, request: AddRequest) -> Option<crate::model::Duplicate> {
+    mgr.find_duplicate(&request)
+}
+
+#[tauri::command]
+pub fn cloud_scan_all(mgr: Mgr<'_>) -> R<usize> {
+    mgr.scan_all_in_cloud().map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn cloud_scan_report(
+    mgr: Mgr<'_>,
+    id: String,
+) -> Option<crate::manager::automation::CloudReport> {
+    mgr.cloud_report(&id)
+}
+
+#[tauri::command]
+pub fn cloud_scan_stop(mgr: Mgr<'_>, id: String) {
+    mgr.stop_cloud_scan(&id);
+}
+
+#[tauri::command]
+pub fn reveal_downloaded_file(app: AppHandle, mgr: Mgr<'_>, id: String, path: String) -> R<()> {
+    let target = mgr.reveal_path_of(&id, &path).map_err(anyhow_err)?;
+    app.opener().reveal_item_in_dir(target).map_err(err)
+}
+
+#[tauri::command]
+pub fn cloud_scan_download(mgr: Mgr<'_>, id: String) -> R<()> {
+    mgr.scan_in_cloud(&id).map_err(anyhow_err)
 }
 
 #[tauri::command]
@@ -563,7 +639,7 @@ pub fn app_update_ready() -> Option<crate::selfupdate::ReadyUpdate> {
 #[tauri::command]
 pub async fn install_app_update(app: AppHandle, mgr: Mgr<'_>) -> R<()> {
     mgr.shutdown().await;
-    if !crate::selfupdate::install_ready(true).map_err(anyhow_err)? {
+    if !crate::selfupdate::install_ready(true, true).map_err(anyhow_err)? {
         return Err("no update has been downloaded".into());
     }
     app.exit(0);

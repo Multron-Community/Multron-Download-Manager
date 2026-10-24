@@ -31,6 +31,11 @@ fn english(key: &str) -> &'static str {
         "hash_bad" => "SHA-256 mismatch",
         "pair" => "A browser extension wants to connect",
         "threat" => "Threat found in a download",
+        "started" => "Download started",
+        "scan_cloud" => "Multron Cloud scan finished",
+        "no_threat" => "No threat found",
+        "not_scanned" => "Not scanned",
+        "suspicious" => "Suspicious file",
         _ => "",
     }
 }

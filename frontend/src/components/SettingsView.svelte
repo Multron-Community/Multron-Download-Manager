@@ -52,6 +52,30 @@
   let bridge = $state<BridgeStatus | null>(null);
   let toolBusy = $state<string | null>(null);
   let smartscreen = $state<'on' | 'off' | 'missing' | 'unsupported' | null>(null);
+  const cloudExtensionsByPlatform: Record<string, { defaults: string[]; more: string[] }> = {
+    windows: {
+      defaults: ['exe', 'msi', 'msix', 'appx', 'dll', 'scr', 'com', 'bat', 'cmd', 'ps1', 'vbs', 'js', 'jar', 'lnk', 'hta', 'reg'],
+      more: ['zip', '7z', 'rar', 'iso', 'img', 'vhd', 'cab', 'docm', 'xlsm', 'pptm', 'pdf', 'apk']
+    },
+    macos: {
+      defaults: ['dmg', 'pkg', 'mpkg', 'command', 'tool', 'sh', 'zsh', 'py', 'jar', 'scpt', 'dylib'],
+      more: ['zip', '7z', 'rar', 'xip', 'iso', 'img', 'tar', 'gz', 'docm', 'xlsm', 'pdf', 'apk']
+    },
+    linux: {
+      defaults: ['appimage', 'deb', 'rpm', 'run', 'bin', 'sh', 'py', 'pl', 'jar', 'flatpakref', 'snap', 'desktop'],
+      more: ['zip', '7z', 'rar', 'iso', 'img', 'tar', 'gz', 'xz', 'docm', 'xlsm', 'pdf', 'apk']
+    }
+  };
+  const cloudExtensionSet = $derived(cloudExtensionsByPlatform[app.platform] ?? cloudExtensionsByPlatform.linux);
+  const cloudExtensionDefaults = $derived(cloudExtensionSet.defaults);
+  const cloudExtensionChoices = $derived([...cloudExtensionSet.defaults, ...cloudExtensionSet.more]);
+  let customExtensions = $state('');
+
+  function toggleExtension(ext: string, on: boolean) {
+    if (!draft) return;
+    const rest = draft.cloudScanExtensions.filter((x) => x !== ext);
+    draft.cloudScanExtensions = on ? [...rest, ext] : rest;
+  }
 
   function resetDraft() {
     if (!app.settings) return;
@@ -108,6 +132,10 @@
       bridgePort: Number(draft.bridgePort),
       torrentPort: Number(draft.torrentPort),
       torrentPeerLimit: Number(draft.torrentPeerLimit),
+      cloudScanLimitMb: Number(draft.cloudScanLimitMb) || 15,
+      cloudScanManualLimitMb: Number(draft.cloudScanManualLimitMb) || 100,
+      cloudConnections: Math.min(8, Math.max(1, Number(draft.cloudConnections) || 4)),
+      cloudScanExtensions: [...new Set([...draft.cloudScanExtensions, ...customExtensions.split(/[\s,;]+/).map((x) => x.trim().replace(/^\./, '').toLowerCase()).filter(Boolean)])],
       torrentDownloadLimit: Number(draft.torrentDownloadLimit) || 0,
       torrentUploadLimit: Number(draft.torrentUploadLimit) || 0,
       seedRatio: Number(draft.seedRatio) || 0,
@@ -427,6 +455,9 @@
             {@render group('Shutdown')}
             {@render toggle('Keep running in the background when the window is closed', 'Downloads, seeding and the browser bridge keep working. Quit from the tray icon.', draft.closeToTray, (v) => (draft!.closeToTray = v))}
             {@render toggle('Show notifications', 'When downloads finish, fail or a SHA-256 check completes.', draft.notifications, (v) => (draft!.notifications = v))}
+            {@render toggle('Show a notice when a download starts or ends', 'A card in the corner of the screen when a download starts, finishes or fails, also when Multron Download Manager is in the background or minimized.', draft.downloadNotices, (v) => (draft!.downloadNotices = v))}
+            {@render toggle('Show a notice when a scan finishes', 'A card in the corner of the screen with the result of the Multron Cloud scan.', draft.scanNotices, (v) => (draft!.scanNotices = v))}
+            {@render toggle('Also show notices inside the window', 'Off by default. While the window is in front, the cards appear inside it instead of the corner of the screen.', draft.inAppNotices, (v) => (draft!.inAppNotices = v))}
           {:else if current.id === 'files'}
             {@render row('Default download folder')}
             <div class="flex gap-2 mt-1">
@@ -591,7 +622,7 @@
             {@render toggle('uTP (µTP) transport', 'UDP-based peer connections in addition to TCP.', draft.torrentUtp, (v) => (draft!.torrentUtp = v))}
             {@render toggle('DHT (trackerless peers)', '', draft.torrentDht, (v) => (draft!.torrentDht = v))}
             {@render toggle('Local Service Discovery', 'Finds peers on your local network.', draft.torrentLsd, (v) => (draft!.torrentLsd = v))}
-            {@render row('Maximum peers per torrent')}
+            {@render row('Maximum peers per torrent', 'Default 500. More peers usually means faster downloads; lower it if your router struggles with many connections.')}
             <input type="number" min="10" max="2000" class="field !w-[120px] mt-1" bind:value={draft.torrentPeerLimit} />
             <p class="text-[11px] text-muted mt-3">{t('Changing these restarts the torrent engine; running torrents continue where they left off.')}</p>
           {:else if current.id === 'queue'}
@@ -672,6 +703,7 @@
             {@render row('Extra trackers', 'Announced for every torrent, one URL per line.')}
             <textarea class="field mt-1" rows="10" bind:value={trackersText} placeholder="udp://tracker.opentrackr.org:1337/announce"></textarea>
             <button class="btn mt-2" onclick={addPublicTrackers}><Icon name="plus" size={12} />{t('Add public tracker list')}</button>
+            {@render toggle('Add public trackers automatically', 'On by default. Torrents and magnet links that are not private also announce to a list of well-known public trackers (refreshed once a day), so they find more peers and download faster. Private torrents are never changed.', draft.torrentPublicTrackers, (v) => (draft!.torrentPublicTrackers = v))}
             {@render toggle('Scrape trackers for seeds / leechers', 'Shown in the Sources tab of each torrent.', draft.torrentScrape, (v) => (draft!.torrentScrape = v))}
             {@render toggle('Disable trackers (DHT/PEX only)', '', draft.torrentDisableTrackers, (v) => (draft!.torrentDisableTrackers = v))}
           {:else if current.id === 'seeding'}
@@ -765,27 +797,58 @@
                 {@render toggle(app.platform === 'macos' ? 'Mark downloaded files for Gatekeeper' : 'Mark downloaded files for SmartScreen', app.platform === 'macos' ? 'Adds the quarantine flag, so macOS checks apps and documents from the internet when they are opened.' : 'Adds the “downloaded from the internet” mark (Mark of the Web), so Windows SmartScreen and Office check the file when it is opened, like files downloaded with a browser.', smartscreen === 'on' && draft.markDownloads, (v) => (draft!.markDownloads = v))}
               </div>
             {/if}
-            {#if app.platform === 'windows'}
-              {@render group('Antivirus scan')}
-              {@render toggle('Scan finished downloads with the antivirus', 'Uses Microsoft Defender, or the antivirus installed on this PC through Windows AMSI (files up to 50 MB). A found threat is shown on the download and in a notification.', draft.scanDownloads, (v) => (draft!.scanDownloads = v))}
-            {/if}
             <h4 class="text-[12px] font-semibold text-white/90 mt-5 mb-1 pb-1 border-b border-line flex items-center gap-2">{t('Multron Cloud scan')}<span class="px-1.5 rounded bg-warn/15 text-warn text-[10px] font-semibold uppercase tracking-wide">{t('Testing')}</span></h4>
             <div class="rounded-[10px] border border-warn/40 bg-warn/10 p-3 text-[12px] flex gap-2 items-start mb-2">
               <Icon name="alert" size={14} class="text-warn mt-[1px] flex-shrink-0" />
               <span>{t('Multron Cloud scans each finished download separately from your antivirus, with the viruskov.com OPEN-EDR engine. The file hash is checked first; a file the cloud has not seen yet is uploaded for analysis and may be reviewed by viruskov.com analysts. The cloud scan is a test version and may report false positives, so check a detection before you delete a file.')}</span>
             </div>
+            {@render toggle('Show the Scan for malware button', 'On by default. Finished downloads get a button that scans them with Multron Cloud when you press it. The agreement is asked only the first time.', draft.cloudScanButton, (v) => (draft!.cloudScanButton = v))}
+            {@render toggle('Show the Scan all button', 'On by default. A button in the toolbar scans every finished download in one window and lists the threats it finds.', draft.cloudScanAllButton, (v) => (draft!.cloudScanAllButton = v))}
+            <div class={draft.cloudScanButton ? '' : 'opacity-45 pointer-events-none'}>
+              {@render row('Upload limit for the button (MB)', 'Default 100 MB, the most Multron Cloud accepts. Larger files are only checked by their hash.')}
+              <input type="number" min="1" max="100" class="field !w-[100px] mt-1" bind:value={draft.cloudScanManualLimitMb} />
+            </div>
+            {@render group('Cloud connection')}
+            {@render toggle('Compress uploads (faster on slow connections)', 'On by default. Unknown files are compressed with Brotli before they are uploaded. Turn it off on a very fast network to save CPU time.', draft.cloudCompressUploads, (v) => (draft!.cloudCompressUploads = v))}
+            {@render toggle('Remember file fingerprints', 'On by default. Files that have not changed since the last scan are not hashed again, so repeated scans start sooner.', draft.cloudFingerprintCache, (v) => (draft!.cloudFingerprintCache = v))}
+            {@render row('Connections', 'Parallel connections to the cloud server (1 to 8, default 4); more connections upload more unknown files at once.')}
+            <input type="number" min="1" max="8" class="field !w-[100px] mt-1 mb-2" bind:value={draft.cloudConnections} />
             <label class="flex items-start gap-2 py-[5px] text-[12px] cursor-pointer">
               <input type="checkbox" class="check mt-[2px]" checked={draft.cloudScanAccepted} onchange={(e) => { draft!.cloudScanAccepted = e.currentTarget.checked; if (!e.currentTarget.checked) draft!.cloudScan = false; }} />
               <span>{t('I have read and accept the Cloud Malware Scan License Agreement.')}</span>
             </label>
             <button class="btn mb-1" onclick={() => api.openUrl('https://github.com/Multron-Community/MultronWcleaner/blob/beta/MALWARE_SCAN_EULA.md')}><Icon name="globe" size={13} />{t('Read the agreement')}</button>
             <div class={draft.cloudScanAccepted ? '' : 'opacity-45 pointer-events-none'}>
-              {@render toggle('Scan finished downloads with Multron Cloud', 'Off by default. The result is shown on the download as “Multron Cloud”, next to the antivirus result.', draft.cloudScanAccepted && draft.cloudScan, (v) => (draft!.cloudScan = v))}
+              {@render toggle('Scan finished downloads with Multron Cloud', 'On by default. Scans finished downloads of the file types below automatically, without pressing the button. The agreement is asked when Multron Download Manager starts. The result is shown on the download as “Multron Cloud”.', draft.cloudScanAccepted && draft.cloudScan, (v) => (draft!.cloudScan = v))}
               {@render row('Upload limit (MB)', 'Larger files are only checked by their hash and are never uploaded. Default 15 MB, at most 100 MB.')}
               <input type="number" min="1" max="100" class="field !w-[100px] mt-1" bind:value={draft.cloudScanLimitMb} />
+              {@render row('File types to scan automatically', 'Only these files are scanned on their own. Programs and scripts are selected by default; the Scan for malware button always checks every file.')}
+              <label class="flex items-center gap-1.5 text-[12px] cursor-pointer mt-2">
+                <input type="checkbox" class="check" checked={draft.cloudScanExtensions.includes('*')} onchange={(e) => toggleExtension('*', e.currentTarget.checked)} />{t('All files')}
+              </label>
+              <div class={draft.cloudScanExtensions.includes('*') ? 'opacity-45 pointer-events-none' : ''}>
+              <div class="grid grid-cols-4 gap-x-3 gap-y-1 mt-2 max-w-[460px]">
+                {#each cloudExtensionChoices as ext}
+                  <label class="flex items-center gap-1.5 text-[12px] cursor-pointer mono">
+                    <input type="checkbox" class="check" checked={draft.cloudScanExtensions.includes(ext)} onchange={(e) => toggleExtension(ext, e.currentTarget.checked)} />.{ext}
+                  </label>
+                {/each}
+              </div>
+              {#if draft.cloudScanExtensions.some((x) => x !== '*' && !cloudExtensionChoices.includes(x))}
+                <div class="flex flex-wrap gap-1.5 mt-2">
+                  {#each draft.cloudScanExtensions.filter((x) => x !== '*' && !cloudExtensionChoices.includes(x)) as ext}
+                    <button class="h-[22px] px-2 rounded-full border border-line text-[11px] mono flex items-center gap-1 hover:border-bad/60 cursor-pointer" title={t('Remove')} onclick={() => toggleExtension(ext, false)}>.{ext}<Icon name="x" size={10} /></button>
+                  {/each}
+                </div>
+              {/if}
+              <input class="field !w-[260px] mt-2" placeholder={t('Other types, for example: iso, img, pdf')} bind:value={customExtensions} />
+              </div>
+              <div class="flex gap-2 mt-2">
+                <button class="btn" onclick={() => (draft!.cloudScanExtensions = [...cloudExtensionDefaults])}>{t('Programs and scripts only')}</button>
+              </div>
             </div>
             {@render group('Opening downloaded programs')}
-            {@render toggle('Start programs with a double-click', 'Off by default, so a program you downloaded never starts by accident. When it is off, double-clicking a program (.exe, .msi, scripts, installers) does nothing; the open button still opens it. Other files open as usual.', draft.openProgramsOnDoubleClick, (v) => (draft!.openProgramsOnDoubleClick = v))}
+            {@render toggle('Ask before starting downloaded programs', 'On by default, so a program you downloaded never starts by accident. Double-clicking a program (.exe, .msi, scripts, installers) or pressing its open button first shows what Multron Cloud and SmartScreen know about it. Other files open as usual.', draft.askBeforeStartingPrograms, (v) => (draft!.askBeforeStartingPrograms = v))}
             {@render toggle('Require approval for browser extensions', 'Each browser extension must be approved once before it can add downloads. Web pages can never use the bridge.', draft.bridgeRequirePairing, (v) => (draft!.bridgeRequirePairing = v))}
             {@render group('Trusted extensions')}
             {#if app.settings?.trustedExtensions.length}

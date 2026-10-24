@@ -549,6 +549,98 @@ fn detach(cmd: &mut Command) {
     }
 }
 
+const MAX_ATTEMPTS: u32 = 2;
+const ATTEMPT_PAUSE_SECS: i64 = 12 * 3600;
+
+#[derive(Debug, Clone, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+struct Attempt {
+    version: String,
+    count: u32,
+    at: i64,
+}
+
+static ATTEMPT_FILE: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
+
+fn now_secs() -> i64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs() as i64)
+        .unwrap_or(0)
+}
+
+pub fn init(data_dir: &Path) {
+    let file = data_dir.join("update-attempt.json");
+    forget_settled(&file, env!("CARGO_PKG_VERSION"));
+    let _ = ATTEMPT_FILE.set(file);
+}
+
+fn forget_settled(file: &Path, current: &str) {
+    if read_attempt(file).is_some_and(|a| settled(&a, current)) {
+        let _ = std::fs::remove_file(file);
+    }
+}
+
+fn read_attempt(file: &Path) -> Option<Attempt> {
+    serde_json::from_slice(&std::fs::read(file).ok()?).ok()
+}
+
+fn settled(a: &Attempt, current: &str) -> bool {
+    match (
+        semver::Version::parse(&a.version),
+        semver::Version::parse(current),
+    ) {
+        (Ok(tried), Ok(current)) => current >= tried,
+        _ => true,
+    }
+}
+
+fn paused(a: Option<&Attempt>, version: &str, now: i64) -> bool {
+    a.is_some_and(|a| {
+        a.version == version && a.count >= MAX_ATTEMPTS && now - a.at < ATTEMPT_PAUSE_SECS
+    })
+}
+
+fn next_attempt(a: Option<Attempt>, version: &str, now: i64) -> Attempt {
+    match a {
+        Some(a) if a.version == version => Attempt {
+            version: a.version,
+            count: a.count + 1,
+            at: now,
+        },
+        _ => Attempt {
+            version: version.to_string(),
+            count: 1,
+            at: now,
+        },
+    }
+}
+
+fn install_paused(version: &str) -> bool {
+    ATTEMPT_FILE
+        .get()
+        .is_some_and(|f| paused_at(f, version, now_secs()))
+}
+
+fn paused_at(file: &Path, version: &str, now: i64) -> bool {
+    paused(read_attempt(file).as_ref(), version, now)
+}
+
+fn note_attempt(version: &str) {
+    if let Some(file) = ATTEMPT_FILE.get() {
+        record_at(file, version, now_secs());
+    }
+}
+
+fn record_at(file: &Path, version: &str, now: i64) {
+    let next = next_attempt(read_attempt(file), version, now);
+    if let Some(dir) = file.parent() {
+        let _ = std::fs::create_dir_all(dir);
+    }
+    if let Ok(bytes) = serde_json::to_vec(&next) {
+        let _ = std::fs::write(file, bytes);
+    }
+}
+
 static READY: std::sync::Mutex<Option<ReadyUpdate>> = std::sync::Mutex::new(None);
 static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static INSTALLING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -585,6 +677,19 @@ pub async fn mandatory_update(app: &tauri::AppHandle, client: &reqwest::Client) 
         return;
     }
     let version = info.latest.clone().unwrap_or_default();
+    if install_paused(&version) {
+        use tauri::Emitter;
+        tracing::warn!("the update to {version} did not install twice; not trying again for now");
+        set_mandatory(app, None);
+        let _ = app.emit(
+            crate::manager::EVT_TOAST,
+            serde_json::json!({
+                "kind": "warning",
+                "message": format!("Multron Download Manager {version} could not be installed automatically. Download it from {}", releases_page()),
+            }),
+        );
+        return;
+    }
     let status = |phase: &str, error: Option<String>| MandatoryStatus {
         version: version.clone(),
         phase: phase.into(),
@@ -597,7 +702,7 @@ pub async fn mandatory_update(app: &tauri::AppHandle, client: &reqwest::Client) 
             Ok(Some(_)) => {
                 set_mandatory(app, Some(status("installing", None)));
                 tokio::time::sleep(std::time::Duration::from_millis(900)).await;
-                match install_ready(true) {
+                match install_ready(true, false) {
                     Ok(true) => {
                         app.exit(0);
                         return;
@@ -736,11 +841,14 @@ pub async fn fetch_latest(
     Ok(Some(update))
 }
 
-pub fn install_ready(relaunch: bool) -> Result<bool> {
+pub fn install_ready(relaunch: bool, force: bool) -> Result<bool> {
     use std::sync::atomic::Ordering;
     let Some(update) = ready() else {
         return Ok(false);
     };
+    if !force && install_paused(&update.version) {
+        return Ok(false);
+    }
     if INSTALLING.swap(true, Ordering::SeqCst) {
         return Ok(false);
     }
@@ -755,6 +863,7 @@ pub fn install_ready(relaunch: bool) -> Result<bool> {
         INSTALLING.store(false, Ordering::SeqCst);
         return Err(e);
     }
+    note_attempt(&update.version);
     Ok(true)
 }
 
@@ -1430,6 +1539,72 @@ mod tests {
             pick(PackageKind::AppImage, x64, None),
             Some("Multron.Download.Manager_0.0.2_amd64.AppImage")
         );
+    }
+
+    #[test]
+    fn stops_retrying_an_update_that_does_not_install() {
+        let first = next_attempt(None, "0.0.7", 1000);
+        assert!(!paused(Some(&first), "0.0.7", 1001));
+        let second = next_attempt(Some(first), "0.0.7", 2000);
+        assert_eq!(second.count, 2);
+        assert!(paused(Some(&second), "0.0.7", 2001));
+        assert!(!paused(Some(&second), "0.0.8", 2001));
+        assert!(!paused(Some(&second), "0.0.7", 2000 + ATTEMPT_PAUSE_SECS));
+        let other = next_attempt(Some(second), "0.0.8", 3000);
+        assert_eq!(other.count, 1);
+    }
+
+    #[test]
+    fn an_update_that_never_installs_stops_after_two_restarts() {
+        let dir = std::env::temp_dir().join(format!("mdm-attempts-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("update-attempt.json");
+        let mut installs = 0;
+        let mut now = 1_000_000;
+        for _start in 0..10 {
+            forget_settled(&file, "0.0.6");
+            if paused_at(&file, "0.0.7", now) {
+                break;
+            }
+            record_at(&file, "0.0.7", now);
+            installs += 1;
+            now += 30;
+        }
+        assert_eq!(installs, 2);
+        assert!(paused_at(&file, "0.0.7", now + 3600));
+        assert!(!paused_at(&file, "0.0.7", now + ATTEMPT_PAUSE_SECS));
+        assert!(!paused_at(&file, "0.0.8", now));
+        forget_settled(&file, "0.0.7");
+        assert!(!file.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn forgets_attempts_once_the_version_is_installed() {
+        let a = Attempt {
+            version: "0.0.7".into(),
+            count: 2,
+            at: 0,
+        };
+        assert!(settled(&a, "0.0.7"));
+        assert!(settled(&a, "0.0.8"));
+        assert!(!settled(&a, "0.0.6"));
+    }
+
+    #[test]
+    fn every_version_file_matches_the_app_version() {
+        let version = env!("CARGO_PKG_VERSION");
+        let read = |text: &str| -> String {
+            serde_json::from_str::<serde_json::Value>(text).unwrap()["version"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert_eq!(read(include_str!("../tauri.conf.json")), version);
+        assert_eq!(read(include_str!("../../package.json")), version);
+        assert_eq!(read(include_str!("../../frontend/package.json")), version);
+        assert_eq!(read(include_str!("../../extension/manifest.json")), version);
     }
 
     #[test]

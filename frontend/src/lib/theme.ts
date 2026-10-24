@@ -126,7 +126,7 @@ let applied = '';
 let effectActive = false;
 let lastAppearance: Appearance | null = null;
 
-export async function applyAppearance(a: Appearance) {
+export async function applyAppearance(a: Appearance, windowEffect = true) {
   lastAppearance = a;
   const theme = resolveTheme(a.theme);
   const palette = PALETTES[theme];
@@ -135,7 +135,9 @@ export async function applyAppearance(a: Appearance) {
   const black: RGB = [0, 0, 0];
 
   const key = JSON.stringify([a.theme, theme, a.transparency, a.backdropMaterial, a.accentColor, level]);
-  if (key !== applied) {
+  if (!windowEffect) {
+    effectActive = false;
+  } else if (key !== applied) {
     applied = key;
     const tintBase = mix(rgb(palette.bg), accent, level.tint);
     try {

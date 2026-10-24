@@ -228,6 +228,28 @@ pub struct AddRequest {
     pub total: Option<u64>,
     pub info_hash: Option<String>,
     pub trackers: Vec<String>,
+    pub allow_duplicate: bool,
+}
+
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Duplicate {
+    pub id: String,
+    pub name: String,
+    pub status: Status,
+}
+
+pub fn same_link(a: &str, b: &str) -> bool {
+    let clean = |u: &str| {
+        u.trim()
+            .split('#')
+            .next()
+            .unwrap_or("")
+            .trim_end_matches('/')
+            .to_string()
+    };
+    let (a, b) = (clean(a), clean(b));
+    !a.is_empty() && a.eq_ignore_ascii_case(&b)
 }
 
 pub fn detect_kind(url: &str) -> Kind {
@@ -282,6 +304,23 @@ pub fn is_media_site(url: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn recognizes_the_same_link() {
+        assert!(same_link(
+            "https://example.org/setup.exe",
+            " https://EXAMPLE.org/setup.exe#top "
+        ));
+        assert!(same_link(
+            "https://example.org/files/",
+            "https://example.org/files"
+        ));
+        assert!(!same_link(
+            "https://example.org/setup.exe",
+            "https://example.org/setup.exe?v=2"
+        ));
+        assert!(!same_link("", ""));
+    }
 
     #[test]
     fn kinds() {

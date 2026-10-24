@@ -1,4 +1,5 @@
 mod appearance;
+mod archive;
 mod bridge;
 mod browsers;
 mod cloudscan;
@@ -11,6 +12,7 @@ mod manager;
 mod media;
 mod model;
 pub mod nativehost;
+mod notice;
 mod portable;
 mod resolver;
 mod rss;
@@ -85,6 +87,7 @@ pub fn run() {
             let handle = app.handle().clone();
             let mgr = Manager::new(handle.clone())?;
             app.manage(mgr.clone());
+            selfupdate::init(&mgr.paths.data);
             let settings = mgr.settings();
             tray::create(&handle, &settings.language)?;
             tray::start_animation(&handle);
@@ -190,6 +193,17 @@ pub fn run() {
             commands::move_in_queue,
             commands::smartscreen_status,
             commands::torrent_recheck,
+            commands::cloud_scan_download,
+            commands::cloud_scan_report,
+            commands::cloud_scan_all,
+            commands::find_duplicate,
+            commands::notice_list,
+            commands::notice_dismiss,
+            commands::notice_layout,
+            commands::notice_show_download,
+            commands::cloud_scan_stop,
+            commands::reveal_downloaded_file,
+            commands::cloud_scan_with_password,
             commands::torrent_export,
             commands::create_torrent,
             commands::torrent_stream_url,
@@ -232,7 +246,7 @@ pub fn run() {
                 let mgr = mgr.inner().clone();
                 tauri::async_runtime::block_on(async move { mgr.shutdown().await });
                 if !cfg!(debug_assertions) {
-                    if let Err(e) = selfupdate::install_ready(false) {
+                    if let Err(e) = selfupdate::install_ready(false, false) {
                         tracing::warn!("could not install the update: {e:#}");
                     }
                 }

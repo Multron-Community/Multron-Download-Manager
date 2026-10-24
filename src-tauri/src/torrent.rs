@@ -12,7 +12,7 @@ use librqbit::api::{Api, TorrentIdOrHash};
 use librqbit::limits::LimitsConfig;
 use librqbit::{
     AddTorrent, AddTorrentOptions, AddTorrentResponse, ConnectionOptions, DhtSessionConfig,
-    ListenerMode, ListenerOptions, ManagedTorrent, Session, SessionOptions,
+    ListenerMode, ListenerOptions, ManagedTorrent, PeerConnectionOptions, Session, SessionOptions,
     SessionPersistenceConfig, TorrentStats,
 };
 use parking_lot::Mutex;
@@ -24,6 +24,9 @@ use crate::trackers::{self, ScrapeStats};
 use crate::util::now_ms;
 
 const SCRAPE_INTERVAL_SECS: u64 = 300;
+const PEER_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const PUBLIC_TRACKERS_FILE: &str = "public-trackers.txt";
+const PUBLIC_TRACKERS_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 
 #[derive(Clone, Debug)]
 pub struct EngineConfig {
@@ -46,6 +49,7 @@ pub struct EngineConfig {
     pub disable_trackers: bool,
     pub hide_client: bool,
     pub scrape: bool,
+    pub public_trackers: bool,
 }
 
 pub enum TorrentSource {
@@ -243,6 +247,7 @@ pub struct TorrentEngine {
     client: reqwest::Client,
     previews: Mutex<HashMap<String, Bytes>>,
     sources: Mutex<HashMap<String, HashMap<String, SourceRow>>>,
+    public: Arc<Mutex<Vec<String>>>,
 }
 
 fn file_url(p: &Path) -> Option<String> {
@@ -289,6 +294,10 @@ async fn new_session(cfg: &EngineConfig, port: u16) -> Result<Arc<Session>> {
         }),
         connect: Some(ConnectionOptions {
             proxy_url: (!cfg.proxy.trim().is_empty()).then(|| cfg.proxy.trim().to_string()),
+            peer_opts: Some(PeerConnectionOptions {
+                connect_timeout: Some(PEER_CONNECT_TIMEOUT),
+                ..Default::default()
+            }),
             ..Default::default()
         }),
         ratelimits: LimitsConfig {
@@ -314,6 +323,43 @@ async fn new_session(cfg: &EngineConfig, port: u16) -> Result<Arc<Session>> {
     Session::new_with_opts(cfg.default_dir.clone(), opts).await
 }
 
+fn read_tracker_list(text: &str) -> Vec<String> {
+    let mut v: Vec<String> = text
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty() && l.contains("://"))
+        .map(str::to_string)
+        .collect();
+    trackers::dedup(&mut v);
+    v
+}
+
+fn load_public_trackers(state_dir: &Path, client: &reqwest::Client, into: Arc<Mutex<Vec<String>>>) {
+    let file = state_dir.join(PUBLIC_TRACKERS_FILE);
+    let fresh = std::fs::metadata(&file)
+        .and_then(|m| m.modified())
+        .ok()
+        .and_then(|t| t.elapsed().ok())
+        .is_some_and(|age| age < PUBLIC_TRACKERS_MAX_AGE);
+    if let Ok(text) = std::fs::read_to_string(&file) {
+        *into.lock() = read_tracker_list(&text);
+    }
+    if fresh {
+        return;
+    }
+    let client = client.clone();
+    tokio::spawn(async move {
+        match trackers::fetch_public_trackers(&client).await {
+            Ok(list) if !list.is_empty() => {
+                let _ = std::fs::write(&file, list.join("\n"));
+                *into.lock() = list;
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("could not refresh the public tracker list: {e:#}"),
+        }
+    });
+}
+
 impl TorrentEngine {
     pub async fn start(cfg: EngineConfig, client: reqwest::Client) -> Result<Self> {
         std::fs::create_dir_all(&cfg.state_dir)?;
@@ -335,6 +381,10 @@ impl TorrentEngine {
             Err(e) => return Err(e),
         };
         let api = Api::new(session.clone(), None);
+        let public = Arc::new(Mutex::new(Vec::new()));
+        if cfg.public_trackers && !cfg.disable_trackers {
+            load_public_trackers(&cfg.state_dir, &client, public.clone());
+        }
         Ok(Self {
             session,
             api,
@@ -343,11 +393,19 @@ impl TorrentEngine {
             client,
             previews: Mutex::new(HashMap::new()),
             sources: Mutex::new(HashMap::new()),
+            public,
         })
     }
 
     pub async fn stop(&self) {
         self.session.stop().await;
+    }
+
+    fn public_for(&self, private: bool) -> Vec<String> {
+        if private || !self.config.public_trackers || self.config.disable_trackers {
+            return Vec::new();
+        }
+        self.public.lock().clone()
     }
 
     pub fn handle(&self, hash: &str) -> Option<Arc<ManagedTorrent>> {
@@ -361,6 +419,10 @@ impl TorrentEngine {
             add,
             Some(AddTorrentOptions {
                 list_only: true,
+                trackers: src
+                    .magnet()
+                    .map(|_| self.public_for(false))
+                    .filter(|t| !t.is_empty()),
                 ..Default::default()
             }),
         );
@@ -450,6 +512,9 @@ impl TorrentEngine {
         } else {
             dir.to_path_buf()
         };
+        let mut extra_trackers = extra_trackers;
+        extra_trackers.extend(self.public_for(trackers::read_metainfo(&bytes).private));
+        trackers::dedup(&mut extra_trackers);
         let opts = AddTorrentOptions {
             paused,
             only_files,
@@ -485,9 +550,13 @@ impl TorrentEngine {
         only_files: Option<Vec<usize>>,
         paused: bool,
     ) -> Result<String> {
-        let add = match torrent_file.filter(|p| p.is_file()) {
-            Some(p) => AddTorrent::from_bytes(std::fs::read(p)?),
-            None => AddTorrent::from_url(source.to_string()),
+        let (add, public) = match torrent_file.filter(|p| p.is_file()) {
+            Some(p) => {
+                let bytes = std::fs::read(p)?;
+                let public = self.public_for(trackers::read_metainfo(&bytes).private);
+                (AddTorrent::from_bytes(bytes), public)
+            }
+            None => (AddTorrent::from_url(source.to_string()), Vec::new()),
         };
         let resp = self
             .session
@@ -498,6 +567,7 @@ impl TorrentEngine {
                     only_files,
                     overwrite: true,
                     output_folder: Some(dir.to_string_lossy().into_owned()),
+                    trackers: (!public.is_empty()).then_some(public),
                     ..Default::default()
                 }),
             )
@@ -923,6 +993,25 @@ fn urlencode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_the_public_tracker_list() {
+        let list = read_tracker_list(
+            "udp://a.example:1337/announce
+
+not a tracker
+udp://a.example:1337/announce
+https://b.example/announce
+",
+        );
+        assert_eq!(
+            list,
+            vec![
+                "udp://a.example:1337/announce".to_string(),
+                "https://b.example/announce".to_string()
+            ]
+        );
+    }
 
     #[tokio::test(flavor = "multi_thread")]
     async fn creates_a_valid_torrent_file() {
