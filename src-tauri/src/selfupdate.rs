@@ -427,7 +427,7 @@ pub fn install(update: &ReadyUpdate, relaunch: bool) -> Result<()> {
                 .ancestors()
                 .find(|p| p.extension().is_some_and(|e| e == "app"))
                 .ok_or_else(|| anyhow!("not running from an .app bundle"))?
-                                .to_path_buf();
+                .to_path_buf();
             #[cfg(target_os = "macos")]
             remove_quarantine(&update.path);
             let script = format!(
