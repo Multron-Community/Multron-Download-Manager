@@ -474,6 +474,7 @@ jobs:
           RELEASE_ID: ${{ needs.create-release.outputs.release_id }}
           VERSION: ${{ needs.create-release.outputs.version }}
           UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
         with:
           script: |
             const crypto = require('crypto');
@@ -534,8 +535,56 @@ jobs:
               throw new Error(`the draft changed while it was being signed: ${extra.join(', ') || 'missing files'}`);
             }
 
-            // VirusTotal Linklerini Otomatik Oluşturup Release Metnine Ekle
-            let vtSection = '\n\n### 🛡️ VirusTotal Scans\n\n| File | VirusTotal Link |\n| --- | --- |\n';
+            // VirusTotal API Otomatik Yükleme
+            const vtApiKey = (process.env.VIRUSTOTAL_API_KEY || '').trim();
+            if (vtApiKey) {
+              core.info('VirusTotal API anahtarı bulundu. Dosyalar taranmak üzere yükleniyor...');
+              for (const [name, hash] of Object.entries(files)) {
+                const filePath = path.join('release', name);
+                const stats = fs.statSync(filePath);
+                try {
+                  core.info(`Yükleniyor: ${name} (${(stats.size / 1024 / 1024).toFixed(2)} MB)...`);
+                  let uploadUrl = 'https://www.virustotal.com/api/v3/files';
+                  
+                  if (stats.size > 32 * 1024 * 1024) {
+                    const urlRes = await fetch('https://www.virustotal.com/api/v3/files/upload_url', {
+                      headers: { 'x-apikey': vtApiKey }
+                    });
+                    if (urlRes.ok) {
+                      const urlData = await urlRes.json();
+                      uploadUrl = urlData.data;
+                    }
+                  }
+
+                  const fileBuffer = fs.readFileSync(filePath);
+                  const blob = new Blob([fileBuffer]);
+                  const formData = new FormData();
+                  formData.append('file', blob, name);
+
+                  const uploadRes = await fetch(uploadUrl, {
+                    method: 'POST',
+                    headers: { 'x-apikey': vtApiKey },
+                    body: formData,
+                  });
+
+                  if (uploadRes.ok) {
+                    core.info(`Başarıyla VirusTotal'a gönderildi: ${name}`);
+                  } else {
+                    const errText = await uploadRes.text();
+                    core.warning(`VirusTotal yükleme hatası (${name}): ${uploadRes.status} ${errText}`);
+                  }
+                } catch (err) {
+                  core.warning(`VirusTotal hatası (${name}): ${err.message}`);
+                }
+
+                await new Promise((r) => setTimeout(r, 15000));
+              }
+            } else {
+              core.warning('VIRUSTOTAL_API_KEY bulunamadı. Otomatik yükleme adımı atlanıyor.');
+            }
+
+            // VirusTotal Linklerini Release Metnine Ekle
+            let vtSection = '\n\n###VirusTotal Scans\n\n| File | VirusTotal Link |\n| --- | --- |\n';
             for (const [name, hash] of Object.entries(files)) {
               vtSection += `| \`${name}\` | [View Report](https://www.virustotal.com/gui/file/${hash}) |\n`;
             }
@@ -545,7 +594,7 @@ jobs:
               body: currentRelease.data.body + vtSection,
             });
 
-            core.info(`signed, uploaded, and added VirusTotal links for ${Object.keys(files).length} files (${process.env.VERSION})`);
+            core.info(`Sürüm imzalandı, yüklendi ve VirusTotal taramaları başlatıldı (${process.env.VERSION})`);
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@e8998f949152b193b063cb0ec769d69d929409be
