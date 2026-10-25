@@ -428,6 +428,8 @@ pub fn install(update: &ReadyUpdate, relaunch: bool) -> Result<()> {
                 .find(|p| p.extension().is_some_and(|e| e == "app"))
                 .ok_or_else(|| anyhow!("not running from an .app bundle"))?
                 .to_path_buf();
+            #[cfg(target_os = "macos")]
+            remove_quarantine(&update.path);
             let script = format!(
                 r#"sleep 2
 mnt=$(mktemp -d)
@@ -437,6 +439,7 @@ if [ -n "$app" ]; then
   rm -rf {bundle}.old && mv {bundle} {bundle}.old && ditto "$app" {bundle} && rm -rf {bundle}.old || mv {bundle}.old {bundle}
 fi
 hdiutil detach -quiet "$mnt"
+xattr -rd com.apple.quarantine {bundle} 2>/dev/null || true
 {relaunch}"#,
                 dmg = sh_quote(&pkg),
                 bundle = sh_quote(&bundle.to_string_lossy()),
@@ -505,6 +508,35 @@ fn relaunch_later(exe: &Path) -> Result<()> {
 #[cfg(not(windows))]
 fn relaunch_later(_exe: &Path) -> Result<()> {
     Ok(())
+}
+
+#[cfg(target_os = "macos")]
+fn remove_quarantine(path: &Path) {
+    match Command::new("xattr")
+        .args(["-rd", "com.apple.quarantine"])
+        .arg(path)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status()
+    {
+        Ok(s) if s.success() => {
+            tracing::debug!("removed quarantine flag from {}", path.display());
+        }
+        Ok(s) => {
+            tracing::warn!(
+                "xattr returned {} while removing quarantine from {}",
+                s,
+                path.display()
+            );
+        }
+        Err(e) => {
+            tracing::warn!(
+                "could not run xattr to remove quarantine from {}: {e}",
+                path.display()
+            );
+        }
+    }
 }
 
 #[cfg_attr(not(windows), allow(dead_code))]
