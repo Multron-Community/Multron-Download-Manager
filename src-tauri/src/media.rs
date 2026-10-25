@@ -518,6 +518,41 @@ impl Tools {
     }
 }
 
+const INSTAGRAM_PAGES: &[&str] = &[
+    "p", "reel", "reels", "tv", "stories", "explore", "accounts", "direct", "about", "legal",
+];
+
+pub fn instagram_profile(url: &str) -> bool {
+    let Ok(u) = url::Url::parse(url) else {
+        return false;
+    };
+    let host = u.host_str().unwrap_or("").to_ascii_lowercase();
+    if host != "instagram.com" && !host.ends_with(".instagram.com") {
+        return false;
+    }
+    let parts: Vec<&str> = u
+        .path_segments()
+        .map(|s| s.filter(|p| !p.is_empty()).collect())
+        .unwrap_or_default();
+    match parts.as_slice() {
+        [user] => !INSTAGRAM_PAGES.contains(user),
+        [user, tab] => {
+            !INSTAGRAM_PAGES.contains(user) && matches!(*tab, "reels" | "tagged" | "saved" | "igtv")
+        }
+        _ => false,
+    }
+}
+
+pub fn site_name(url: &str) -> String {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| {
+            u.host_str()
+                .map(|h| h.trim_start_matches("www.").to_string())
+        })
+        .unwrap_or_else(|| "this site".into())
+}
+
 pub fn is_youtube(url: &str) -> bool {
     url::Url::parse(url)
         .ok()
@@ -541,6 +576,8 @@ pub fn needs_sign_in(error: &str) -> bool {
         "age-restricted",
         "inappropriate for some users",
         "login required",
+        "need to log in",
+        "log in to access",
     ]
     .iter()
     .any(|k| e.contains(k))
@@ -1128,6 +1165,30 @@ mod tests {
             classify_failure("ERROR: [youtube] x: Video unavailable"),
             Failure::Other
         );
+    }
+
+    #[test]
+    fn recognizes_instagram_profiles() {
+        assert!(instagram_profile("https://www.instagram.com/instagram/"));
+        assert!(instagram_profile("https://instagram.com/natgeo"));
+        assert!(instagram_profile("https://www.instagram.com/natgeo/reels/"));
+        assert!(!instagram_profile(
+            "https://www.instagram.com/reel/Chunk8-jurw/"
+        ));
+        assert!(!instagram_profile(
+            "https://www.instagram.com/natgeo/reel/Chunk8-jurw/"
+        ));
+        assert!(!instagram_profile(
+            "https://www.instagram.com/p/aye83DjauH/"
+        ));
+        assert!(!instagram_profile(
+            "https://www.instagram.com/stories/natgeo/3412345678901234567/"
+        ));
+        assert!(!instagram_profile("https://www.instagram.com/explore/"));
+        assert!(!instagram_profile("https://www.youtube.com/natgeo"));
+        assert!(needs_sign_in(
+            "ERROR: [instagram:story] You need to log in to access this content."
+        ));
     }
 
     #[test]

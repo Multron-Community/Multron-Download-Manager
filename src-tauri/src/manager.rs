@@ -1393,6 +1393,9 @@ impl Manager {
         let rec = self.record(id)?;
         let settings = self.settings();
         let media = rec.media.clone().unwrap_or_default();
+        if media::instagram_profile(&rec.url) {
+            bail!("this is an Instagram profile, which cannot be downloaded as a whole. Open the post, reel or story you want and download that, or use the browser extension's list of the videos on the page")
+        }
         self.with_entry(id, |e| e.live.phase = Some("preparing".into()));
         let app = self.app.clone();
         let exe = self
@@ -1641,6 +1644,12 @@ impl Manager {
             });
         }
         match result {
+            Err(e) if !has_cookies && media::needs_sign_in(&format!("{e:#}")) => {
+                bail!(
+                    "{} only shows this to signed-in users. Sign in to it in your browser and download with the Multron Download Manager browser extension, or choose your browser in Settings → Media → Use cookies from browser ({e})",
+                    media::site_name(&rec.url)
+                )
+            }
             Err(e)
                 if !has_ffmpeg && e.to_string().contains("Requested format is not available") =>
             {

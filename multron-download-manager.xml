@@ -34,9 +34,9 @@
 </Company_Info>
 <Program_Info>
 <Program_Name>Multron Download Manager</Program_Name>
-<Program_Version>0.0.7</Program_Version>
+<Program_Version>0.0.8</Program_Version>
 <Program_Release_Month>10</Program_Release_Month>
-<Program_Release_Day>24</Program_Release_Day>
+<Program_Release_Day>25</Program_Release_Day>
 <Program_Release_Year>2026</Program_Release_Year>
 <Program_Cost_Dollars>0</Program_Cost_Dollars>
 <Program_Cost_Other_Code>USD</Program_Cost_Other_Code>
@@ -98,7 +98,7 @@ Also: queue control, bulk actions, categories, tray icon, taskbar progress, ligh
 <Application_XML_File_URL>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml</Application_XML_File_URL>
 </Application_URLs>
 <Download_URLs>
-<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.7/Multron-Download-Manager-0.0.7-x64-Setup.exe</Primary_Download_URL>
+<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.8/Multron-Download-Manager-0.0.8-x64-Setup.exe</Primary_Download_URL>
 <Secondary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/latest</Secondary_Download_URL>
 <Additional_Download_URL_1></Additional_Download_URL_1>
 <Additional_Download_URL_2></Additional_Download_URL_2>

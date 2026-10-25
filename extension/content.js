@@ -10,7 +10,7 @@
     if (on('youtube.com')) return p === '/watch' || p.startsWith('/shorts/') || p.startsWith('/live/');
     if (on('youtu.be')) return p.length > 1;
     if (on('reddit.com')) return /\/comments\//.test(p);
-    if (on('instagram.com')) return /^\/(p|reel|reels|tv)\//.test(p) || /^\/[^/]+\/(p|reel)\//.test(p);
+    if (on('instagram.com')) return /^\/(p|reel|reels|tv)\//.test(p) || /^\/[^/]+\/(p|reel)\//.test(p) || /^\/stories\/(highlights\/)?[^/]+\/?(\d+\/?)?$/.test(p);
     if (on('x.com', 'twitter.com')) return /\/status\/\d+/.test(p);
     if (on('tiktok.com')) return /\/video\/\d+/.test(p) || p.startsWith('/t/');
     if (on('vimeo.com')) return /^\/\d+/.test(p);
