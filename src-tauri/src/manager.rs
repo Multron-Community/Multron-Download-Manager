@@ -867,6 +867,7 @@ impl Manager {
                 files: Vec::new(),
                 filename: req.filename.clone().filter(|f| !f.trim().is_empty()),
                 partials: Vec::new(),
+                audio_url: req.audio_url.clone().filter(|a| a.starts_with("https://")),
             });
         }
 
@@ -1511,6 +1512,50 @@ impl Manager {
             }
         }
         let has_ffmpeg = ffmpeg.is_some();
+
+        if let Some(audio) = media.audio_url.clone() {
+            let Some(ffmpeg) = ffmpeg else {
+                bail!("joining the picture and sound of this video needs FFmpeg. Install it in Settings → Media")
+            };
+            let dest = util::unique_path(&PathBuf::from(&rec.dir), &rec.name);
+            let this = self.clone();
+            let id2 = id.to_string();
+            let mut meter = media::SpeedMeter::default();
+            return media::merge(
+                &ffmpeg,
+                &rec.url,
+                &audio,
+                rec.referrer.as_deref(),
+                rec.user_agent.as_deref(),
+                &dest,
+                cancel,
+                move |ev| {
+                    this.with_entry(&id2, |e| match ev {
+                        MediaEvent::Progress { downloaded, .. } => {
+                            e.rec.downloaded = downloaded;
+                            e.live.speed = meter.sample(downloaded);
+                            e.live.phase = Some("downloading".into());
+                        }
+                        MediaEvent::File(path) => {
+                            if let Some(m) = e.rec.media.as_mut() {
+                                m.files.push(path.to_string_lossy().into_owned());
+                            }
+                            if let Some(n) = path.file_name() {
+                                e.rec.name = n.to_string_lossy().into_owned();
+                                e.rec.category = util::category_for(&e.rec.name);
+                            }
+                            if let Ok(meta) = std::fs::metadata(&path) {
+                                e.rec.total = Some(meta.len());
+                                e.rec.downloaded = meta.len();
+                            }
+                        }
+                        _ => {}
+                    });
+                    this.dirty.store(true, Ordering::Relaxed);
+                },
+            )
+            .await;
+        }
 
         let base = MediaJob {
             exe,

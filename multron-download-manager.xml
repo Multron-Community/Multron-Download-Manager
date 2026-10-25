@@ -34,7 +34,7 @@
 </Company_Info>
 <Program_Info>
 <Program_Name>Multron Download Manager</Program_Name>
-<Program_Version>0.0.8</Program_Version>
+<Program_Version>0.0.9</Program_Version>
 <Program_Release_Month>10</Program_Release_Month>
 <Program_Release_Day>25</Program_Release_Day>
 <Program_Release_Year>2026</Program_Release_Year>
@@ -46,14 +46,14 @@
 <Program_Install_Support>Install and Uninstall</Program_Install_Support>
 <Program_OS_Support>Windows 10,Windows 11,Mac OS X,Linux</Program_OS_Support>
 <Program_Language>English,Turkish,German,French,Spanish,Italian,Portuguese,Russian,Japanese,Korean,ChineseSimplified,ChineseTraditional</Program_Language>
-<Program_Change_Info>A Scan for malware button, password-protected archives, faster torrents and an update that can no longer get stuck. Scan for malware with Multron Cloud (testing): scan for malware button, 100 mb for the button, automatic scanning is on by default, scan window, fingerprints first, then uploads, a much more stable cloud scan, faster uploads, new cloud settings, stop scan works right away, scan all, password-protected archives. Clearer downloads: no more separate antivirus scan, clearer results, a clearer scan for malware button, download and scan notices, programs really do not start by accident, smartscreen badge. Fixes and checks: already downloading?, no false antivirus alarms, multron cloud results. Faster torrents: public trackers added automatically, more peers, quicker peer connections. Updates no longer loop.</Program_Change_Info>
+<Program_Change_Info>Instagram stories download again. Fixes: instagram stories.</Program_Change_Info>
 <Program_Specific_Category>Download Managers</Program_Specific_Category>
 <Program_Category_Class>Internet::Download Managers</Program_Category_Class>
 <Program_System_Requirements>Windows 10 or 11 (x64), macOS 11 or later (Apple Silicon or Intel), or Linux with glibc 2.36 or newer (x86_64 or arm64). WebView2 on Windows is installed automatically.</Program_System_Requirements>
 <File_Info>
-<File_Size_Bytes>10274181</File_Size_Bytes>
-<File_Size_K>10033</File_Size_K>
-<File_Size_MB>9.80</File_Size_MB>
+<File_Size_Bytes>10304398</File_Size_Bytes>
+<File_Size_K>10063</File_Size_K>
+<File_Size_MB>9.83</File_Size_MB>
 </File_Info>
 <Expire_Info>
 <Has_Expire_Info>N</Has_Expire_Info>
@@ -98,7 +98,7 @@ Also: queue control, bulk actions, categories, tray icon, taskbar progress, ligh
 <Application_XML_File_URL>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml</Application_XML_File_URL>
 </Application_URLs>
 <Download_URLs>
-<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.8/Multron-Download-Manager-0.0.8-x64-Setup.exe</Primary_Download_URL>
+<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.9/Multron-Download-Manager-0.0.9-x64-Setup.exe</Primary_Download_URL>
 <Secondary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/latest</Secondary_Download_URL>
 <Additional_Download_URL_1></Additional_Download_URL_1>
 <Additional_Download_URL_2></Additional_Download_URL_2>

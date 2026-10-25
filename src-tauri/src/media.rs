@@ -930,6 +930,118 @@ fn parse_progress(line: &str) -> Option<MediaEvent> {
     })
 }
 
+#[allow(clippy::too_many_arguments)]
+pub async fn merge(
+    ffmpeg_dir: &Path,
+    video: &str,
+    audio: &str,
+    referrer: Option<&str>,
+    user_agent: Option<&str>,
+    dest: &Path,
+    cancel: CancellationToken,
+    mut on_event: impl FnMut(MediaEvent),
+) -> Result<bool> {
+    let part = dest.with_extension("part.mp4");
+    let mut cmd = Command::new(ffmpeg_dir.join(exe("ffmpeg")));
+    cmd.args(["-hide_banner", "-nostdin", "-loglevel", "error", "-y"]);
+    for url in [video, audio] {
+        if let Some(agent) = user_agent.filter(|a| !a.trim().is_empty()) {
+            cmd.arg("-user_agent").arg(agent);
+        }
+        if let Some(referer) = referrer.filter(|r| r.starts_with("https://")) {
+            cmd.arg("-referer").arg(referer);
+        }
+        cmd.arg("-i").arg(url);
+    }
+    cmd.args([
+        "-map",
+        "0:v:0",
+        "-map",
+        "1:a:0?",
+        "-c",
+        "copy",
+        "-movflags",
+        "+faststart",
+        "-progress",
+        "pipe:1",
+        "-nostats",
+        "-f",
+        "mp4",
+    ])
+    .arg(&part)
+    .stdin(Stdio::null())
+    .stdout(Stdio::piped())
+    .stderr(Stdio::piped())
+    .kill_on_drop(true);
+    hide_console(&mut cmd);
+    #[cfg(unix)]
+    cmd.process_group(0);
+
+    on_event(MediaEvent::Phase("downloading".into()));
+    let mut child = cmd.spawn().context("could not start FFmpeg")?;
+    let pid = child.id();
+    let stdout = child.stdout.take().ok_or_else(|| anyhow!("no stdout"))?;
+    let stderr = child.stderr.take().ok_or_else(|| anyhow!("no stderr"))?;
+    let stderr_task = tokio::spawn(async move {
+        let mut lines = BufReader::new(stderr).lines();
+        let mut tail: Vec<String> = Vec::new();
+        while let Ok(Some(line)) = lines.next_line().await {
+            tail.push(line);
+            if tail.len() > 20 {
+                tail.remove(0);
+            }
+        }
+        tail.join("\n")
+    });
+    let mut lines = BufReader::new(stdout).lines();
+    loop {
+        let line = tokio::select! {
+            _ = cancel.cancelled() => {
+                kill_tree(&mut child, pid).await;
+                let _ = tokio::fs::remove_file(&part).await;
+                return Ok(false);
+            }
+            l = lines.next_line() => l,
+        };
+        let Ok(Some(line)) = line else { break };
+        if let Some(size) = line
+            .strip_prefix("total_size=")
+            .and_then(|s| s.trim().parse::<u64>().ok())
+        {
+            on_event(MediaEvent::Progress {
+                downloaded: size,
+                total: None,
+                speed: None,
+                eta: None,
+                index: None,
+                count: None,
+            });
+        }
+    }
+    let status = tokio::select! {
+        _ = cancel.cancelled() => {
+            kill_tree(&mut child, pid).await;
+            let _ = tokio::fs::remove_file(&part).await;
+            return Ok(false);
+        }
+        s = child.wait() => s?,
+    };
+    let stderr = stderr_task.await.unwrap_or_default();
+    if !status.success() {
+        let _ = tokio::fs::remove_file(&part).await;
+        let why = stderr.lines().last().unwrap_or("").trim().to_string();
+        if why.is_empty() {
+            bail!("FFmpeg could not download and join the picture and sound");
+        }
+        bail!("FFmpeg could not download and join the picture and sound: {why}");
+    }
+    tokio::fs::rename(&part, dest)
+        .await
+        .context("could not save the joined video")?;
+    on_event(MediaEvent::File(dest.to_path_buf()));
+    Ok(true)
+}
+
 pub async fn run(
     job: MediaJob,
     cancel: CancellationToken,
@@ -1189,6 +1301,133 @@ mod tests {
         assert!(needs_sign_in(
             "ERROR: [instagram:story] You need to log in to access this content."
         ));
+    }
+
+    fn test_ffmpeg() -> Option<PathBuf> {
+        let managed = std::env::var_os("APPDATA")
+            .map(|a| {
+                PathBuf::from(a)
+                    .join("com.multron.downloadmanager")
+                    .join("tools")
+            })
+            .filter(|d| d.join(exe("ffmpeg")).is_file());
+        managed.or_else(|| util::which("ffmpeg").and_then(|p| p.parent().map(Path::to_path_buf)))
+    }
+
+    #[tokio::test]
+    async fn joins_separate_picture_and_sound_into_one_file() {
+        let Some(ffmpeg) = test_ffmpeg() else { return };
+        let dir = std::env::temp_dir().join(format!("mdm-merge-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let make = |args: &[&str], out: &str| {
+            let ok = std::process::Command::new(ffmpeg.join(exe("ffmpeg")))
+                .args(["-hide_banner", "-loglevel", "error", "-y"])
+                .args(args)
+                .arg(dir.join(out))
+                .status()
+                .unwrap()
+                .success();
+            assert!(ok, "could not make {out}");
+            std::fs::read(dir.join(out)).unwrap()
+        };
+        let video = make(
+            &[
+                "-f",
+                "lavfi",
+                "-i",
+                "testsrc=duration=2:size=160x120:rate=10",
+                "-an",
+                "-c:v",
+                "mpeg4",
+            ],
+            "v.mp4",
+        );
+        let audio = make(
+            &[
+                "-f",
+                "lavfi",
+                "-i",
+                "sine=frequency=440:duration=2",
+                "-vn",
+                "-c:a",
+                "aac",
+            ],
+            "a.m4a",
+        );
+        let seen = Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+        let log = seen.clone();
+        let app = axum::Router::new()
+            .route(
+                "/v.mp4",
+                axum::routing::get(move || async move { video.clone() }),
+            )
+            .route(
+                "/a.m4a",
+                axum::routing::get(move || async move { audio.clone() }),
+            )
+            .layer(axum::middleware::from_fn(
+                move |req: axum::extract::Request, next: axum::middleware::Next| {
+                    let log = log.clone();
+                    async move {
+                        let referer = req
+                            .headers()
+                            .get("referer")
+                            .and_then(|v| v.to_str().ok())
+                            .unwrap_or("")
+                            .to_string();
+                        log.lock().unwrap().push(referer);
+                        next.run(req).await
+                    }
+                },
+            ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let base = format!("http://{}", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let dest = dir.join("someone_story_1.mp4");
+        let mut files = Vec::new();
+        let done = merge(
+            &ffmpeg,
+            &format!("{base}/v.mp4"),
+            &format!("{base}/a.m4a"),
+            Some("https://www.instagram.com/stories/someone/1/"),
+            Some("Mozilla/5.0 test"),
+            &dest,
+            CancellationToken::new(),
+            |ev| {
+                if let MediaEvent::File(p) = ev {
+                    files.push(p);
+                }
+            },
+        )
+        .await
+        .unwrap();
+        assert!(done);
+        assert_eq!(files, vec![dest.clone()]);
+        assert!(!dest.with_extension("part.mp4").exists());
+        let probe = std::process::Command::new(ffmpeg.join(exe("ffprobe")))
+            .args([
+                "-v",
+                "error",
+                "-show_entries",
+                "stream=codec_type",
+                "-of",
+                "csv=p=0",
+            ])
+            .arg(&dest)
+            .output()
+            .unwrap();
+        let streams = String::from_utf8_lossy(&probe.stdout);
+        assert!(
+            streams.contains("video") && streams.contains("audio"),
+            "{streams}"
+        );
+        assert!(seen
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|r| r == "https://www.instagram.com/stories/someone/1/"));
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

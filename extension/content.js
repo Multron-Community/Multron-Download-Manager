@@ -339,7 +339,73 @@
     };
   }
 
+  function storyStreams(duration) {
+    const tracks = [];
+    for (const e of performance.getEntriesByType('resource')) {
+      let u;
+      try {
+        u = new URL(e.name);
+      } catch {
+        continue;
+      }
+      const efg = u.searchParams.get('efg');
+      if (!efg) continue;
+      let info;
+      try {
+        info = JSON.parse(atob(efg.replace(/-/g, '+').replace(/_/g, '/')));
+      } catch {
+        continue;
+      }
+      const tag = String(info.vencode_tag || '');
+      if (!tag.includes('story')) continue;
+      u.searchParams.delete('bytestart');
+      u.searchParams.delete('byteend');
+      tracks.push({
+        url: u.href,
+        audio: /audio/i.test(tag),
+        asset: String(info.xpv_asset_id ?? ''),
+        duration: Number(info.duration_s),
+        bitrate: Number(info.bitrate) || 0,
+        at: e.startTime
+      });
+    }
+    const exact = (t) => t.duration === Math.floor(duration);
+    const near = (t) => Number.isFinite(t.duration) && Math.abs(t.duration - duration) < 1;
+    const fits = tracks.some((t) => !t.audio && exact(t)) ? exact : near;
+    const video = tracks
+      .filter((t) => !t.audio && fits(t))
+      .sort((a, b) => b.at - a.at || b.bitrate - a.bitrate)[0];
+    if (!video) return null;
+    const sameAsset = (t) => video.asset && t.asset === video.asset;
+    const audios = tracks.filter((t) => t.audio && fits(t));
+    const audio =
+      audios.find(sameAsset) ||
+      audios.sort((a, b) => Math.abs(a.at - video.at) - Math.abs(b.at - video.at))[0];
+    const best = tracks
+      .filter((t) => !t.audio && (sameAsset(t) || t.url === video.url))
+      .sort((a, b) => b.bitrate - a.bitrate)[0];
+    return { video: best.url, audio: audio?.url || null };
+  }
+
+  function storyItem(el) {
+    if (!on('instagram.com') || !location.pathname.startsWith('/stories/')) return null;
+    const videos = [...document.querySelectorAll('video')];
+    const video = el?.tagName === 'VIDEO' ? el : videos.find((v) => !v.paused) || videos[0];
+    if (!video) return null;
+    const parts = location.pathname.split('/').filter(Boolean);
+    const owner = parts[1] === 'highlights' ? 'highlight' : parts[1] || 'instagram';
+    const id = parts[2] || String(Date.now());
+    const name = `${owner}_story_${id}.mp4`;
+    const src = [video.currentSrc, video.src].find((x) => x && /^https?:/i.test(x));
+    if (src) return { url: src, kind: 'auto', mediaType: 'video', name };
+    const streams = storyStreams(video.duration);
+    if (!streams) return null;
+    return { url: streams.video, audioUrl: streams.audio, kind: 'media', mediaType: 'video', name, filename: name };
+  }
+
   function videoItem(el) {
+    const story = storyItem(el);
+    if (story) return story;
     if (on('youtube.com', 'youtu.be')) {
       const yt = youtubeItem(el);
       if (yt) return yt;
@@ -369,6 +435,7 @@
       kind: item.kind,
       quality: item.kind === 'media' ? quality : undefined,
       filename: item.filename || null,
+      audioUrl: item.audioUrl || undefined,
       pageTitle: resolveName(item),
       thumbnail: item.thumbnail || meta('og:image'),
       referrer: location.href
