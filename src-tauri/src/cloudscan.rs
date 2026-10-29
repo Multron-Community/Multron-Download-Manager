@@ -1315,17 +1315,13 @@ pub fn summarize(verdicts: &[(PathBuf, FileVerdict)], limit_mb: u32) -> Summary 
             detail: format!("Multron Cloud: {}", locked.join(", ")),
         };
     }
-    let errors = named(&["error"]);
-    if !errors.is_empty() {
-        return Summary {
-            state: "error",
-            detail: format!("Multron Cloud: {}", errors.join(", ")),
-        };
-    }
     let count = |wanted: &str| verdicts.iter().filter(|(_, v)| v.verdict == wanted).count();
-    let skipped = count("skipped");
     let unknown = count("unknown");
-    if skipped == 0 && unknown > 0 {
+    let checked = clean + unknown;
+    let skipped = count("skipped");
+    let errors = named(&["error"]);
+    let missed = verdicts.len() - checked;
+    if checked > 0 && missed == 0 {
         return Summary {
             state: "unknown",
             detail: format!(
@@ -1334,10 +1330,40 @@ pub fn summarize(verdicts: &[(PathBuf, FileVerdict)], limit_mb: u32) -> Summary 
             ),
         };
     }
+    if checked > 0 {
+        let mut why = errors;
+        if skipped > 0 {
+            why.push(format!(
+                "{skipped} larger than the {limit_mb} MB upload limit"
+            ));
+        }
+        return Summary {
+            state: "partial",
+            detail: format!(
+                "Multron Cloud: no threat found in {checked} of {} files; {missed} could not be checked ({})",
+                verdicts.len(),
+                why.join(", ")
+            ),
+        };
+    }
+    if !errors.is_empty() {
+        return Summary {
+            state: "error",
+            detail: format!("Multron Cloud: {}", errors.join(", ")),
+        };
+    }
     if skipped == 0 {
         return Summary {
             state: "skipped",
             detail: "Multron Cloud: no file was checked".into(),
+        };
+    }
+    if verdicts.len() == 1 {
+        return Summary {
+            state: "skipped",
+            detail: format!(
+                "Multron Cloud: the file is larger than the {limit_mb} MB upload limit and the cloud does not know its fingerprint"
+            ),
         };
     }
     Summary {
@@ -2073,6 +2099,56 @@ mod tests {
         let summary = summarize(&[(PathBuf::from("/d/setup.exe"), v)], 15);
         assert_eq!(summary.state, "unknown");
         assert!(summary.detail.contains("no threat found"));
+    }
+
+    #[test]
+    fn files_that_were_checked_count_even_when_others_were_not() {
+        let v = |verdict: &str, detail: &str| FileVerdict::new(verdict, detail);
+        let mixed = summarize(
+            &[
+                (PathBuf::from("/d/setup.exe"), v("clean", "")),
+                (
+                    PathBuf::from("/d/data.bin"),
+                    v("skipped", "larger than the 100 MB upload limit"),
+                ),
+            ],
+            100,
+        );
+        assert_eq!(mixed.state, "partial");
+        assert!(
+            mixed.detail.contains("no threat found in 1 of 2 files"),
+            "{}",
+            mixed.detail
+        );
+        assert!(mixed.detail.contains("100 MB"), "{}", mixed.detail);
+        let failed = summarize(
+            &[
+                (PathBuf::from("/d/a.exe"), v("unknown", "")),
+                (
+                    PathBuf::from("/d/b.exe"),
+                    v("error", "the cloud server did not answer in time"),
+                ),
+            ],
+            100,
+        );
+        assert_eq!(failed.state, "partial");
+        assert!(
+            failed
+                .detail
+                .contains("b.exe: the cloud server did not answer in time"),
+            "{}",
+            failed.detail
+        );
+        let only_failed = summarize(&[(PathBuf::from("/d/b.exe"), v("error", "timeout"))], 100);
+        assert_eq!(only_failed.state, "error");
+        let threat = summarize(
+            &[
+                (PathBuf::from("/d/a.exe"), v("malicious", "Trojan")),
+                (PathBuf::from("/d/b.exe"), v("error", "timeout")),
+            ],
+            100,
+        );
+        assert_eq!(threat.state, "threat");
     }
 
     #[test]

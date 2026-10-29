@@ -42,6 +42,7 @@ pub struct Settings {
     pub bridge_enabled: bool,
     pub bridge_port: u16,
     pub confirm_browser_downloads: bool,
+    pub fullscreen_video_button: bool,
 
     pub ytdlp_auto_update: bool,
     pub media_quality: String,
@@ -155,6 +156,7 @@ impl Default for Settings {
             bridge_enabled: true,
             bridge_port: DEFAULT_BRIDGE_PORT,
             confirm_browser_downloads: false,
+            fullscreen_video_button: true,
 
             ytdlp_auto_update: true,
             media_quality: "best".into(),
@@ -473,6 +475,13 @@ mod tests {
             chosen.cloud_connections,
             crate::cloudscan::MAX_CONNECTIONS as u32
         );
+    }
+
+    #[test]
+    fn shows_the_fullscreen_video_button_by_default() {
+        assert!(Settings::default().fullscreen_video_button);
+        let old: Settings = serde_json::from_str("{}").unwrap();
+        assert!(old.fullscreen_video_button);
     }
 
     #[test]

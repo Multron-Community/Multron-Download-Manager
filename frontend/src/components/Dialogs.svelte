@@ -4,6 +4,7 @@
   import { bytes } from '../lib/format';
   import { t } from '../lib/i18n.svelte';
   import Icon from './Icon.svelte';
+  import { cloudView } from '../lib/cloud';
   import CloudScanWindow from './CloudScanWindow.svelte';
 
   let deleteFiles = $state(false);
@@ -91,11 +92,9 @@
     }
   }
 
-  function startResult(d: { cloudState: string; scanState: string }) {
-    if (d.cloudState === 'threat') return { tone: 'bad', icon: 'alert', text: t('Threat found') };
-    if (d.cloudState === 'suspicious') return { tone: 'warn', icon: 'alert', text: t('Suspicious file') };
-    if (d.cloudState === 'clean' || d.cloudState === 'unknown') return { tone: 'ok', icon: 'shield', text: t('No threat found') };
-    return { tone: 'muted', icon: 'info', text: t('Not scanned') };
+  function startResult(d: { cloudState: string; cloudDetail?: string | null }) {
+    const v = cloudView(d.cloudState, d.cloudDetail);
+    return { tone: v.tone, icon: v.icon === 'lock' ? 'lock' : v.icon, text: v.label, reason: v.reason };
   }
 
   function host(url: string) {
@@ -205,6 +204,9 @@
             <span class="font-medium">Multron Cloud</span>
             <span class="ml-auto {toneText[result.tone]}">{result.text}</span>
           </div>
+          {#if result.reason}
+            <div class="text-[11.5px] text-muted px-1 select-text leading-relaxed">{result.reason}</div>
+          {/if}
           {#if d.scanState === 'threat'}
             <div class="rounded-[10px] border px-3 py-2 flex items-center gap-2 text-[12.5px] {toneBox.bad}">
               <Icon name="alert" size={14} class="text-bad" />
@@ -221,7 +223,7 @@
         </div>
       </div>
       <div class="flex items-center gap-2 px-5 py-3 border-t border-line">
-        {#if result.tone === 'muted' && app.settings?.cloudScanButton !== false}
+        {#if ['', 'skipped', 'error', 'partial'].includes(d.cloudState) && app.settings?.cloudScanButton !== false}
           <button class="btn" onclick={scanFirst}><Icon name="shield" size={13} />{t('Scan first')}</button>
         {/if}
         <div class="flex gap-2 ml-auto">
@@ -283,19 +285,18 @@
 <div class="fixed bottom-9 right-4 z-[70] flex flex-col gap-2 w-[340px] pointer-events-none">
   {#each app.notices as n (n.id)}
     {@const d = app.downloads.find((x) => x.id === n.downloadId)}
-    {@const tone = n.kind === 'scan' ? (n.result === 'clean' || n.result === 'unknown' ? 'ok' : n.result === 'threat' ? 'bad' : 'warn') : n.kind === 'started' ? 'accent' : n.kind === 'finished' ? 'ok' : 'bad'}
+    {@const view = n.kind === 'scan' ? cloudView(n.result ?? '', n.detail) : null}
+    {@const tone = view ? (view.tone === 'muted' ? 'warn' : view.tone) : n.kind === 'started' ? 'accent' : n.kind === 'finished' ? 'ok' : 'bad'}
     <div class="pointer-events-auto bg-raised border-l-4 border border-line {tone === 'accent' ? '!border-l-accent' : tone === 'ok' ? '!border-l-ok' : tone === 'warn' ? '!border-l-warn' : '!border-l-bad'} rounded-[10px] shadow-2xl p-3 flex gap-3 items-start">
       <div class="w-[34px] h-[34px] rounded-full flex items-center justify-center flex-shrink-0 {tone === 'accent' ? 'bg-accent/20 text-accent' : tone === 'ok' ? 'bg-ok/20 text-ok' : tone === 'warn' ? 'bg-warn/20 text-warn' : 'bg-bad/20 text-bad'}">
-        <Icon name={n.kind === 'scan' ? (n.result === 'clean' || n.result === 'unknown' ? 'shield' : 'alert') : n.kind === 'started' ? 'down' : n.kind === 'finished' ? 'check' : 'alert'} size={17} />
+        <Icon name={view ? (view.icon === 'shield' ? 'shield' : 'alert') : n.kind === 'started' ? 'down' : n.kind === 'finished' ? 'check' : 'alert'} size={17} />
       </div>
       <div class="min-w-0 flex-1">
         <div class="text-[13px] font-semibold">{n.kind === 'scan' ? t('Multron Cloud scan finished') : n.kind === 'started' ? t('Download started') : n.kind === 'finished' ? t('Download finished') : t('Download failed')}</div>
         <div class="text-[12px] text-muted truncate" title={n.name}>{n.name}</div>
-        {#if n.kind === 'scan'}
-          <div class="text-[12px] font-medium mt-0.5 {tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : 'text-bad'}" title={n.detail ?? ''}>
-            {n.result === 'clean' || n.result === 'unknown' ? t('No threat found') : n.result === 'threat' ? t('Threat found') : n.result === 'suspicious' ? t('Suspicious file') : t('Not scanned')}
-          </div>
-          {#if n.result !== 'clean' && n.detail}<div class="text-[11px] text-muted line-clamp-2 select-text">{n.detail}</div>{/if}
+        {#if view}
+          <div class="text-[12px] font-medium mt-0.5 {tone === 'ok' ? 'text-ok' : tone === 'warn' ? 'text-warn' : 'text-bad'}" title={view.reason}>{view.label}</div>
+          {#if view.reason}<div class="text-[11px] text-muted line-clamp-3 select-text" title={view.reason}>{view.reason}</div>{/if}
         {/if}
         <div class="flex gap-1.5 mt-2">
           {#if n.kind === 'finished' && d}

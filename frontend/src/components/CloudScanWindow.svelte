@@ -6,6 +6,7 @@
   import { bytes, duration } from '../lib/format';
   import type { CloudFinding } from '../types';
   import Icon from './Icon.svelte';
+  import { cloudReason } from '../lib/cloud';
 
   let tab = $state<'files' | 'threats'>('files');
   let now = $state(Date.now());
@@ -43,6 +44,10 @@
     if (report) app.run(() => api.revealDownloadedFile(f.download || report.id, f.path));
   }
 
+  const notScanned = $derived(!!report && !report.running && !report.stopped && report.state === 'skipped');
+  const partly = $derived(!!report && !report.running && !report.stopped && report.state === 'partial');
+  const reason = $derived(cloudReason(report?.summary));
+
   function result(f: CloudFinding) {
     switch (f.verdict) {
       case 'clean':
@@ -57,7 +62,7 @@
       case 'locked':
         return { text: t('Password needed'), cls: 'bg-warn/15 text-warn' };
       case 'skipped':
-        return { text: t('Not uploaded'), cls: 'bg-line text-muted' };
+        return { text: t('Not scanned'), cls: 'bg-warn/15 text-warn' };
       default:
         return { text: t('Error'), cls: 'bg-line text-muted' };
     }
@@ -66,7 +71,8 @@
   function how(f: CloudFinding) {
     if (f.route === 'hash') return t('Known fingerprint');
     if (f.route === 'upload') return t('Uploaded and analyzed');
-    if (f.route === 'local') return f.verdict === 'skipped' ? t('Checked by fingerprint only') : t('Checked on this PC');
+    if (f.verdict === 'skipped') return t('Unknown fingerprint, larger than the upload limit');
+    if (f.route === 'local') return t('Checked on this PC');
     return '—';
   }
 </script>
@@ -75,7 +81,7 @@
   <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation">
     <div class="w-full max-w-[860px] h-[86vh] max-h-[720px] bg-menu border border-line rounded-[14px] shadow-2xl flex flex-col overflow-hidden">
       <div class="flex items-start gap-3 px-5 py-4 border-b border-line">
-        <div class="w-[38px] h-[38px] rounded-full flex items-center justify-center flex-shrink-0 {report?.threats ? 'bg-bad/20 text-bad' : report?.suspicious ? 'bg-warn/20 text-warn' : 'bg-accent/20 text-accent'}">
+        <div class="w-[38px] h-[38px] rounded-full flex items-center justify-center flex-shrink-0 {report?.threats ? 'bg-bad/20 text-bad' : report?.suspicious || notScanned || partly ? 'bg-warn/20 text-warn' : 'bg-accent/20 text-accent'}">
           <Icon name="shield" size={19} />
         </div>
         <div class="min-w-0 flex-1">
@@ -108,6 +114,10 @@
                   {t('Suspicious files found')}
                 {:else if report.state === 'error'}
                   {t('The scan could not be finished')}
+                {:else if notScanned}
+                  {t('Not scanned')}
+                {:else if partly}
+                  {t('Partly scanned')}
                 {:else}
                   {t('No threat found')}
                 {/if}
@@ -115,10 +125,12 @@
               <span class="text-muted">{percent}%</span>
             </div>
             <div class="h-[8px] rounded-full bg-line overflow-hidden">
-              <div class="h-full rounded-full transition-all {report.threats ? 'bg-bad' : report.suspicious ? 'bg-warn' : report.running ? 'bg-accent' : 'bg-ok'}" style="width: {percent}%"></div>
+              <div class="h-full rounded-full transition-all {report.threats ? 'bg-bad' : report.suspicious || notScanned || partly ? 'bg-warn' : report.running ? 'bg-accent' : 'bg-ok'}" style="width: {percent}%"></div>
             </div>
-            {#if !report.running && report.state === 'error' && report.summary}
-              <div class="text-[11.5px] text-bad mt-1.5 select-text">{report.summary}</div>
+            {#if !report.running && report.state === 'error' && reason}
+              <div class="text-[11.5px] text-bad mt-1.5 select-text">{reason}</div>
+            {:else if !report.running && (report.stopped || report.notChecked > 0 || report.state === 'unknown') && reason}
+              <div class="text-[11.5px] text-warn mt-1.5 select-text">{reason}</div>
             {/if}
           </div>
 
@@ -202,10 +214,10 @@
                 {#each files as f, i (f.path + i)}
                   {@const r = result(f)}
                   <tr class="border-t border-line/60 {f.verdict === 'malicious' ? 'bg-bad/5' : ''}">
-                    <td class="py-1 pr-2 mono truncate" title={f.detail ? f.name + ' — ' + f.detail : f.name}>{f.name}</td>
+                    <td class="py-1 pr-2 mono truncate" title={f.detail ? f.name + ' — ' + cloudReason(f.detail) : f.name}>{f.name}</td>
                     <td class="py-1 text-right pr-3 text-muted">{bytes(f.size)}</td>
-                    <td class="py-1"><span class="px-1.5 py-[1px] rounded font-medium {r.cls}" title={f.detail}>{r.text}</span></td>
-                    <td class="py-1 text-muted truncate" title={f.detail}>{how(f)}</td>
+                    <td class="py-1"><span class="px-1.5 py-[1px] rounded font-medium {r.cls}" title={cloudReason(f.detail)}>{r.text}</span></td>
+                    <td class="py-1 text-muted truncate" title={cloudReason(f.detail) || how(f)}>{how(f)}</td>
                   </tr>
                 {/each}
               </tbody>

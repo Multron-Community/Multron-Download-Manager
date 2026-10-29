@@ -5,29 +5,9 @@
   import { bytes, date, duration, percent, speed } from '../lib/format';
   import type { Download } from '../types';
   import Icon from './Icon.svelte';
+  import { cloudView } from '../lib/cloud';
   import SpeedGraph from './SpeedGraph.svelte';
 
-  function cloudLabel(state: string) {
-    switch (state) {
-      case 'clean':
-        return t('Clean');
-      case 'unknown':
-        return t('No threat found');
-      case 'threat':
-        return t('Threat found');
-      case 'suspicious':
-        return t('Suspicious file');
-      case 'locked':
-        return t('Password needed');
-      default:
-        return t('Not scanned');
-    }
-  }
-
-  function cloudDetail(detail: string | null | undefined) {
-    const text = (detail ?? '').replace(/^Multron Cloud:?\s*/, '').trim();
-    return text;
-  }
   import TorrentTabs from './TorrentTabs.svelte';
 
   interface Props {
@@ -138,7 +118,8 @@
           {/if}
           {#if item.cloudState && item.cloudState !== 'scanning'}
             <span class="text-muted">Multron Cloud</span>
-            <span class="whitespace-pre-wrap select-text {item.cloudState === 'threat' ? 'text-bad' : item.cloudState === 'clean' || item.cloudState === 'unknown' ? 'text-ok' : 'text-warn'}">{cloudLabel(item.cloudState)}{cloudDetail(item.cloudDetail) ? ' — ' + cloudDetail(item.cloudDetail) : ''}</span>
+            {@const cloud = cloudView(item.cloudState, item.cloudDetail)}
+            <span class="whitespace-pre-wrap select-text {cloud.tone === 'bad' ? 'text-bad' : cloud.tone === 'ok' ? 'text-ok' : 'text-warn'}">{cloud.label}{cloud.reason ? ' — ' + cloud.reason : ''}</span>
           {/if}
           {#if item.error}
             <span class="text-muted">{t('Error')}</span>

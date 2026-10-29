@@ -25,6 +25,8 @@ use crate::util::now_ms;
 
 const SCRAPE_INTERVAL_SECS: u64 = 300;
 const PEER_CONNECT_TIMEOUT: Duration = Duration::from_secs(5);
+const PEER_IDLE_TIMEOUT: Duration = Duration::from_secs(150);
+const PEER_KEEP_ALIVE: Duration = Duration::from_secs(60);
 const PUBLIC_TRACKERS_FILE: &str = "public-trackers.txt";
 const PUBLIC_TRACKERS_MAX_AGE: Duration = Duration::from_secs(24 * 3600);
 
@@ -296,7 +298,8 @@ async fn new_session(cfg: &EngineConfig, port: u16) -> Result<Arc<Session>> {
             proxy_url: (!cfg.proxy.trim().is_empty()).then(|| cfg.proxy.trim().to_string()),
             peer_opts: Some(PeerConnectionOptions {
                 connect_timeout: Some(PEER_CONNECT_TIMEOUT),
-                ..Default::default()
+                read_write_timeout: Some(PEER_IDLE_TIMEOUT),
+                keep_alive_interval: Some(PEER_KEEP_ALIVE),
             }),
             ..Default::default()
         }),
@@ -308,6 +311,7 @@ async fn new_session(cfg: &EngineConfig, port: u16) -> Result<Arc<Session>> {
         allowlist_url: cfg.allowlist.as_deref().and_then(file_url),
         trackers,
         peer_limit: Some(cfg.peer_limit.max(10) as usize),
+        runtime_worker_threads: Some(disk_threads()),
         disable_local_service_discovery: !cfg.lsd,
         disable_trackers: cfg.disable_trackers,
         ipv4_only: cfg.ipv4_only,
@@ -321,6 +325,13 @@ async fn new_session(cfg: &EngineConfig, port: u16) -> Result<Arc<Session>> {
         ..Default::default()
     };
     Session::new_with_opts(cfg.default_dir.clone(), opts).await
+}
+
+fn disk_threads() -> usize {
+    std::thread::available_parallelism()
+        .map(|n| n.get() * 2)
+        .unwrap_or(8)
+        .clamp(8, 32)
 }
 
 fn read_tracker_list(text: &str) -> Vec<String> {

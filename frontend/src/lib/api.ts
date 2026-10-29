@@ -81,6 +81,7 @@ export const api = {
   toolsStatus: () => invoke<ToolStatus>('tools_status'),
   updateYtdlp: () => invoke<string>('update_ytdlp'),
   installFfmpeg: () => invoke<void>('install_ffmpeg'),
+  installDeno: () => invoke<string>('install_deno'),
   checkUpdates: () => invoke<UpdateReport>('check_updates'),
   diskSpace: (path?: string | null) => invoke<{ free: number; total: number }>('disk_space', { path }),
   reloadIpFilter: () => invoke<FilterStatus>('reload_ip_filter'),

@@ -690,6 +690,20 @@ pub struct MandatoryStatus {
 }
 
 static MANDATORY: std::sync::Mutex<Option<MandatoryStatus>> = std::sync::Mutex::new(None);
+static STARTUP_CHECKED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn startup_check_done() {
+    STARTUP_CHECKED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+pub async fn wait_for_startup_check() {
+    for _ in 0..900 {
+        if STARTUP_CHECKED.load(std::sync::atomic::Ordering::SeqCst) {
+            return;
+        }
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+    }
+}
 
 pub fn mandatory_status() -> Option<MandatoryStatus> {
     MANDATORY.lock().ok()?.clone()

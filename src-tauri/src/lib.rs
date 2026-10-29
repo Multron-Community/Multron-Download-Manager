@@ -115,6 +115,7 @@ pub fn run() {
                     if !cfg!(debug_assertions) || updates::test_mode() {
                         selfupdate::mandatory_update(&mgr2.app, &mgr2.api_client).await;
                     }
+                    selfupdate::startup_check_done();
                     loop {
                         tokio::time::sleep(std::time::Duration::from_secs(6 * 3600)).await;
                         let info = updates::check_app(&mgr2.api_client).await;
@@ -173,6 +174,7 @@ pub fn run() {
             commands::save_settings,
             commands::tools_status,
             commands::update_ytdlp,
+            commands::install_deno,
             commands::install_ffmpeg,
             commands::check_updates,
             commands::disk_space,

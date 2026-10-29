@@ -589,10 +589,80 @@
     placeOverlay();
   }
 
+  const IDLE_MS = 2500;
+  let mini = null;
+  let miniTarget = null;
+  let miniTimer = 0;
+
+  function fullscreenHost() {
+    const host = document.fullscreenElement;
+    return host && host.tagName !== 'VIDEO' ? host : null;
+  }
+
+  function fullscreenVideo(host) {
+    if (host.matches?.(REDDIT_PLAYER)) return host;
+    const videos = [...host.querySelectorAll('video')];
+    return videos.find((v) => !v.paused) || videos[0] || null;
+  }
+
+  function wakeMini() {
+    if (!mini) return;
+    mini.classList.remove('multron-idle');
+    clearTimeout(miniTimer);
+    miniTimer = setTimeout(() => {
+      if (mini && !mini.matches(':hover') && !mini.querySelector('.multron-menu.open')) mini.classList.add('multron-idle');
+    }, IDLE_MS);
+  }
+
+  function updateMini() {
+    const host = enabled && fullscreenEnabled && dismissed !== location.href && miniDismissed !== location.href ? fullscreenHost() : null;
+    miniTarget = host ? fullscreenVideo(host) : null;
+    if (!host || !miniTarget) {
+      clearTimeout(miniTimer);
+      mini?.remove();
+      mini = null;
+      return;
+    }
+    if (!mini) {
+      mini = document.createElement('div');
+      mini.className = 'multron-mini';
+      mini.appendChild(qualityButton('', (q) => miniTarget && sendItem(videoItem(miniTarget), q)));
+      const button = mini.querySelector('.multron-btn');
+      button.title = 'Download with Multron Download Manager';
+      button.setAttribute('aria-label', 'Download with Multron Download Manager');
+      const close = document.createElement('button');
+      close.className = 'multron-mini-close';
+      close.type = 'button';
+      close.title = 'Hide in fullscreen on this page (turn it off everywhere in Multron Download Manager: Settings → Browser Integration)';
+      close.setAttribute('aria-label', 'Hide in fullscreen on this page');
+      close.textContent = '×';
+      close.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        miniDismissed = location.href;
+        refresh();
+      });
+      mini.appendChild(close);
+      mini.addEventListener('mouseleave', wakeMini);
+    }
+    if (mini.parentElement !== host) {
+      host.appendChild(mini);
+      wakeMini();
+    }
+  }
+
+  for (const type of ['mousemove', 'pointerdown', 'keydown', 'touchstart']) {
+    addEventListener(type, wakeMini, { passive: true, capture: true });
+  }
+  document.addEventListener('fullscreenchange', () => refresh());
+
   let enabled = true;
+  let fullscreenEnabled = true;
+  let miniDismissed = null;
   function refresh() {
+    updateMini();
     updateOverlay();
-    const kind = !enabled || dismissed === location.href ? null : filePage() ? 'file' : mediaPage() && !overlay ? 'media' : null;
+    const kind = !enabled || dismissed === location.href || document.fullscreenElement ? null : filePage() ? 'file' : mediaPage() && !overlay ? 'media' : null;
     if (kind) {
       showFab(kind);
       updateFabLabel();
@@ -808,7 +878,14 @@
 
   chrome.runtime.sendMessage({ type: 'settings' }).then((s) => {
     enabled = s?.mediaButton !== false;
+    fullscreenEnabled = s?.fullscreenButton !== false;
     refresh();
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area !== 'local') return;
+      if (changes.mediaButton) enabled = changes.mediaButton.newValue !== false;
+      if (changes.fullscreenButton) fullscreenEnabled = changes.fullscreenButton.newValue !== false;
+      if (changes.mediaButton || changes.fullscreenButton) refresh();
+    });
     setInterval(refresh, 1000);
 
     const skip = String(s?.skipDomains || '')

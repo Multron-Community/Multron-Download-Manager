@@ -144,6 +144,8 @@ pub struct DownloadRecord {
     pub cloud_state: String,
     #[serde(default)]
     pub cloud_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cloud_before: Option<(String, Option<String>)>,
     #[serde(default)]
     pub queue_order: i64,
     #[serde(default)]

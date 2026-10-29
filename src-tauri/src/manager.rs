@@ -49,6 +49,16 @@ struct Running {
     last_tick: Instant,
     ema: f64,
     handle: Option<tauri::async_runtime::JoinHandle<()>>,
+    media_attempt: Option<(CancellationToken, u32)>,
+    progress_base: u64,
+    progress_total: Option<u64>,
+    peak: u64,
+}
+
+async fn remove_scratch(files: &[PathBuf]) {
+    for f in files {
+        let _ = tokio::fs::remove_file(f).await;
+    }
 }
 
 struct Entry {
@@ -303,8 +313,7 @@ impl Manager {
                     rec.hash_state = HashState::Pending;
                 }
                 if rec.cloud_state == "scanning" {
-                    rec.cloud_state.clear();
-                    rec.cloud_detail = None;
+                    crate::manager::automation::end_cloud(&mut rec, None);
                 }
                 if rec.queue_order == 0 {
                     rec.queue_order = rec.created_at;
@@ -984,6 +993,10 @@ impl Manager {
                 last_tick: Instant::now(),
                 ema: 0.0,
                 handle: None,
+                media_attempt: None,
+                progress_base: 0,
+                progress_total: None,
+                peak: 0,
             });
             (e.rec.kind, limiter)
         }) else {
@@ -1256,6 +1269,7 @@ impl Manager {
             e.live.phase = Some("downloading".into());
             if let Some(r) = e.run.as_mut() {
                 r.progress = Some(progress.clone());
+                r.peak = 0;
                 r.last_received = 0;
                 r.last_tick = Instant::now();
             }
@@ -1441,62 +1455,11 @@ impl Manager {
         if ffmpeg.is_none() && crate::media::ffmpeg_auto_install() {
             self.with_entry(id, |e| e.live.phase = Some("installing FFmpeg".into()));
             self.dirty.store(true, Ordering::Relaxed);
-            let app = self.app.clone();
-            let this = self.clone();
-            let id2 = id.to_string();
-            let last = Mutex::new((0u64, Instant::now()));
             let installed = self
                 .tools
-                .install_ffmpeg(
-                    move |p: ToolProgress| {
-                        let speed = {
-                            let mut l = last.lock();
-                            let secs = l.1.elapsed().as_secs_f64();
-                            if secs >= 0.2 {
-                                let s = (p.downloaded.saturating_sub(l.0) as f64 / secs) as u64;
-                                *l = (p.downloaded, Instant::now());
-                                Some(s)
-                            } else {
-                                None
-                            }
-                        };
-                        this.with_entry(&id2, |e| {
-                            e.live.tool_name = Some("FFmpeg".into());
-                            e.live.tool_downloaded = p.downloaded;
-                            e.live.tool_total = p.total;
-                            e.live.phase = Some(
-                                if p.done {
-                                    "extracting FFmpeg"
-                                } else {
-                                    "installing FFmpeg"
-                                }
-                                .into(),
-                            );
-                            if p.done {
-                                e.live.speed = 0;
-                                e.live.eta = None;
-                            } else if let Some(s) = speed {
-                                e.live.speed = s;
-                                e.live.eta = p
-                                    .total
-                                    .filter(|_| s > 0)
-                                    .map(|t| t.saturating_sub(p.downloaded) / s);
-                            }
-                        });
-                        this.dirty.store(true, Ordering::Relaxed);
-                        let _ = app.emit(EVT_TOOLS, p);
-                    },
-                    &cancel,
-                )
+                .install_ffmpeg(self.tool_progress(id, "FFmpeg"), &cancel)
                 .await;
-            self.with_entry(id, |e| {
-                e.live.tool_name = None;
-                e.live.tool_downloaded = 0;
-                e.live.tool_total = None;
-                e.live.speed = 0;
-                e.live.eta = None;
-                e.live.phase = Some("preparing".into());
-            });
+            self.tool_finished(id);
             if cancel.is_cancelled() {
                 return Ok(false);
             }
@@ -1507,6 +1470,34 @@ impl Manager {
                     self.toast(
                         "warning",
                         format!("FFmpeg could not be installed, so the video is saved in a lower quality: {e:#}"),
+                    );
+                }
+            }
+        }
+        let mut js_runtime = self.tools.deno_location();
+        if js_runtime.is_none() && media::is_youtube(&rec.url) && media::deno_auto_install() {
+            self.with_entry(id, |e| e.live.phase = Some("installing Deno".into()));
+            self.dirty.store(true, Ordering::Relaxed);
+            let installed = self
+                .tools
+                .install_deno(self.tool_progress(id, "Deno"), &cancel)
+                .await;
+            self.tool_finished(id);
+            if cancel.is_cancelled() {
+                return Ok(false);
+            }
+            match installed {
+                Ok(v) => {
+                    tracing::info!("Deno {v} installed for YouTube");
+                    js_runtime = self.tools.deno_location();
+                }
+                Err(e) => {
+                    tracing::warn!("Deno install failed: {e:#}");
+                    self.toast(
+                        "warning",
+                        format!(
+                            "Deno could not be installed, so YouTube may download slowly: {e:#}"
+                        ),
                     );
                 }
             }
@@ -1576,14 +1567,61 @@ impl Manager {
             embed_metadata: settings.embed_metadata,
             embed_thumbnail: settings.embed_thumbnail,
             filename: media.filename.clone(),
+            js_runtime,
+            local_info: None,
         };
+        let mut base = base;
         let has_cookies = base.cookies_file.is_some() || !base.cookies_browser.trim().is_empty();
         let youtube = media::is_youtube(&rec.url);
-        let attempts: Vec<bool> = match (has_cookies, youtube) {
+        let mut attempts: Vec<bool> = match (has_cookies, youtube) {
             (false, _) => vec![false],
             (true, true) => vec![false, true],
             (true, false) => vec![true, false],
         };
+        let mut scratch: Vec<PathBuf> = Vec::new();
+        if !media.playlist && !youtube {
+            let mut first = base.clone();
+            if !attempts[0] {
+                first.cookies_file = None;
+                first.cookies_browser = String::new();
+            }
+            match self
+                .clone()
+                .fetch_media_direct(id, &first, &cancel, &mut scratch)
+                .await
+            {
+                Ok(Some(info)) => {
+                    base.local_info = Some(info);
+                    attempts = vec![attempts[0]];
+                }
+                Ok(None) => {}
+                Err(_) if cancel.is_cancelled() => {
+                    remove_scratch(&scratch).await;
+                    return Ok(false);
+                }
+                Err(e) => {
+                    tracing::info!("downloading {} with yt-dlp instead: {e:#}", rec.url);
+                    remove_scratch(&scratch).await;
+                    scratch.clear();
+                }
+            }
+            self.with_entry(id, |e| {
+                if let Some(r) = e.run.as_mut() {
+                    r.progress = None;
+                    r.progress_base = 0;
+                    r.progress_total = None;
+                }
+                e.rec.segments.clear();
+                e.live.phase = Some(
+                    if base.local_info.is_some() {
+                        "merging"
+                    } else {
+                        "preparing"
+                    }
+                    .into(),
+                );
+            });
+        }
         let mut result = Ok(false);
         for (n, with_cookies) in attempts.iter().copied().enumerate() {
             let mut job = base.clone();
@@ -1591,77 +1629,127 @@ impl Manager {
                 job.cookies_file = None;
                 job.cookies_browser = String::new();
             }
-            let this = self.clone();
-            let id2 = id.to_string();
-            let media = media.clone();
-            let mut last_index: Option<u32> = None;
-            let mut completed_bytes: u64 = 0;
-            let mut last_downloaded: u64 = 0;
-            result = media::run(job, cancel.clone(), move |ev| {
-                this.with_entry(&id2, |e| match ev {
-                    MediaEvent::Progress {
-                        downloaded,
-                        total,
-                        speed,
-                        eta,
-                        index,
-                        count,
-                    } => {
-                        if index != last_index || downloaded < last_downloaded {
-                            completed_bytes += last_downloaded;
-                            last_index = index;
-                        }
-                        last_downloaded = downloaded;
-                        e.rec.downloaded = downloaded;
-                        e.rec.total = total;
-                        e.live.speed = speed.unwrap_or(0);
-                        e.live.eta = eta;
-                        e.live.item_index = index;
-                        e.live.item_count = count;
-                        e.live.phase = Some("downloading".into());
-                        e.live.connections = e.rec.threads;
-                    }
-                    MediaEvent::Phase(p) => {
-                        e.live.phase = Some(p);
-                        e.live.speed = 0;
-                        e.live.eta = None;
-                    }
-                    MediaEvent::Title(t) => {
-                        if !media.playlist && !t.is_empty() {
-                            e.rec.name = t;
-                        }
-                    }
-                    MediaEvent::Destination(path) => {
-                        if let Some(m) = e.rec.media.as_mut() {
-                            let p = path.to_string_lossy().into_owned();
-                            if !m.partials.contains(&p) {
-                                m.partials.push(p);
-                            }
-                        }
-                    }
-                    MediaEvent::File(path) => {
-                        if let Some(m) = e.rec.media.as_mut() {
-                            m.files.push(path.to_string_lossy().into_owned());
-                        }
-                        if !media.playlist {
-                            if let Some(n) = path.file_name() {
-                                e.rec.name = n.to_string_lossy().into_owned();
-                                e.rec.category = util::category_for(&e.rec.name);
-                            }
-                            if let Some(parent) = path.parent() {
-                                e.rec.dir = parent.to_string_lossy().into_owned();
-                            }
-                            if let Ok(meta) = std::fs::metadata(&path) {
-                                e.rec.total = Some(meta.len());
-                                e.rec.downloaded = meta.len();
-                            }
-                        }
+            loop {
+                let attempt = cancel.child_token();
+                job.fragments = self.record(id).map(|r| r.threads).unwrap_or(job.fragments);
+                let fragments = job.fragments;
+                self.with_entry(id, |e| {
+                    if let Some(r) = e.run.as_mut() {
+                        r.media_attempt = Some((attempt.clone(), fragments));
                     }
                 });
-                this.dirty.store(true, Ordering::Relaxed);
-            })
-            .await;
-            let _ = completed_bytes;
+                let this = self.clone();
+                let id2 = id.to_string();
+                let media = media.clone();
+                let mut last_index: Option<u32> = None;
+                let mut totals = media::MediaTotals::default();
+                let mut meter = media::SpeedMeter::default();
+                let local = job.local_info.is_some();
+                result = media::run(job.clone(), attempt.clone(), move |ev| {
+                    this.with_entry(&id2, |e| match ev {
+                        MediaEvent::Progress {
+                            downloaded,
+                            total,
+                            estimate,
+                            speed,
+                            eta,
+                            index,
+                            count,
+                        } => {
+                            if index != last_index {
+                                totals = media::MediaTotals::default();
+                                meter = media::SpeedMeter::default();
+                                last_index = index;
+                            }
+                            if local {
+                                e.live.phase = Some("merging".into());
+                                return;
+                            }
+                            let (shown, size) = totals.update(downloaded, total, estimate);
+                            e.rec.downloaded = shown;
+                            e.rec.total = size;
+                            let measured = meter.sample(shown);
+                            e.live.speed = if measured > 0 {
+                                measured
+                            } else {
+                                speed.unwrap_or(0)
+                            };
+                            e.live.eta = match size {
+                                Some(t) if e.live.speed > 0 => {
+                                    Some(t.saturating_sub(shown) / e.live.speed)
+                                }
+                                _ => eta,
+                            };
+                            e.live.item_index = index;
+                            e.live.item_count = count;
+                            e.live.phase = Some("downloading".into());
+                            e.live.connections = e.rec.threads;
+                        }
+                        MediaEvent::Size(size) => {
+                            if !media.playlist {
+                                totals.set_exact(size);
+                            }
+                        }
+                        MediaEvent::Phase(p) => {
+                            e.live.phase = Some(p);
+                            e.live.speed = 0;
+                            e.live.eta = None;
+                        }
+                        MediaEvent::Title(t) => {
+                            if !media.playlist && !t.is_empty() {
+                                e.rec.name = t;
+                            }
+                        }
+                        MediaEvent::Destination(path) => {
+                            if let Some(m) = e.rec.media.as_mut() {
+                                let p = path.to_string_lossy().into_owned();
+                                if !m.partials.contains(&p) {
+                                    m.partials.push(p);
+                                }
+                            }
+                        }
+                        MediaEvent::File(path) => {
+                            if let Some(m) = e.rec.media.as_mut() {
+                                m.files.push(path.to_string_lossy().into_owned());
+                            }
+                            if !media.playlist {
+                                if let Some(n) = path.file_name() {
+                                    e.rec.name = n.to_string_lossy().into_owned();
+                                    e.rec.category = util::category_for(&e.rec.name);
+                                }
+                                if let Some(parent) = path.parent() {
+                                    e.rec.dir = parent.to_string_lossy().into_owned();
+                                }
+                                match e.rec.total {
+                                    Some(t) if e.rec.downloaded > 0 => e.rec.downloaded = t,
+                                    _ => {
+                                        if let Ok(meta) = std::fs::metadata(&path) {
+                                            e.rec.total = Some(meta.len());
+                                            e.rec.downloaded = meta.len();
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    });
+                    this.dirty.store(true, Ordering::Relaxed);
+                })
+                .await;
+                self.with_entry(id, |e| {
+                    if let Some(r) = e.run.as_mut() {
+                        r.media_attempt = None;
+                    }
+                });
+                if matches!(result, Ok(false)) && attempt.is_cancelled() && !cancel.is_cancelled() {
+                    tracing::info!(
+                        "restarting {} with {} connections",
+                        rec.url,
+                        self.record(id).map(|r| r.threads).unwrap_or(0)
+                    );
+                    continue;
+                }
+                break;
+            }
             let retry = match &result {
                 Err(e) if n + 1 < attempts.len() => {
                     let text = format!("{e:#}");
@@ -1688,6 +1776,7 @@ impl Manager {
                 e.live.phase = Some("preparing".into());
             });
         }
+        remove_scratch(&scratch).await;
         match result {
             Err(e) if !has_cookies && media::needs_sign_in(&format!("{e:#}")) => {
                 bail!(
@@ -2222,15 +2311,38 @@ impl Manager {
         self.emit_now();
     }
 
-    pub fn set_threads(&self, id: &str, threads: u32) -> Result<()> {
+    pub fn set_threads(self: &Arc<Self>, id: &str, threads: u32) -> Result<()> {
         let threads = threads.clamp(1, MAX_THREADS);
-        self.with_entry(id, |e| {
-            e.rec.threads = threads;
-            if let Some(p) = e.run.as_ref().and_then(|r| r.progress.as_ref()) {
-                p.set_target(threads);
-            }
-        })
-        .ok_or_else(|| anyhow!("download not found"))?;
+        let relaunch = self
+            .with_entry(id, |e| {
+                e.rec.threads = threads;
+                if let Some(p) = e.run.as_ref().and_then(|r| r.progress.as_ref()) {
+                    p.set_target(threads);
+                }
+                e.run
+                    .as_ref()
+                    .and_then(|r| r.media_attempt.as_ref())
+                    .is_some_and(|(_, n)| *n != threads)
+            })
+            .ok_or_else(|| anyhow!("download not found"))?;
+        if relaunch {
+            let this = self.clone();
+            let id = id.to_string();
+            tauri::async_runtime::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(1500)).await;
+                this.with_entry(&id, |e| {
+                    let wanted = e.rec.threads;
+                    if let Some((attempt, n)) =
+                        e.run.as_ref().and_then(|r| r.media_attempt.as_ref())
+                    {
+                        let downloading = e.live.phase.as_deref() == Some("downloading");
+                        if *n != wanted && wanted == threads && downloading {
+                            attempt.cancel();
+                        }
+                    }
+                });
+            });
+        }
         self.mark_dirty();
         Ok(())
     }
@@ -2387,8 +2499,9 @@ impl Manager {
             };
             run.last_received = received;
             run.last_tick = now;
-            e.rec.downloaded = p.downloaded();
-            if let Some(t) = p.total() {
+            run.peak = run.peak.max(run.progress_base + p.downloaded());
+            e.rec.downloaded = run.peak;
+            if let Some(t) = run.progress_total.or(p.total()) {
                 e.rec.total = Some(t);
             }
             e.rec.segments = p.segments();
@@ -2462,6 +2575,7 @@ impl Manager {
     }
 
     async fn keep_tools_updated(self: Arc<Self>) {
+        crate::selfupdate::wait_for_startup_check().await;
         loop {
             let mut retry_soon = false;
             if self.settings().media_enabled {
@@ -2487,12 +2601,170 @@ impl Manager {
                                 retry_soon = true;
                             }
                         }
+                        let app = self.app.clone();
+                        if !self.media_busy() {
+                            match self
+                                .tools
+                                .update_deno(move |p| {
+                                    let _ = app.emit(EVT_TOOLS, p);
+                                })
+                                .await
+                            {
+                                Ok(true) => tracing::info!("Deno updated"),
+                                Ok(false) => {}
+                                Err(e) => {
+                                    tracing::info!("Deno update skipped: {e:#}");
+                                    retry_soon = true;
+                                }
+                            }
+                        }
                     }
                 }
             }
             let wait = if retry_soon { 30 * 60 } else { 6 * 3600 };
             tokio::time::sleep(Duration::from_secs(wait)).await;
         }
+    }
+
+    async fn fetch_media_direct(
+        self: Arc<Self>,
+        id: &str,
+        job: &MediaJob,
+        cancel: &CancellationToken,
+        scratch: &mut Vec<PathBuf>,
+    ) -> Result<Option<PathBuf>> {
+        self.with_entry(id, |e| e.live.phase = Some("metadata".into()));
+        self.dirty.store(true, Ordering::Relaxed);
+        let mut info = tokio::select! {
+            _ = cancel.cancelled() => bail!("cancelled"),
+            i = media::extract(job) => i?,
+        };
+        let Some(formats) = media::direct_formats(&info) else {
+            return Ok(None);
+        };
+        let settings = self.settings();
+        let client = self.http.read().clone();
+        let limiter = self
+            .with_entry(id, |e| e.run.as_ref().map(|r| r.limiter.clone()))
+            .flatten()
+            .ok_or_else(|| anyhow!("download not found"))?;
+        let mut probed = Vec::new();
+        for format in &formats {
+            let url = format["url"].as_str().unwrap_or_default().to_string();
+            let headers = media::format_headers(format);
+            let probe = engine::probe(&client, &url, &headers).await?;
+            probed.push((format, headers, probe));
+        }
+        let sizes: Option<Vec<u64>> = probed.iter().map(|(_, _, p)| p.total).collect();
+        let overall = sizes.as_ref().map(|s| s.iter().sum::<u64>());
+        let mut base = 0u64;
+        let mut local = Vec::new();
+        for (format, headers, probe) in probed {
+            let format_id = format["format_id"].as_str().unwrap_or("0").to_string();
+            let safe: String = format_id
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { '_' })
+                .collect();
+            let part = job.dir.join(format!(".{id}.f{safe}.mdmpart"));
+            scratch.push(part.clone());
+            if part.exists() {
+                let _ = tokio::fs::remove_file(&part).await;
+            }
+            if let Some(total) = probe.total {
+                let p = part.clone();
+                tokio::task::spawn_blocking(move || engine::ensure_space(&p, total)).await??;
+            }
+            let threads = self.record(id).map(|r| r.threads).unwrap_or(1);
+            let progress = Progress::new(probe.total, &[], threads);
+            self.with_entry(id, |e| {
+                e.rec.segments.clear();
+                e.rec.downloaded = base;
+                e.rec.total = overall.or(probe.total);
+                e.live.phase = Some("downloading".into());
+                if let Some(r) = e.run.as_mut() {
+                    r.progress = Some(progress.clone());
+                    r.progress_base = base;
+                    r.progress_total = overall;
+                    r.peak = base;
+                    r.last_received = 0;
+                    r.last_tick = Instant::now();
+                }
+            });
+            let done = engine::run(Arc::new(engine::Job {
+                client: client.clone(),
+                url: probe.final_url.clone(),
+                headers,
+                part: part.clone(),
+                resumable: probe.resumable,
+                progress,
+                cancel: cancel.clone(),
+                limiters: vec![self.global_limit.clone(), limiter.clone()],
+                retries: settings.retries,
+                transform: None,
+                if_range: probe.validator.clone(),
+            }))
+            .await?;
+            if !done {
+                bail!("cancelled");
+            }
+            base += probe.total.unwrap_or(0);
+            local.push((format_id, part));
+        }
+        media::use_local_files(&mut info, &local);
+        let info_path = job.dir.join(format!(".{id}.mdminfo.json"));
+        scratch.push(info_path.clone());
+        tokio::fs::write(&info_path, serde_json::to_vec(&info)?).await?;
+        Ok(Some(info_path))
+    }
+
+    fn tool_progress(self: &Arc<Self>, id: &str, name: &'static str) -> impl Fn(ToolProgress) {
+        let app = self.app.clone();
+        let this = self.clone();
+        let id = id.to_string();
+        let last = Mutex::new((0u64, Instant::now()));
+        move |p: ToolProgress| {
+            let speed = {
+                let mut l = last.lock();
+                let secs = l.1.elapsed().as_secs_f64();
+                if secs >= 0.2 {
+                    let s = (p.downloaded.saturating_sub(l.0) as f64 / secs) as u64;
+                    *l = (p.downloaded, Instant::now());
+                    Some(s)
+                } else {
+                    None
+                }
+            };
+            this.with_entry(&id, |e| {
+                e.live.tool_name = Some(name.into());
+                e.live.tool_downloaded = p.downloaded;
+                e.live.tool_total = p.total;
+                let step = if p.done { "extracting" } else { "installing" };
+                e.live.phase = Some(format!("{step} {name}"));
+                if p.done {
+                    e.live.speed = 0;
+                    e.live.eta = None;
+                } else if let Some(s) = speed {
+                    e.live.speed = s;
+                    e.live.eta = p
+                        .total
+                        .filter(|_| s > 0)
+                        .map(|t| t.saturating_sub(p.downloaded) / s);
+                }
+            });
+            this.dirty.store(true, Ordering::Relaxed);
+            let _ = app.emit(EVT_TOOLS, p);
+        }
+    }
+
+    fn tool_finished(&self, id: &str) {
+        self.with_entry(id, |e| {
+            e.live.tool_name = None;
+            e.live.tool_downloaded = 0;
+            e.live.tool_total = None;
+            e.live.speed = 0;
+            e.live.eta = None;
+            e.live.phase = Some("preparing".into());
+        });
     }
 
     async fn auto_update_ytdlp(self: Arc<Self>) {
@@ -2572,6 +2844,7 @@ fn blank_record(url: &str) -> DownloadRecord {
         scan_state: String::new(),
         scan_detail: None,
         cloud_state: String::new(),
+        cloud_before: None,
         cloud_detail: None,
         queue_order: now_ms(),
         media: None,

@@ -158,6 +158,7 @@ async fn ping(State(mgr): State<Arc<Manager>>, headers: HeaderMap) -> Json<Value
         "askSha256": s.ask_sha256,
         "mediaEnabled": s.media_enabled,
         "torrentEnabled": s.torrent_enabled,
+        "fullscreenButton": s.fullscreen_video_button,
     }))
 }
 

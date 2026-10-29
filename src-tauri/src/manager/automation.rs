@@ -835,8 +835,7 @@ impl Manager {
         );
         for id in &ids {
             self.with_entry(id, |e| {
-                e.rec.cloud_state = "scanning".into();
-                e.rec.cloud_detail = None;
+                begin_cloud(&mut e.rec);
             });
         }
         self.emit_cloud(ALL_REPORT);
@@ -880,19 +879,11 @@ impl Manager {
                     .get(id)
                     .map(|list| crate::cloudscan::summarize(list, limit_mb));
                 this.with_entry(id, |e| match &result {
-                    Some(r) => {
-                        e.rec.cloud_state = r.state.into();
-                        e.rec.cloud_detail = Some(r.detail.clone());
+                    Some(r) => end_cloud(&mut e.rec, Some((r.state, r.detail.clone()))),
+                    None if summary.state == "error" => {
+                        end_cloud(&mut e.rec, Some(("error", summary.detail.clone())))
                     }
-                    None => {
-                        e.rec.cloud_state = if summary.state == "error" {
-                            "error".into()
-                        } else {
-                            String::new()
-                        };
-                        e.rec.cloud_detail =
-                            (summary.state == "error").then(|| summary.detail.clone());
-                    }
+                    None => end_cloud(&mut e.rec, None),
                 });
             }
             let done = this
@@ -917,7 +908,7 @@ impl Manager {
             match summary.state {
                 "threat" | "suspicious" => this.notify(None, "threat", &detail),
                 "clean" | "unknown" => this.notify(None, "scan_cloud", &this.word("no_threat")),
-                _ => this.notify(None, "scan_cloud", &detail),
+                state => this.notify(None, "scan_cloud", &this.word(unfinished_word(state))),
             }
             this.mark_dirty();
             this.save_needed.store(true, Ordering::Relaxed);
@@ -1035,8 +1026,7 @@ impl Manager {
         );
         self.emit_cloud(&id);
         self.with_entry(&id, |e| {
-            e.rec.cloud_state = "scanning".into();
-            e.rec.cloud_detail = None;
+            begin_cloud(&mut e.rec);
         });
         self.mark_dirty();
         let this = self.clone();
@@ -1103,9 +1093,10 @@ impl Manager {
                     format!("{} (inside the archive)", summary.detail)
                 };
             }
+            let nothing_checked = stopped && done == 0;
             this.with_entry(&id, |e| {
-                e.rec.cloud_state = summary.state.into();
-                e.rec.cloud_detail = Some(summary.detail.clone());
+                let result = (!nothing_checked).then(|| (summary.state, summary.detail.clone()));
+                end_cloud(&mut e.rec, result);
             });
             match summary.state {
                 "threat" | "suspicious" => {
@@ -1120,11 +1111,11 @@ impl Manager {
                     );
                 }
                 "locked" => {}
-                _ => {
+                state => {
                     this.notify(
                         Some(&id),
                         "scan_cloud",
-                        &format!("{name}: {}", summary.detail),
+                        &format!("{name}: {}", this.word(unfinished_word(state))),
                     );
                 }
             }
@@ -1432,9 +1423,104 @@ impl Manager {
     }
 }
 
+const KEPT_RESULTS: &[&str] = &[
+    "clean",
+    "unknown",
+    "partial",
+    "threat",
+    "suspicious",
+    "locked",
+];
+
+fn unfinished_word(state: &str) -> &'static str {
+    match state {
+        "partial" => "partly_scanned",
+        "error" => "scan_not_finished",
+        _ => "not_scanned",
+    }
+}
+
+pub(crate) fn begin_cloud(rec: &mut DownloadRecord) {
+    if rec.cloud_state != "scanning" {
+        rec.cloud_before = Some((rec.cloud_state.clone(), rec.cloud_detail.clone()));
+    }
+    rec.cloud_state = "scanning".into();
+    rec.cloud_detail = None;
+}
+
+pub(crate) fn end_cloud(rec: &mut DownloadRecord, result: Option<(&str, String)>) {
+    let before = rec.cloud_before.take();
+    let failed = result.as_ref().is_none_or(|(state, _)| *state == "error");
+    if failed {
+        if let Some((state, detail)) = before.filter(|(s, _)| KEPT_RESULTS.contains(&s.as_str())) {
+            rec.cloud_state = state;
+            rec.cloud_detail = detail;
+            return;
+        }
+    }
+    match result {
+        Some((state, detail)) => {
+            rec.cloud_state = state.into();
+            rec.cloud_detail = Some(detail);
+        }
+        None => {
+            rec.cloud_state.clear();
+            rec.cloud_detail = None;
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_failed_or_stopped_scan_keeps_the_last_result() {
+        let mut rec = blank_record("https://example.com/setup.exe");
+        rec.cloud_state = "clean".into();
+        rec.cloud_detail = Some("Multron Cloud".into());
+        begin_cloud(&mut rec);
+        assert_eq!(rec.cloud_state, "scanning");
+        end_cloud(
+            &mut rec,
+            Some(("error", "Multron Cloud: HTTP error: 502 Bad Gateway".into())),
+        );
+        assert_eq!(rec.cloud_state, "clean");
+        assert_eq!(rec.cloud_detail.as_deref(), Some("Multron Cloud"));
+        assert!(rec.cloud_before.is_none());
+
+        begin_cloud(&mut rec);
+        end_cloud(&mut rec, None);
+        assert_eq!(rec.cloud_state, "clean");
+
+        begin_cloud(&mut rec);
+        end_cloud(
+            &mut rec,
+            Some(("threat", "Multron Cloud: setup.exe: Trojan".into())),
+        );
+        assert_eq!(rec.cloud_state, "threat");
+
+        let mut fresh = blank_record("https://example.com/new.exe");
+        begin_cloud(&mut fresh);
+        end_cloud(&mut fresh, Some(("error", "server error".into())));
+        assert_eq!(fresh.cloud_state, "error");
+        let mut stopped = blank_record("https://example.com/other.exe");
+        begin_cloud(&mut stopped);
+        end_cloud(&mut stopped, None);
+        assert_eq!(stopped.cloud_state, "");
+    }
+
+    #[test]
+    fn a_restart_during_a_scan_brings_the_last_result_back() {
+        let mut rec = blank_record("https://example.com/setup.exe");
+        rec.cloud_state = "unknown".into();
+        begin_cloud(&mut rec);
+        let saved: DownloadRecord =
+            serde_json::from_str(&serde_json::to_string(&rec).unwrap()).unwrap();
+        let mut loaded = saved;
+        end_cloud(&mut loaded, None);
+        assert_eq!(loaded.cloud_state, "unknown");
+    }
 
     #[test]
     fn cloud_reports_count_results_and_keep_problems() {

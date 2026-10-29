@@ -35,6 +35,8 @@ fn english(key: &str) -> &'static str {
         "scan_cloud" => "Multron Cloud scan finished",
         "no_threat" => "No threat found",
         "not_scanned" => "Not scanned",
+        "partly_scanned" => "Partly scanned",
+        "scan_not_finished" => "Scan not finished",
         "suspicious" => "Suspicious file",
         _ => "",
     }
@@ -112,6 +114,10 @@ mod tests {
                 "hash_bad",
                 "pair",
                 "threat",
+                "no_threat",
+                "not_scanned",
+                "partly_scanned",
+                "scan_not_finished",
             ] {
                 assert!(
                     dict.contains_key(english(key)),

@@ -4,7 +4,7 @@ use std::fs::{File, OpenOptions};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use anyhow::{anyhow, bail, Context, Result};
 use futures_util::StreamExt;
@@ -23,6 +23,10 @@ use crate::util;
 use limiter::Limiter;
 
 const MIN_SPLIT: u64 = 256 * 1024;
+const MIN_STEAL: u64 = 64 * 1024;
+const RATE_AFTER: f64 = 1.0;
+const MIN_GAIN_SECS: f64 = 0.5;
+const STALL_AFTER: Duration = Duration::from_secs(3);
 const MIN_INITIAL_SEGMENT: u64 = 1024 * 1024;
 const FLUSH_AT: usize = 1024 * 1024;
 
@@ -33,6 +37,46 @@ struct Seg {
     pos: u64,
     written: u64,
     busy: bool,
+    since: Option<(Instant, u64)>,
+}
+
+fn seg_rate(s: &Seg, now: Instant, after: f64) -> Option<f64> {
+    let (at, from) = s.since?;
+    let secs = now.duration_since(at).as_secs_f64();
+    (secs >= after).then(|| s.pos.saturating_sub(from) as f64 / secs)
+}
+
+fn split_plan(segs: &[Seg], now: Instant, thief: Option<f64>) -> Option<(usize, u64)> {
+    let measured: Vec<f64> = segs
+        .iter()
+        .filter(|s| s.busy)
+        .filter_map(|s| seg_rate(s, now, RATE_AFTER))
+        .collect();
+    let typical =
+        (!measured.is_empty()).then(|| measured.iter().sum::<f64>() / measured.len() as f64);
+    let taker = thief.or(typical);
+    segs.iter()
+        .enumerate()
+        .filter(|(_, s)| s.busy)
+        .filter_map(|(i, s)| {
+            let remaining = s.end.saturating_sub(s.pos);
+            let own = seg_rate(s, now, RATE_AFTER).or(typical);
+            let keep = match (own, taker) {
+                (Some(v), Some(t)) if v + t > 0.0 => {
+                    if remaining < 2 * MIN_STEAL || remaining as f64 / v.max(1.0) < MIN_GAIN_SECS {
+                        return None;
+                    }
+                    ((remaining as f64 * v / (v + t)) as u64)
+                        .clamp(MIN_STEAL, remaining - MIN_STEAL)
+                }
+                _ if remaining >= 2 * MIN_SPLIT => remaining / 2,
+                _ => return None,
+            };
+            let eta = remaining as f64 / own.unwrap_or(1.0).max(1.0);
+            Some((i, s.pos + keep, eta))
+        })
+        .max_by(|a, b| a.2.total_cmp(&b.2))
+        .map(|(i, at, _)| (i, at))
 }
 
 pub struct Progress {
@@ -56,6 +100,7 @@ impl Progress {
                 pos: s.pos.clamp(s.start, s.end),
                 written: s.pos.clamp(s.start, s.end),
                 busy: false,
+                since: None,
             })
             .collect();
         Arc::new(Self {
@@ -125,6 +170,7 @@ impl Progress {
                 pos: start,
                 written: start,
                 busy: false,
+                since: None,
             });
         }
     }
@@ -137,44 +183,41 @@ impl Progress {
     }
 
     fn has_work(&self) -> bool {
-        self.segs.lock().iter().any(|s| {
-            (!s.busy && s.pos < s.end) || (s.busy && s.end.saturating_sub(s.pos) >= 2 * MIN_SPLIT)
-        })
+        let segs = self.segs.lock();
+        segs.iter().any(|s| !s.busy && s.pos < s.end)
+            || split_plan(&segs, Instant::now(), None).is_some()
     }
 
-    fn claim(&self) -> Option<usize> {
+    fn claim(&self, speed: Option<f64>) -> Option<usize> {
         let mut segs = self.segs.lock();
+        let now = Instant::now();
         if let Some(i) = segs.iter().position(|s| !s.busy && s.pos < s.end) {
             segs[i].busy = true;
+            segs[i].since = Some((now, segs[i].pos));
             return Some(i);
         }
-        let (victim, remaining) = segs
-            .iter()
-            .enumerate()
-            .filter(|(_, s)| s.busy)
-            .map(|(i, s)| (i, s.end.saturating_sub(s.pos)))
-            .max_by_key(|(_, r)| *r)?;
-        if remaining < 2 * MIN_SPLIT {
-            return None;
-        }
-        let mid = segs[victim].pos + remaining / 2;
+        let (victim, at) = split_plan(&segs, now, speed)?;
         let end = segs[victim].end;
-        segs[victim].end = mid;
+        segs[victim].end = at;
         segs.push(Seg {
-            start: mid,
+            start: at,
             end,
-            pos: mid,
-            written: mid,
+            pos: at,
+            written: at,
             busy: true,
+            since: Some((now, at)),
         });
         Some(segs.len() - 1)
     }
 
-    fn release(&self, idx: usize) {
+    fn release(&self, idx: usize) -> Option<f64> {
         let mut segs = self.segs.lock();
         let s = &mut segs[idx];
+        let speed = seg_rate(s, Instant::now(), MIN_GAIN_SECS);
         s.busy = false;
+        s.since = None;
         s.pos = s.written;
+        speed
     }
 
     fn should_retire(&self) -> bool {
@@ -543,15 +586,16 @@ enum SegEnd {
 
 async fn worker(job: Arc<Job>, file: Arc<File>, cancel: CancellationToken) -> Result<()> {
     let mut errors = 0u32;
+    let mut speed = None;
     loop {
         if cancel.is_cancelled() {
             return Ok(());
         }
-        let Some(idx) = job.progress.claim() else {
+        let Some(idx) = job.progress.claim(speed) else {
             return Ok(());
         };
         let outcome = fetch_segment(&job, &file, idx, &cancel).await;
-        job.progress.release(idx);
+        speed = job.progress.release(idx).or(speed);
         match outcome {
             Ok(SegEnd::Done) => errors = 0,
             Ok(SegEnd::Cancelled) | Ok(SegEnd::Retired) => return Ok(()),
@@ -652,11 +696,21 @@ async fn fetch_segment(
     };
     let mut stream = resp.bytes_stream();
     let result: Result<SegEnd> = async {
+        let mut quiet_since = Instant::now();
+        let mut others = job.progress.received.load(Ordering::Relaxed);
         loop {
             let item = tokio::select! {
                 biased;
                 _ = cancel.cancelled() => return Ok(SegEnd::Cancelled),
                 i = stream.next() => i,
+                _ = tokio::time::sleep_until((quiet_since + STALL_AFTER).into()) => {
+                    let now = job.progress.received.load(Ordering::Relaxed);
+                    if now > others {
+                        bail!("connection stalled while the others kept downloading");
+                    }
+                    quiet_since = Instant::now();
+                    continue;
+                }
             };
             let Some(chunk) = item else {
                 let segs = job.progress.segs.lock();
@@ -680,9 +734,12 @@ async fn fetch_segment(
             if let Some(t) = &job.transform {
                 t.apply(&mut writer.buf[appended_at..], chunk_offset);
             }
-            job.progress
+            others = job
+                .progress
                 .received
-                .fetch_add(take as u64, Ordering::Relaxed);
+                .fetch_add(take as u64, Ordering::Relaxed)
+                + take as u64;
+            quiet_since = Instant::now();
             if writer.buf.len() >= FLUSH_AT || reached_end {
                 writer.flush()?;
             }
@@ -854,9 +911,9 @@ mod tests {
         p.init_segments(64 * 1024 * 1024);
         assert_eq!(p.segs.lock().len(), 4);
         for _ in 0..4 {
-            assert!(p.claim().is_some());
+            assert!(p.claim(None).is_some());
         }
-        let stolen = p.claim().unwrap();
+        let stolen = p.claim(None).unwrap();
         let segs = p.segs.lock();
         assert_eq!(segs.len(), 5);
         assert_eq!(segs[stolen].end - segs[stolen].start, 8 * 1024 * 1024);
@@ -865,12 +922,175 @@ mod tests {
     }
 
     #[test]
+    fn slow_connections_hand_most_of_their_work_to_fast_ones() {
+        let now = Instant::now();
+        let started = now - Duration::from_secs(2);
+        let seg = |start: u64, pos: u64, end: u64| Seg {
+            start,
+            end,
+            pos,
+            written: pos,
+            busy: true,
+            since: Some((started, start)),
+        };
+        let mb = 1024 * 1024;
+        let segs = [
+            seg(0, 4 * mb, 8 * mb),
+            seg(8 * mb, 8 * mb + mb / 8, 16 * mb),
+        ];
+        let (victim, at) = split_plan(&segs, now, Some(4.0 * mb as f64)).unwrap();
+        assert_eq!(victim, 1);
+        let kept = at - segs[1].pos;
+        assert!(kept < mb / 4, "slow connection kept {kept} bytes");
+
+        let segs = [seg(0, 6 * mb, 8 * mb)];
+        let (_, at) = split_plan(&segs, now, Some(64.0 * 1024.0)).unwrap();
+        assert!(at - segs[0].pos > 2 * mb * 9 / 10);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn a_stalled_connection_does_not_hold_up_the_download() {
+        let took = paced_download(4 << 20, |n| {
+            if n == 2 {
+                Pace::StallAfter(64 << 10)
+            } else {
+                Pace::Rate(0)
+            }
+        })
+        .await;
+        assert!(took < Duration::from_secs(15), "took {took:?}");
+    }
+
+    #[test]
     fn small_files_get_one_segment() {
         let p = Progress::new(Some(1000), &[], 8);
         p.init_segments(1000);
         assert_eq!(p.segs.lock().len(), 1);
-        assert!(p.claim().is_some());
-        assert!(p.claim().is_none());
+        assert!(p.claim(None).is_some());
+        assert!(p.claim(None).is_none());
+    }
+
+    #[derive(Clone, Copy)]
+    enum Pace {
+        Rate(u64),
+        StallAfter(u64),
+    }
+
+    async fn paced_server(data: Arc<Vec<u8>>, pace: fn(usize) -> Pace) -> String {
+        use axum::http::{HeaderMap as H, StatusCode as S};
+        use std::sync::atomic::AtomicUsize;
+        let requests = Arc::new(AtomicUsize::new(0));
+        let app = axum::Router::new().route(
+            "/file.bin",
+            axum::routing::get(move |headers: H| {
+                let data = data.clone();
+                let n = requests.fetch_add(1, Ordering::SeqCst);
+                async move {
+                    let total = data.len() as u64;
+                    let (a, b) = headers
+                        .get("range")
+                        .and_then(|v| v.to_str().ok())
+                        .and_then(|v| v.strip_prefix("bytes="))
+                        .and_then(|v| v.split_once('-'))
+                        .and_then(|(a, b)| {
+                            Some((
+                                a.parse::<u64>().ok()?,
+                                b.parse::<u64>().unwrap_or(total - 1).min(total - 1),
+                            ))
+                        })
+                        .unwrap_or((0, total - 1));
+                    let pace = if n == 0 { Pace::Rate(0) } else { pace(n) };
+                    const STEP: u64 = 16 * 1024;
+                    let body = futures_util::stream::unfold(a, move |at| {
+                        let data = data.clone();
+                        async move {
+                            if at > b {
+                                return None;
+                            }
+                            let next = (at + STEP).min(b + 1);
+                            match pace {
+                                Pace::Rate(0) => {}
+                                Pace::Rate(r) => {
+                                    tokio::time::sleep(Duration::from_secs_f64(
+                                        (next - at) as f64 / r as f64,
+                                    ))
+                                    .await
+                                }
+                                Pace::StallAfter(n) if at >= a + n => {
+                                    std::future::pending::<()>().await
+                                }
+                                Pace::StallAfter(_) => {}
+                            }
+                            let chunk =
+                                bytes::Bytes::copy_from_slice(&data[at as usize..next as usize]);
+                            Some((Ok::<_, std::convert::Infallible>(chunk), next))
+                        }
+                    });
+                    (
+                        S::PARTIAL_CONTENT,
+                        [
+                            ("content-range", format!("bytes {a}-{b}/{total}")),
+                            ("content-length", (b + 1 - a).to_string()),
+                        ],
+                        axum::body::Body::from_stream(body),
+                    )
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        format!("http://{addr}/file.bin")
+    }
+
+    async fn paced_download(total: usize, pace: fn(usize) -> Pace) -> Duration {
+        let data: Vec<u8> = (0..total as u32)
+            .map(|i| (i.wrapping_mul(2654435761) >> 11) as u8)
+            .collect();
+        let expected = {
+            use sha2::Digest;
+            hex::encode(sha2::Sha256::digest(&data))
+        };
+        let url = paced_server(Arc::new(data), pace).await;
+        let client = Client::builder()
+            .http1_only()
+            .read_timeout(Duration::from_secs(30))
+            .build()
+            .unwrap();
+        let p = probe(&client, &url, &HeaderMap::new()).await.unwrap();
+        let dir = std::env::temp_dir().join(format!("mdm-paced-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let part = dir.join("file.bin.part");
+        let mut job = local_job(&url, part.clone(), p.total.unwrap(), None);
+        Arc::get_mut(&mut job).unwrap().client = client;
+        Arc::get_mut(&mut job).unwrap().retries = 4;
+        let started = std::time::Instant::now();
+        assert!(run(job).await.unwrap());
+        let took = started.elapsed();
+        assert_eq!(sha256(&part), expected);
+        let _ = std::fs::remove_dir_all(&dir);
+        took
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    #[ignore = "timing benchmark"]
+    async fn bench_paced_connections() {
+        let slow = paced_download(16 << 20, |n| {
+            Pace::Rate(if n % 4 == 1 { 64 << 10 } else { 2 << 20 })
+        })
+        .await;
+        println!("one slow connection in four: {slow:?}");
+        let stalled = paced_download(16 << 20, |n| {
+            if n == 2 {
+                Pace::StallAfter(64 << 10)
+            } else {
+                Pace::Rate(2 << 20)
+            }
+        })
+        .await;
+        println!("one stalled connection: {stalled:?}");
+        let even = paced_download(16 << 20, |_| Pace::Rate(2 << 20)).await;
+        println!("even connections: {even:?}");
     }
 
     fn sha256(path: &std::path::Path) -> String {

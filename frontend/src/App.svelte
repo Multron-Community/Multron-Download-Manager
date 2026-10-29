@@ -114,10 +114,10 @@
 
 {#if app.mandatoryUpdate}
   {@const u = app.mandatoryUpdate}
-  {@const p = app.toolProgress && app.toolProgress.tool.startsWith('Multron Download Manager') ? app.toolProgress : null}
+  {@const p = app.appUpdateProgress}
   {@const pct = p?.total ? Math.min(100, Math.round((p.downloaded / p.total) * 100)) : null}
-  <div class="fixed inset-0 z-[80] bg-bg/95 backdrop-blur-md flex items-center justify-center p-6" role="alertdialog" aria-live="polite">
-    <div class="w-full max-w-[420px] bg-menu border border-line rounded-[16px] shadow-2xl p-6 flex flex-col items-center text-center gap-4">
+  <div class="fixed inset-0 z-[80] bg-bg flex items-center justify-center p-6" role="alertdialog" aria-live="polite">
+    <div class="w-full max-w-[420px] min-h-[250px] bg-menu border border-line rounded-[16px] shadow-2xl p-6 flex flex-col items-center justify-center text-center gap-4">
       <img src="/logo.png" alt="" class="w-16 h-16 rounded-full" />
       {#if u.phase === 'failed'}
         <h2 class="text-[16px] font-semibold">{t('Multron Download Manager could not update')}</h2>
@@ -129,11 +129,11 @@
         </div>
       {:else}
         <h2 class="text-[16px] font-semibold">{t('Updating Multron Download Manager to {version}', { version: u.version })}</h2>
-        <p class="text-[12.5px] text-muted">{u.phase === 'installing' ? t('Installing the update. Multron Download Manager restarts by itself.') : t('Downloading the update. This only takes a moment.')}</p>
+        <p class="text-[12.5px] text-muted leading-[18px] min-h-[36px] flex items-center">{u.phase === 'installing' ? t('Installing the update. Multron Download Manager restarts by itself.') : t('Downloading the update. This only takes a moment.')}</p>
         <div class="w-full h-[6px] bg-line rounded-full overflow-hidden">
           <div class="h-full bg-accent rounded-full transition-[width] duration-300 {pct === null || u.phase === 'installing' ? 'progress-live w-full' : ''}" style={pct !== null && u.phase !== 'installing' ? `width: ${pct}%` : ''}></div>
         </div>
-        <p class="text-[11.5px] text-dim mono">{u.phase === 'installing' || !p ? '' : (pct !== null ? pct + '% · ' : '') + bytes(p.downloaded) + (p.total ? ' / ' + bytes(p.total) : '') + ' · ' + speed(p.speed)}{u.error ? ' · ' + t('Retrying…') : ''}</p>
+        <p class="text-[11.5px] text-dim mono tabular-nums h-[16px] leading-[16px] w-full truncate">{u.phase === 'installing' || !p ? '' : (pct !== null ? pct + '% · ' : '') + bytes(p.downloaded) + (p.total ? ' / ' + bytes(p.total) : '') + ' · ' + speed(p.speed)}{u.error ? ' · ' + t('Retrying…') : ''}</p>
       {/if}
     </div>
   </div>

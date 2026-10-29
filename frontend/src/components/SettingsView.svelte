@@ -190,11 +190,11 @@
     }
   }
 
-  async function runTool(name: 'ytdlp' | 'ffmpeg') {
+  async function runTool(name: 'ytdlp' | 'ffmpeg' | 'deno') {
     toolBusy = name;
     const ok = await app.run(
-      () => (name === 'ytdlp' ? api.updateYtdlp() : api.installFfmpeg()),
-      name === 'ytdlp' ? 'yt-dlp is up to date' : 'FFmpeg installed'
+      () => (name === 'ytdlp' ? api.updateYtdlp() : name === 'deno' ? api.installDeno() : api.installFfmpeg()),
+      name === 'ytdlp' ? 'yt-dlp is up to date' : name === 'deno' ? 'Deno installed' : 'FFmpeg installed'
     );
     toolBusy = null;
     if (ok) {
@@ -514,6 +514,7 @@
             {@render row('Bridge port', 'Must match the port set in the extension (default 6801).')}
             <input type="number" min="1024" max="65535" class="field !w-[120px] mt-1" bind:value={draft.bridgePort} />
             {@render toggle('Confirm downloads sent from the browser', 'Opens the New Task dialog first so you can pick the folder, quality or SHA-256.', draft.confirmBrowserDownloads, (v) => (draft!.confirmBrowserDownloads = v))}
+            {@render toggle('Show the download icon in fullscreen videos', 'On by default. When a video plays in fullscreen, the browser extension shows a small download icon in the top-left corner. Its × button hides it on that page only; turn this off to hide it everywhere.', draft.fullscreenVideoButton, (v) => (draft!.fullscreenVideoButton = v))}
             {@render group('Install the extension')}
             <p class="text-[12px] text-muted leading-relaxed">
               {t('The setup assistant finds your browsers, prepares the extension folder, opens the extensions page and connects the extension automatically.')}
@@ -587,6 +588,14 @@
                   </button>
                 {:else if !tools?.ffmpegAvailable}
                   <span class="mono text-[11px] text-muted">sudo apt install ffmpeg · sudo dnf install ffmpeg · sudo pacman -S ffmpeg</span>
+                {/if}
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span>Deno {tools?.denoVersion ? `· ${tools.denoVersion} · ` : '· '}{tools?.denoAvailable ? (tools.denoManaged ? t('installed by Multron Download Manager') : t('found on this system')) : t('not installed — installed with the first YouTube video, needed for full YouTube speed')}</span>
+                {#if tools?.denoAutoInstall}
+                  <button class="btn" disabled={toolBusy !== null} onclick={() => runTool('deno')}>
+                    <Icon name="down" size={13} />{toolBusy === 'deno' ? t('Downloading…') : tools?.denoManaged ? t('Reinstall') : t('Install')}
+                  </button>
                 {/if}
               </div>
               {#if app.toolProgress}
@@ -767,6 +776,7 @@
                 <tr><td><input type="checkbox" class="check" bind:checked={draft.torrentEnabled} /></td><td>{t('Built in')}</td><td>{t('BitTorrent engine (librqbit)')}</td><td>9</td><td>{app.stats.torrent ? '● Running' : 'Idle'}</td></tr>
                 <tr><td><input type="checkbox" class="check" bind:checked={draft.mediaEnabled} /></td><td>{t('External')}</td><td>{t('Media downloader (yt-dlp)')}</td><td>{tools?.ytdlpVersion ?? '—'}</td><td>{tools?.ytdlpInstalled ? 'Installed' : 'On demand'}</td></tr>
                 <tr><td><input type="checkbox" class="check" checked={tools?.ffmpegAvailable ?? false} disabled /></td><td>{t('External')}</td><td>{t('FFmpeg (merging / audio)')}</td><td>—</td><td>{tools?.ffmpegAvailable ? 'Available' : 'Missing'}</td></tr>
+                <tr><td><input type="checkbox" class="check" checked={tools?.denoAvailable ?? false} disabled /></td><td>{t('External')}</td><td>{t('Deno (YouTube challenges)')}</td><td>{tools?.denoVersion ?? '—'}</td><td>{tools?.denoAvailable ? 'Available' : 'On demand'}</td></tr>
                 <tr><td><input type="checkbox" class="check" bind:checked={draft.bridgeEnabled} /></td><td>{t('Built in')}</td><td>{t('Browser extension bridge')}</td><td>{app.version}</td><td>{bridge?.running ? '● Listening' : 'Off'}</td></tr>
                 <tr><td><input type="checkbox" class="check" bind:checked={draft.torrentScrape} /></td><td>{t('Built in')}</td><td>{t('Tracker scraper')}</td><td>{app.version}</td><td>{draft.torrentScrape ? 'On' : 'Off'}</td></tr>
                 <tr><td><input type="checkbox" class="check" bind:checked={draft.torrentUpnp} /></td><td>{t('Built in')}</td><td>{t('Universal Plug and Play (UPnP)')}</td><td>—</td><td>{draft.torrentUpnp ? 'On' : 'Off'}</td></tr>

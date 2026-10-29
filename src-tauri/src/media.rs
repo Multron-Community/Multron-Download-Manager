@@ -30,6 +30,7 @@ fn download_client() -> &'static reqwest::Client {
 }
 
 const YTDLP_REPO: &str = "yt-dlp/yt-dlp";
+const DENO_REPO: &str = "denoland/deno";
 
 #[derive(Serialize, Clone, Debug, Default)]
 #[serde(rename_all = "camelCase")]
@@ -41,6 +42,10 @@ pub struct ToolStatus {
     pub ffmpeg_path: Option<String>,
     pub ffmpeg_managed: bool,
     pub ffmpeg_auto_install: bool,
+    pub deno_available: bool,
+    pub deno_managed: bool,
+    pub deno_version: Option<String>,
+    pub deno_auto_install: bool,
 }
 
 #[derive(Serialize, Clone, Debug)]
@@ -135,6 +140,35 @@ fn ffmpeg_build_asset() -> Option<&'static str> {
     }
 }
 
+fn deno_asset() -> Option<&'static str> {
+    if cfg!(all(windows, target_arch = "x86_64")) {
+        Some("deno-x86_64-pc-windows-msvc.zip")
+    } else if cfg!(all(target_os = "macos", target_arch = "aarch64")) {
+        Some("deno-aarch64-apple-darwin.zip")
+    } else if cfg!(all(target_os = "macos", target_arch = "x86_64")) {
+        Some("deno-x86_64-apple-darwin.zip")
+    } else if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
+        Some("deno-x86_64-unknown-linux-gnu.zip")
+    } else if cfg!(all(target_os = "linux", target_arch = "aarch64")) {
+        Some("deno-aarch64-unknown-linux-gnu.zip")
+    } else {
+        None
+    }
+}
+
+pub fn deno_auto_install() -> bool {
+    deno_asset().is_some()
+}
+
+fn parse_deno_version(out: &str) -> Option<String> {
+    out.lines()
+        .next()?
+        .strip_prefix("deno ")?
+        .split_whitespace()
+        .next()
+        .map(str::to_string)
+}
+
 pub fn ffmpeg_auto_install() -> bool {
     cfg!(target_os = "macos") || ffmpeg_build_asset().is_some()
 }
@@ -184,6 +218,11 @@ impl Tools {
             None
         };
         let ffmpeg = self.ffmpeg_location();
+        let deno = self.deno_location();
+        let deno_version = match &deno {
+            Some(p) => deno_version_of(p).await,
+            None => None,
+        };
         ToolStatus {
             ytdlp_installed: installed,
             ytdlp_version: version,
@@ -192,7 +231,86 @@ impl Tools {
             ffmpeg_path: ffmpeg.map(|p| p.to_string_lossy().into_owned()),
             ffmpeg_managed: self.managed_ffmpeg().is_file(),
             ffmpeg_auto_install: ffmpeg_auto_install(),
+            deno_available: deno.is_some(),
+            deno_managed: self.managed_deno().is_file(),
+            deno_version,
+            deno_auto_install: deno_auto_install(),
         }
+    }
+
+    fn managed_deno(&self) -> PathBuf {
+        self.dir.join(exe("deno"))
+    }
+
+    pub fn deno_location(&self) -> Option<PathBuf> {
+        let managed = self.managed_deno();
+        if managed.is_file() {
+            return Some(managed);
+        }
+        util::which("deno")
+    }
+
+    pub async fn install_deno(
+        &self,
+        on_progress: impl Fn(ToolProgress),
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        let _guard = tokio::select! {
+            g = self.install_lock.lock() => g,
+            _ = cancel.cancelled() => bail!("cancelled"),
+        };
+        self.fetch_deno(&on_progress, cancel).await
+    }
+
+    pub async fn update_deno(&self, on_progress: impl Fn(ToolProgress)) -> Result<bool> {
+        let managed = self.managed_deno();
+        if !managed.is_file() {
+            return Ok(false);
+        }
+        let latest = latest_release_tag(&self.client, DENO_REPO).await?;
+        let installed = deno_version_of(&managed).await;
+        if installed.as_deref() == Some(latest.trim_start_matches('v')) {
+            return Ok(false);
+        }
+        let _guard = self.install_lock.lock().await;
+        self.fetch_deno(&on_progress, &CancellationToken::new())
+            .await?;
+        Ok(true)
+    }
+
+    async fn fetch_deno(
+        &self,
+        on_progress: &impl Fn(ToolProgress),
+        cancel: &CancellationToken,
+    ) -> Result<String> {
+        let Some(asset) = deno_asset() else {
+            bail!("Deno is not available for this system; install it from deno.com")
+        };
+        tokio::fs::create_dir_all(&self.dir).await?;
+        let archive = self.dir.join("deno.zip.download");
+        let url = format!("https://github.com/{DENO_REPO}/releases/latest/download/{asset}");
+        self.fetch_to(&url, &archive, "Deno", on_progress, cancel)
+            .await?;
+        let staged = self.dir.join(format!("{}.new", exe("deno")));
+        let (from, to) = (archive.clone(), staged.clone());
+        let extracted = tokio::task::spawn_blocking(move || extract_deno(&from, &to)).await;
+        let _ = tokio::fs::remove_file(&archive).await;
+        extracted??;
+        let version = match deno_version_of(&staged).await {
+            Some(v) => v,
+            None => {
+                let _ = tokio::fs::remove_file(&staged).await;
+                bail!("the downloaded Deno does not run on this system")
+            }
+        };
+        let target = self.managed_deno();
+        if target.exists() {
+            tokio::fs::remove_file(&target)
+                .await
+                .context("Deno is in use; it will be updated later")?;
+        }
+        tokio::fs::rename(&staged, &target).await?;
+        Ok(version)
     }
 
     pub async fn ytdlp_version(&self) -> Option<String> {
@@ -499,6 +617,7 @@ impl Tools {
         cmd.args(["--encoding", "utf-8"]);
         cmd.args(["-J", "--flat-playlist", "--no-warnings", "--skip-download"]);
         apply_cookies(&mut cmd, cookies, browser);
+        apply_js_runtime(&mut cmd, self.deno_location().as_deref());
         cmd.arg("--").arg(url);
         cmd.stdin(Stdio::null())
             .stdout(Stdio::piped())
@@ -713,6 +832,43 @@ fn parse_info(v: &Value) -> MediaInfo {
     }
 }
 
+async fn deno_version_of(path: &Path) -> Option<String> {
+    let mut cmd = Command::new(path);
+    cmd.arg("--version").stdin(Stdio::null());
+    hide_console(&mut cmd);
+    let out = tokio::time::timeout(Duration::from_secs(20), cmd.output())
+        .await
+        .ok()?
+        .ok()?;
+    out.status
+        .success()
+        .then(|| parse_deno_version(&String::from_utf8_lossy(&out.stdout)))
+        .flatten()
+}
+
+fn extract_deno(archive: &Path, dest: &Path) -> Result<()> {
+    let file = std::fs::File::open(archive)?;
+    let mut zip = zip::ZipArchive::new(file)?;
+    for i in 0..zip.len() {
+        let mut entry = zip.by_index(i)?;
+        if entry.is_dir() {
+            continue;
+        }
+        let name = entry.name()?.replace('\\', "/");
+        if name.rsplit('/').next() == Some(exe("deno").as_str()) {
+            let mut out = std::fs::File::create(dest)?;
+            std::io::copy(&mut entry, &mut out)?;
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                std::fs::set_permissions(dest, std::fs::Permissions::from_mode(0o755))?;
+            }
+            return Ok(());
+        }
+    }
+    bail!("deno was not found in the downloaded archive")
+}
+
 fn extract_ffmpeg(archive: &Path, dir: &Path) -> Result<()> {
     let file = std::fs::File::open(archive)?;
     let mut zip = zip::ZipArchive::new(file)?;
@@ -822,6 +978,163 @@ pub struct MediaJob {
     pub embed_metadata: bool,
     pub embed_thumbnail: bool,
     pub filename: Option<String>,
+    pub js_runtime: Option<PathBuf>,
+    pub local_info: Option<PathBuf>,
+}
+
+fn output_template(job: &MediaJob) -> String {
+    let named = job
+        .filename
+        .as_deref()
+        .map(output_name)
+        .filter(|n| !n.is_empty());
+    match (&named, job.playlist) {
+        (_, true) => {
+            "%(playlist_title|Playlist).120B/%(playlist_index)03d - %(title).150B [%(id)s].%(ext)s"
+                .to_string()
+        }
+        (Some(name), false) => format!("{name}.%(ext)s"),
+        (None, false) => "%(title).180B [%(id)s].%(ext)s".to_string(),
+    }
+}
+
+pub async fn extract(job: &MediaJob) -> Result<Value> {
+    let mut cmd = Command::new(&job.exe);
+    cmd.args([
+        "--encoding",
+        "utf-8",
+        "-J",
+        "--no-warnings",
+        "--no-playlist",
+    ])
+    .arg("-P")
+    .arg(&job.dir)
+    .args(["-o", output_template(job).as_str()]);
+    if let Some(ff) = &job.ffmpeg {
+        cmd.arg("--ffmpeg-location").arg(ff);
+    }
+    cmd.args(format_args(
+        &job.quality,
+        job.ffmpeg.is_some(),
+        &job.container,
+    ));
+    apply_cookies(&mut cmd, job.cookies_file.as_deref(), &job.cookies_browser);
+    apply_js_runtime(&mut cmd, job.js_runtime.as_deref());
+    cmd.arg("--").arg(&job.url);
+    cmd.stdin(Stdio::null())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .env("PYTHONIOENCODING", "utf-8")
+        .env("PYTHONUTF8", "1")
+        .kill_on_drop(true);
+    hide_console(&mut cmd);
+    let out = tokio::time::timeout(Duration::from_secs(90), cmd.output())
+        .await
+        .map_err(|_| anyhow!("yt-dlp took too long to answer"))??;
+    if !out.status.success() {
+        bail!(last_error(&String::from_utf8_lossy(&out.stderr)));
+    }
+    serde_json::from_slice(&out.stdout).context("yt-dlp returned invalid JSON")
+}
+
+pub fn direct_formats(info: &Value) -> Option<Vec<Value>> {
+    if info.get("_type").and_then(Value::as_str) == Some("playlist")
+        || info.get("is_live").and_then(Value::as_bool) == Some(true)
+    {
+        return None;
+    }
+    let picked: Vec<Value> = match info.get("requested_formats").and_then(Value::as_array) {
+        Some(list) if !list.is_empty() => list.clone(),
+        _ => vec![info.clone()],
+    };
+    let direct = |f: &Value| {
+        matches!(
+            f.get("protocol").and_then(Value::as_str),
+            Some("https" | "http")
+        ) && f
+            .get("url")
+            .and_then(Value::as_str)
+            .is_some_and(|u| u.starts_with("http"))
+            && f.get("format_id").and_then(Value::as_str).is_some()
+    };
+    picked.iter().all(direct).then_some(picked)
+}
+
+pub fn format_headers(format: &Value) -> reqwest::header::HeaderMap {
+    use reqwest::header::{HeaderMap, HeaderName, HeaderValue, COOKIE};
+    let mut headers = HeaderMap::new();
+    if let Some(map) = format.get("http_headers").and_then(Value::as_object) {
+        for (k, v) in map {
+            if let (Ok(name), Some(Ok(value))) = (
+                HeaderName::from_bytes(k.as_bytes()),
+                v.as_str().map(HeaderValue::from_str),
+            ) {
+                headers.insert(name, value);
+            }
+        }
+    }
+    if let Some(raw) = format.get("cookies").and_then(Value::as_str) {
+        const ATTRIBUTES: &[&str] = &[
+            "domain", "path", "expires", "max-age", "secure", "httponly", "samesite",
+        ];
+        let pairs: Vec<&str> = raw
+            .split(';')
+            .map(str::trim)
+            .filter(|part| {
+                part.split_once('=').is_some_and(|(k, _)| {
+                    !ATTRIBUTES.contains(&k.trim().to_ascii_lowercase().as_str())
+                })
+            })
+            .collect();
+        if let Ok(value) = HeaderValue::from_str(&pairs.join("; ")) {
+            if !pairs.is_empty() {
+                headers.insert(COOKIE, value);
+            }
+        }
+    }
+    headers
+}
+
+pub fn use_local_files(info: &mut Value, local: &[(String, PathBuf)]) {
+    let file_url = |p: &Path| url::Url::from_file_path(p).ok().map(|u| u.to_string());
+    let swap = |f: &mut Value| {
+        let id = f
+            .get("format_id")
+            .and_then(Value::as_str)
+            .map(str::to_string);
+        if let Some((_, path)) = local.iter().find(|(fid, _)| Some(fid) == id.as_ref()) {
+            if let Some(u) = file_url(path) {
+                f["url"] = Value::String(u);
+                if let Some(obj) = f.as_object_mut() {
+                    obj.remove("fragments");
+                    obj.remove("downloader_options");
+                }
+            }
+        }
+    };
+    for key in ["formats", "requested_formats"] {
+        if let Some(list) = info.get_mut(key).and_then(Value::as_array_mut) {
+            list.iter_mut().for_each(swap);
+        }
+    }
+    if info.get("requested_formats").is_none() {
+        swap(info);
+    }
+}
+
+fn youtube_split_args(url: &str, fragments: u32) -> &'static [&'static str] {
+    if fragments > 1 && is_youtube(url) {
+        &["--extractor-args", "youtube:formats=dashy"]
+    } else {
+        &[]
+    }
+}
+
+fn apply_js_runtime(cmd: &mut Command, runtime: Option<&Path>) {
+    if let Some(p) = runtime {
+        cmd.arg("--js-runtimes")
+            .arg(format!("deno:{}", p.to_string_lossy()));
+    }
 }
 
 #[derive(Debug, Clone)]
@@ -829,6 +1142,7 @@ pub enum MediaEvent {
     Progress {
         downloaded: u64,
         total: Option<u64>,
+        estimate: Option<u64>,
         speed: Option<u64>,
         eta: Option<u64>,
         index: Option<u32>,
@@ -836,8 +1150,84 @@ pub enum MediaEvent {
     },
     Phase(String),
     Title(String),
+    Size(u64),
     File(PathBuf),
     Destination(PathBuf),
+}
+
+#[derive(Default, Debug)]
+pub struct MediaTotals {
+    finished: u64,
+    part_seen: u64,
+    part_total: Option<u64>,
+    exact: Option<u64>,
+    shown: u64,
+    guess: Option<u64>,
+}
+
+impl MediaTotals {
+    pub fn set_exact(&mut self, size: u64) {
+        if size > 0 {
+            self.exact = Some(size);
+        }
+    }
+
+    pub fn update(
+        &mut self,
+        downloaded: u64,
+        total: Option<u64>,
+        estimate: Option<u64>,
+    ) -> (u64, Option<u64>) {
+        let part_done = match self.part_total {
+            Some(t) => t > 0 && self.part_seen >= t / 10 * 9,
+            None => self.part_seen > 0,
+        };
+        if part_done && downloaded < self.part_seen / 4 {
+            self.finished += self.part_total.unwrap_or(0).max(self.part_seen);
+            self.part_seen = 0;
+            self.part_total = None;
+        }
+        self.part_seen = self.part_seen.max(downloaded);
+        if let Some(t) = total {
+            self.part_total = Some(t.max(self.part_seen));
+        }
+        self.shown = self.shown.max(self.finished + self.part_seen);
+        let size = if let Some(e) = self.exact {
+            Some(e.max(self.shown))
+        } else if let Some(t) = self.part_total {
+            Some(self.finished + t)
+        } else {
+            let fresh = estimate
+                .filter(|e| *e > 0 && self.part_seen as f64 >= *e as f64 * 0.2)
+                .map(|e| self.finished + e.max(self.part_seen));
+            match (self.guess, fresh) {
+                (Some(g), _) if (self.shown as f64) < g as f64 * 0.98 => Some(g),
+                (_, Some(f)) => {
+                    let g = f.max(self.shown + self.shown / 50);
+                    self.guess = Some(g);
+                    Some(g)
+                }
+                (g, None) => g.map(|g| g.max(self.shown)),
+            }
+        };
+        (self.shown, size.filter(|t| *t >= self.shown))
+    }
+}
+
+pub fn exact_size(line: &str) -> Option<u64> {
+    let mut parts = line.splitn(3, '|');
+    let sizes: Vec<u64> = serde_json::from_str::<Vec<Value>>(parts.next()?.trim())
+        .unwrap_or_default()
+        .iter()
+        .filter_map(Value::as_u64)
+        .collect();
+    let formats = serde_json::from_str::<Vec<Value>>(parts.next()?.trim())
+        .map(|v| v.len())
+        .unwrap_or(0);
+    if formats > 0 {
+        return (sizes.len() == formats).then(|| sizes.iter().sum());
+    }
+    parts.next()?.trim().parse().ok().filter(|n| *n > 0)
 }
 
 const PROGRESS_PREFIX: &str = "[MDM]";
@@ -851,6 +1241,8 @@ fn video_sort(height: Option<u32>, container: &str) -> String {
         (None, false) => "res,ext:mp4:m4a".into(),
     }
 }
+
+const SIZED_VIDEO: &str = "bv*[filesize>0]+ba[filesize>0]/bv*+ba/b";
 
 fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> {
     let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
@@ -882,7 +1274,7 @@ fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> 
             }
             vec![
                 "-f".into(),
-                "bv*+ba/b".into(),
+                SIZED_VIDEO.into(),
                 "-S".into(),
                 video_sort(height, container),
                 "--merge-output-format".into(),
@@ -915,14 +1307,31 @@ fn parse_num(s: Option<&str>) -> Option<f64> {
         .filter(|v| v.is_finite() && *v >= 0.0)
 }
 
+fn post_phase(processor: &str) -> &'static str {
+    if processor.starts_with("Merger") {
+        "merging"
+    } else if ["ExtractAudio", "VideoConvertor", "VideoRemuxer"]
+        .iter()
+        .any(|p| processor.contains(p))
+    {
+        "converting"
+    } else if processor.contains("Metadata") {
+        "tagging"
+    } else if processor.contains("EmbedThumbnail") {
+        "thumbnail"
+    } else {
+        "finishing"
+    }
+}
+
 fn parse_progress(line: &str) -> Option<MediaEvent> {
     let rest = line.split_once(PROGRESS_PREFIX)?.1;
     let f: Vec<&str> = rest.split_whitespace().collect();
     let downloaded = parse_num(f.first().copied())? as u64;
-    let total = parse_num(f.get(1).copied()).or(parse_num(f.get(2).copied()));
     Some(MediaEvent::Progress {
         downloaded,
-        total: total.map(|t| t as u64),
+        total: parse_num(f.get(1).copied()).map(|t| t as u64),
+        estimate: parse_num(f.get(2).copied()).map(|t| t as u64),
         speed: parse_num(f.get(3).copied()).map(|v| v as u64),
         eta: parse_num(f.get(4).copied()).map(|v| v as u64),
         index: parse_num(f.get(5).copied()).map(|v| v as u32),
@@ -1011,6 +1420,7 @@ pub async fn merge(
             on_event(MediaEvent::Progress {
                 downloaded: size,
                 total: None,
+                estimate: None,
                 speed: None,
                 eta: None,
                 index: None,
@@ -1049,27 +1459,16 @@ pub async fn run(
 ) -> Result<bool> {
     let mut cmd = Command::new(&job.exe);
     cmd.args(["--encoding", "utf-8"]);
-    let named = job
-        .filename
-        .as_deref()
-        .map(output_name)
-        .filter(|n| !n.is_empty());
-    let template = match (&named, job.playlist) {
-        (_, true) => {
-            "%(playlist_title|Playlist).120B/%(playlist_index)03d - %(title).150B [%(id)s].%(ext)s"
-                .to_string()
-        }
-        (Some(name), false) => format!("{name}.%(ext)s"),
-        (None, false) => "%(title).180B [%(id)s].%(ext)s".to_string(),
-    };
-    cmd.args(["--newline", "--progress", "--no-colors", "--continue", "--no-mtime", "--windows-filenames"])
+    let template = output_template(&job);
+    cmd.args(["--newline", "--no-quiet", "--progress", "--no-colors", "--continue", "--no-mtime", "--windows-filenames"])
         .args(["--progress-template", &format!(
             "download:{PROGRESS_PREFIX} %(progress.downloaded_bytes)s %(progress.total_bytes)s %(progress.total_bytes_estimate)s %(progress.speed)s %(progress.eta)s %(info.playlist_index)s %(info.n_entries)s"
         )])
         .args(["--progress-template", "postprocess:MDMPP %(progress.postprocessor)s %(progress.status)s"])
         .args(["--print", "before_dl:MDMTITLE:%(title)s"])
+        .args(["--print", "before_dl:MDMSIZE:%(requested_formats.:.filesize)j|%(requested_formats.:.format_id)j|%(filesize)s"])
         .args(["--print", "after_move:MDMFILE:%(filepath)s"])
-        .args(["--concurrent-fragments", &job.fragments.clamp(1, 32).to_string()])
+        .args(["--concurrent-fragments", &job.fragments.clamp(1, crate::settings::MAX_THREADS).to_string()])
         .args(["--retries", "15", "--fragment-retries", "15", "--file-access-retries", "5"])
         .args(["--retry-sleep", "exp=1:15", "--retry-sleep", "fragment:exp=1:15", "--socket-timeout", "20"])
         .arg("-P")
@@ -1096,11 +1495,22 @@ pub async fn run(
             cmd.arg("--embed-thumbnail");
         }
     }
-    if job.rate_limit > 0 {
-        cmd.args(["--limit-rate", &format!("{}K", job.rate_limit)]);
+    match &job.local_info {
+        Some(info) => {
+            cmd.arg("--enable-file-urls")
+                .arg("--load-info-json")
+                .arg(info);
+        }
+        None => {
+            if job.rate_limit > 0 {
+                cmd.args(["--limit-rate", &format!("{}K", job.rate_limit)]);
+            }
+            apply_cookies(&mut cmd, job.cookies_file.as_deref(), &job.cookies_browser);
+            apply_js_runtime(&mut cmd, job.js_runtime.as_deref());
+            cmd.args(youtube_split_args(&job.url, job.fragments));
+            cmd.arg("--").arg(&job.url);
+        }
     }
-    apply_cookies(&mut cmd, job.cookies_file.as_deref(), &job.cookies_browser);
-    cmd.arg("--").arg(&job.url);
     cmd.stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
@@ -1141,23 +1551,23 @@ pub async fn run(
             on_event(ev);
         } else if let Some(title) = line.strip_prefix("MDMTITLE:") {
             on_event(MediaEvent::Title(title.trim().to_string()));
+        } else if let Some(size) = line.strip_prefix("MDMSIZE:") {
+            if let Some(n) = exact_size(size) {
+                on_event(MediaEvent::Size(n));
+            }
         } else if let Some(file) = line.strip_prefix("MDMFILE:") {
             on_event(MediaEvent::File(PathBuf::from(file.trim())));
         } else if let Some(pp) = line.strip_prefix("MDMPP ") {
-            let phase = if pp.starts_with("Merger") {
-                "merging"
-            } else if pp.contains("ExtractAudio") || pp.contains("VideoConvertor") {
-                "converting"
-            } else {
-                "tagging"
-            };
+            let phase = post_phase(pp);
             on_event(MediaEvent::Phase(phase.into()));
         } else if line.starts_with("[Merger]") {
             on_event(MediaEvent::Phase("merging".into()));
         } else if line.starts_with("[ExtractAudio]") || line.starts_with("[VideoConvertor]") {
             on_event(MediaEvent::Phase("converting".into()));
-        } else if line.starts_with("[Metadata]") || line.starts_with("[EmbedThumbnail]") {
+        } else if line.starts_with("[Metadata]") {
             on_event(MediaEvent::Phase("tagging".into()));
+        } else if line.starts_with("[EmbedThumbnail]") {
+            on_event(MediaEvent::Phase("thumbnail".into()));
         } else if let Some(dest) = line.strip_prefix("[download] Destination:") {
             on_event(MediaEvent::Destination(PathBuf::from(dest.trim())));
             on_event(MediaEvent::Phase("downloading".into()));
@@ -1245,6 +1655,7 @@ mod tests {
         assert_eq!(video_sort(None, "mkv"), "res,ext:mp4:m4a");
         let args = format_args("best", true, "mp4");
         assert!(args.contains(&"vcodec:h264,res,acodec:aac".to_string()));
+        assert!(args.contains(&"bv*[filesize>0]+ba[filesize>0]/bv*+ba/b".to_string()));
         assert_eq!(
             format_args("720", false, "mp4"),
             vec!["-f", "b[height<=720]/b"]
@@ -1280,6 +1691,104 @@ mod tests {
     }
 
     #[test]
+    fn video_size_comes_from_exact_sizes_only() {
+        let mut m = MediaTotals::default();
+        assert_eq!(m.update(20, None, Some(2_900_000)), (20, None));
+        assert_eq!(m.update(400, None, Some(1500)), (400, Some(1500)));
+        assert_eq!(m.update(300, None, Some(1200)), (400, Some(1500)));
+        assert_eq!(m.update(900, None, Some(1550)), (900, Some(1500)));
+        assert_eq!(m.update(1480, None, Some(1600)), (1480, Some(1600)));
+        assert_eq!(m.update(1550, None, Some(1600)), (1550, Some(1600)));
+
+        let mut exact = MediaTotals::default();
+        exact.set_exact(1000);
+        assert_eq!(exact.update(100, None, Some(9000)), (100, Some(1000)));
+        assert_eq!(exact.update(800, Some(800), None), (800, Some(1000)));
+        assert_eq!(exact.update(10, None, Some(50)), (810, Some(1000)));
+        assert_eq!(exact.update(200, Some(200), None), (1000, Some(1000)));
+
+        let mut parts = MediaTotals::default();
+        assert_eq!(parts.update(500, Some(500), None), (500, Some(500)));
+        assert_eq!(parts.update(20, Some(100), None), (520, Some(600)));
+        assert_eq!(parts.update(100, Some(100), None), (600, Some(600)));
+    }
+
+    #[test]
+    fn reads_exact_sizes_only_when_every_part_has_one() {
+        assert_eq!(exact_size("[700, 300]|[\"137\", \"140\"]|NA"), Some(1000));
+        assert_eq!(exact_size("[300]|[\"270\", \"140\"]|NA"), None);
+        assert_eq!(exact_size("NA|NA|4096"), Some(4096));
+        assert_eq!(exact_size("NA|NA|NA"), None);
+    }
+
+    #[test]
+    fn finds_videos_that_can_be_downloaded_with_several_connections() {
+        let merged = serde_json::json!({
+            "requested_formats": [
+                { "format_id": "hd", "protocol": "https", "url": "https://cdn.example/v.mp4" },
+                { "format_id": "a", "protocol": "https", "url": "https://cdn.example/a.m4a" }
+            ]
+        });
+        assert_eq!(direct_formats(&merged).map(|f| f.len()), Some(2));
+        let single = serde_json::json!({ "format_id": "720", "protocol": "https", "url": "https://cdn.example/v.mp4" });
+        assert_eq!(direct_formats(&single).map(|f| f.len()), Some(1));
+        let hls = serde_json::json!({ "format_id": "hls-1", "protocol": "m3u8_native", "url": "https://cdn.example/v.m3u8" });
+        assert!(direct_formats(&hls).is_none());
+        let live = serde_json::json!({ "format_id": "1", "protocol": "https", "url": "https://x/v", "is_live": true });
+        assert!(direct_formats(&live).is_none());
+        assert!(direct_formats(&serde_json::json!({ "_type": "playlist" })).is_none());
+    }
+
+    #[test]
+    fn hands_downloaded_parts_back_to_yt_dlp() {
+        let dir = std::env::temp_dir();
+        let video = dir.join("v.part");
+        let mut info = serde_json::json!({
+            "formats": [
+                { "format_id": "hd", "protocol": "https", "url": "https://cdn.example/v.mp4" },
+                { "format_id": "sd", "protocol": "https", "url": "https://cdn.example/s.mp4" }
+            ],
+            "requested_formats": [
+                { "format_id": "hd", "protocol": "https", "url": "https://cdn.example/v.mp4" }
+            ]
+        });
+        use_local_files(&mut info, &[("hd".into(), video.clone())]);
+        let expected = url::Url::from_file_path(&video).unwrap().to_string();
+        assert_eq!(info["formats"][0]["url"], expected.as_str());
+        assert_eq!(info["formats"][1]["url"], "https://cdn.example/s.mp4");
+        assert_eq!(info["requested_formats"][0]["url"], expected.as_str());
+
+        let headers = format_headers(&serde_json::json!({
+            "http_headers": { "User-Agent": "UA", "Referer": "https://site.example/" },
+            "cookies": "sid=abc; Domain=.site.example; Path=/; Secure; lang=en; Expires=123"
+        }));
+        assert_eq!(headers["user-agent"], "UA");
+        assert_eq!(headers["cookie"], "sid=abc; lang=en");
+    }
+
+    #[test]
+    fn splits_youtube_videos_into_parts_for_several_connections() {
+        let yt = "https://www.youtube.com/watch?v=1";
+        assert_eq!(
+            youtube_split_args(yt, 8),
+            &["--extractor-args", "youtube:formats=dashy"]
+        );
+        assert!(youtube_split_args(yt, 1).is_empty());
+        assert!(youtube_split_args("https://vimeo.com/1", 8).is_empty());
+    }
+
+    #[test]
+    fn reads_the_deno_version() {
+        assert_eq!(
+            parse_deno_version("deno 2.5.4 (stable, release, x86_64-pc-windows-msvc)\nv8 14.0\n")
+                .as_deref(),
+            Some("2.5.4")
+        );
+        assert_eq!(parse_deno_version("node v22"), None);
+        assert!(deno_auto_install() == deno_asset().is_some());
+    }
+
+    #[test]
     fn recognizes_instagram_profiles() {
         assert!(instagram_profile("https://www.instagram.com/instagram/"));
         assert!(instagram_profile("https://instagram.com/natgeo"));
@@ -1312,6 +1821,109 @@ mod tests {
             })
             .filter(|d| d.join(exe("ffmpeg")).is_file());
         managed.or_else(|| util::which("ffmpeg").and_then(|p| p.parent().map(Path::to_path_buf)))
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "downloads a YouTube video in every quality"]
+    async fn live_youtube_qualities() {
+        let tools = PathBuf::from(std::env::var("MULTRON_TOOLS_DIR").expect("MULTRON_TOOLS_DIR"));
+        let out = PathBuf::from(std::env::var("MULTRON_TEST_DIR").expect("MULTRON_TEST_DIR"));
+        let url = std::env::var("MULTRON_TEST_URL")
+            .unwrap_or_else(|_| "https://www.youtube.com/watch?v=o6ALnu6XZEo".into());
+        let qualities = std::env::var("MULTRON_QUALITIES")
+            .unwrap_or_else(|_| "best,1080,720,480,audio-m4a,audio-mp3".into());
+        for quality in qualities.split(',') {
+            let dir = out.join(quality);
+            std::fs::create_dir_all(&dir).unwrap();
+            let job = MediaJob {
+                exe: tools.join(exe("yt-dlp")),
+                url: url.clone(),
+                dir: dir.clone(),
+                quality: quality.into(),
+                container: "mp4".into(),
+                playlist: false,
+                fragments: 8,
+                rate_limit: 0,
+                ffmpeg: Some(tools.clone()),
+                cookies_file: None,
+                cookies_browser: String::new(),
+                embed_metadata: true,
+                embed_thumbnail: false,
+                filename: None,
+                js_runtime: Some(tools.join(exe("deno"))),
+                local_info: None,
+            };
+            let mut totals = MediaTotals::default();
+            let mut exact = None;
+            let mut seen_totals: Vec<u64> = Vec::new();
+            let mut last_shown = 0u64;
+            let mut backwards = 0;
+            let mut first_total_at: Option<u64> = None;
+            let mut file = None;
+            let mut phases: Vec<String> = Vec::new();
+            let started = std::time::Instant::now();
+            let ok = run(job, CancellationToken::new(), |ev| match ev {
+                MediaEvent::Size(n) => {
+                    exact = Some(n);
+                    totals.set_exact(n);
+                }
+                MediaEvent::Progress {
+                    downloaded,
+                    total,
+                    estimate,
+                    ..
+                } => {
+                    let (shown, size) = totals.update(downloaded, total, estimate);
+                    if shown < last_shown {
+                        backwards += 1;
+                    }
+                    last_shown = shown;
+                    if let Some(t) = size {
+                        if first_total_at.is_none() {
+                            first_total_at = Some(shown);
+                        }
+                        if seen_totals.last() != Some(&t) {
+                            seen_totals.push(t);
+                        }
+                    }
+                }
+                MediaEvent::File(f) => file = Some(f),
+                MediaEvent::Phase(p) if phases.last() != Some(&p) => phases.push(p),
+                _ => {}
+            })
+            .await
+            .unwrap();
+            let secs = started.elapsed().as_secs_f64();
+            let file = file.expect("no file reported");
+            let len = std::fs::metadata(&file).map(|m| m.len()).unwrap_or(0);
+            println!(
+                "{quality}: ok={ok} file={:?} {:.1} MB in {secs:.1}s, exact={exact:?}, totals shown={seen_totals:?}, first total after {:?} bytes, backwards={backwards}, steps={phases:?}",
+                file.file_name().unwrap_or_default(),
+                len as f64 / 1048576.0,
+                first_total_at
+            );
+            assert!(ok && len > 0, "{quality} produced no file");
+            assert_eq!(backwards, 0, "{quality} went backwards");
+            assert!(
+                seen_totals.len() <= 1,
+                "{quality} total changed: {seen_totals:?}"
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "downloads Deno from GitHub"]
+    async fn live_installs_deno() {
+        let dir = PathBuf::from(std::env::var("MULTRON_TOOLS_DIR").expect("MULTRON_TOOLS_DIR"));
+        let tools = Tools::new(dir, reqwest::Client::new());
+        let version = tools
+            .install_deno(|_| {}, &CancellationToken::new())
+            .await
+            .unwrap();
+        println!("deno {version} at {:?}", tools.deno_location());
+        assert!(tools.managed_deno().is_file());
+        let status = tools.status().await;
+        assert_eq!(status.deno_version.as_deref(), Some(version.as_str()));
     }
 
     #[tokio::test]
@@ -1463,18 +2075,29 @@ mod tests {
     }
 
     #[test]
+    fn names_each_processing_step() {
+        assert_eq!(post_phase("Merger started"), "merging");
+        assert_eq!(post_phase("ExtractAudio processing"), "converting");
+        assert_eq!(post_phase("FFmpegMetadata started"), "tagging");
+        assert_eq!(post_phase("EmbedThumbnail started"), "thumbnail");
+        assert_eq!(post_phase("MoveFiles started"), "finishing");
+    }
+
+    #[test]
     fn progress_lines() {
         match parse_progress("[MDM] 1024 NA 4096.0 512.5 3 2 10") {
             Some(MediaEvent::Progress {
                 downloaded,
                 total,
+                estimate,
                 speed,
                 eta,
                 index,
                 count,
             }) => {
                 assert_eq!(downloaded, 1024);
-                assert_eq!(total, Some(4096));
+                assert_eq!(total, None);
+                assert_eq!(estimate, Some(4096));
                 assert_eq!(speed, Some(512));
                 assert_eq!(eta, Some(3));
                 assert_eq!(index, Some(2));

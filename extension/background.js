@@ -5,6 +5,7 @@ const DEFAULTS = {
   minSizeKB: 0,
   sendCookies: true,
   mediaButton: true,
+  fullscreenButton: true,
   interceptMagnets: true,
   skipDomains: ''
 };
@@ -79,7 +80,13 @@ async function ping(force = false) {
   updateBadge(value);
   if (value && !value.paired) autoPair();
   if (value?.version) reloadIfUpdated(value.version);
+  if (typeof value?.fullscreenButton === 'boolean') syncFullscreenButton(value.fullscreenButton);
   return value;
+}
+
+async function syncFullscreenButton(on) {
+  const { fullscreenButton } = await chrome.storage.local.get({ fullscreenButton: true });
+  if (fullscreenButton !== on) await chrome.storage.local.set({ fullscreenButton: on });
 }
 
 function versionParts(v) {
@@ -467,6 +474,7 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         reply(await send({ referrer: sender?.tab?.url ?? null, ...msg.payload }));
         break;
       case 'settings':
+        ping().catch(() => {});
         reply(await settings());
         break;
       case 'title':

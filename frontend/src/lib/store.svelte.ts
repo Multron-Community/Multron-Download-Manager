@@ -82,6 +82,7 @@ class AppState {
   toasts = $state<Toast[]>([]);
   notices = $state<Notice[]>([]);
   toolProgress = $state<ToolProgress | null>(null);
+  appUpdateProgress = $state<ToolProgress | null>(null);
   appUpdate = $state<AppUpdate | null>(null);
   updateReady = $state<ReadyUpdate | null>(null);
   mandatoryUpdate = $state<MandatoryUpdate | null>(null);
@@ -195,7 +196,8 @@ class AppState {
       }
     });
     await listen<ToolProgress>('tools://progress', (e) => {
-      this.toolProgress = e.payload.done ? null : e.payload;
+      if (e.payload.tool.startsWith('Multron Download Manager')) this.appUpdateProgress = e.payload;
+      else this.toolProgress = e.payload.done ? null : e.payload;
     });
     await listen<{ kind: Toast['kind']; message: string }>('app://toast', (e) =>
       this.toast(e.payload.kind, e.payload.message)
@@ -248,7 +250,9 @@ class AppState {
       if (this.settings?.scanNotices !== false) {
         const inBulk = this.cloudReports.all?.ids.includes(d.id) ?? false;
         if (!inBulk && o.cloudState !== d.cloudState && d.cloudState && d.cloudState !== 'scanning' && d.cloudState !== 'locked') {
-          this.notice('scan', d, 'cloud', d.cloudState, d.cloudDetail);
+          const report = this.cloudReports[d.id];
+          const finished = report && !report.running ? report : null;
+          this.notice('scan', d, 'cloud', finished?.state || d.cloudState, finished?.summary ?? d.cloudDetail);
         }
       }
       if (o.phase !== d.phase && d.phase) this.log(d.id, 'Phase: ' + d.phase);

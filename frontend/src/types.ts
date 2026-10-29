@@ -60,7 +60,7 @@ export interface Download {
   hashState: HashState;
   scanState: '' | 'scanning' | 'clean' | 'threat' | 'skipped' | 'marked';
   scanDetail?: string | null;
-  cloudState: '' | 'scanning' | 'clean' | 'threat' | 'suspicious' | 'skipped' | 'error' | 'locked' | 'unknown';
+  cloudState: '' | 'scanning' | 'clean' | 'threat' | 'suspicious' | 'skipped' | 'error' | 'locked' | 'unknown' | 'partial';
   cloudDetail?: string | null;
   speed: number;
   eta: number | null;
@@ -147,6 +147,7 @@ export interface Settings {
   cloudFingerprintCache: boolean;
   cloudScanExtensions: string[];
   askBeforeStartingPrograms: boolean;
+  fullscreenVideoButton: boolean;
   downloadNotices: boolean;
   scanNotices: boolean;
   inAppNotices: boolean;
@@ -323,6 +324,10 @@ export interface ToolStatus {
   ffmpegPath: string | null;
   ffmpegManaged: boolean;
   ffmpegAutoInstall: boolean;
+  denoAvailable: boolean;
+  denoManaged: boolean;
+  denoVersion: string | null;
+  denoAutoInstall: boolean;
 }
 
 export interface ToolProgress {

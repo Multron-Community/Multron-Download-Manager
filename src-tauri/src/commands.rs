@@ -428,6 +428,19 @@ pub async fn install_ffmpeg(app: AppHandle, mgr: Mgr<'_>) -> R<()> {
         .map_err(anyhow_err)
 }
 
+#[tauri::command]
+pub async fn install_deno(app: AppHandle, mgr: Mgr<'_>) -> R<String> {
+    mgr.tools
+        .install_deno(
+            move |p| {
+                let _ = app.emit(EVT_TOOLS, p);
+            },
+            &tokio_util::sync::CancellationToken::new(),
+        )
+        .await
+        .map_err(anyhow_err)
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UpdateReport {

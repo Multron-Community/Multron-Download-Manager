@@ -5,6 +5,7 @@
   import { t, tc } from '../lib/i18n.svelte';
   import { bytes, duration, extension, percent, speed } from '../lib/format';
   import Icon from './Icon.svelte';
+  import { cloudView } from '../lib/cloud';
 
   interface Props {
     item: Download;
@@ -32,12 +33,16 @@
     verifying: 'Verifying',
     merging: 'Merging',
     converting: 'Converting',
-    tagging: 'Converting',
+    tagging: 'Adding metadata',
+    thumbnail: 'Adding the thumbnail',
+    finishing: 'Finishing',
     metadata: 'Fetching metadata',
     checking: 'Checking',
     preparing: 'Preparing',
     'installing FFmpeg': 'Installing FFmpeg',
     'extracting FFmpeg': 'Extracting FFmpeg',
+    'installing Deno': 'Installing Deno',
+    'extracting Deno': 'Extracting Deno',
     'waiting for network': 'Waiting for the network',
     retrying: 'Reconnecting'
   };
@@ -88,6 +93,8 @@
     e.stopPropagation();
     app.toast(kind, text);
   }
+
+  const cloud = $derived(cloudView(item.cloudState, item.cloudDetail));
 
   async function explainCloud(e: MouseEvent, kind: 'info' | 'success' | 'warning' | 'error', text: string) {
     e.stopPropagation();
@@ -183,20 +190,12 @@
             {@const shield = app.platform === 'macos' ? 'Gatekeeper' : 'SmartScreen'}
             <button type="button" class="flex items-center gap-1 text-ok hover:underline cursor-pointer" title={t('Marked as downloaded from the internet, so {name} checks the file when it is opened.', { name: shield })} onclick={(e) => explain(e, 'success', t('Marked as downloaded from the internet, so {name} checks the file when it is opened.', { name: shield }))} ondblclick={(e) => e.stopPropagation()}><Icon name="shield" size={11} />{shield}</button>
           {/if}
-          {#if item.cloudState === 'threat'}
-            <button type="button" class="flex items-center gap-1 text-bad hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explainCloud(e, 'error', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Multron Cloud: threat')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
-          {:else if item.cloudState === 'suspicious'}
-            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explainCloud(e, 'warning', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Multron Cloud: suspicious')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
-          {:else if item.cloudState === 'clean'}
-            <button type="button" class="flex items-center gap-1 text-ok hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explainCloud(e, 'success', t('Scanned separately by Multron Cloud'))} ondblclick={(e) => e.stopPropagation()}><Icon name="shield" size={11} />{t('Multron Cloud: clean')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
-          {:else if item.cloudState === 'scanning'}
+          {#if item.cloudState === 'scanning'}
             <span class="flex items-center gap-1 text-accent font-medium cursor-pointer hover:underline" role="button" tabindex="-1" onclick={(e) => { e.stopPropagation(); app.showCloudReport(item); }} onkeydown={() => {}}><Icon name="shield" size={11} />{t('Multron Cloud: scanning…')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></span>
-          {:else if item.cloudState === 'unknown'}
-            <button type="button" class="flex items-center gap-1 text-ok hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explainCloud(e, 'success', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="shield" size={11} />{t('Multron Cloud: no threat found')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
           {:else if item.cloudState === 'locked'}
-            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={item.cloudDetail ?? ''} onclick={(e) => { e.stopPropagation(); app.cloudPasswordFor = item.id; }} ondblclick={(e) => e.stopPropagation()}><Icon name="lock" size={11} />{t('Multron Cloud: password needed')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
-          {:else if item.cloudState === 'skipped' || item.cloudState === 'error'}
-            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('Click to see why')} onclick={(e) => explainCloud(e, 'warning', item.cloudDetail || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name="alert" size={11} />{t('Multron Cloud: not scanned')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
+            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={cloud.reason} onclick={(e) => { e.stopPropagation(); app.cloudPasswordFor = item.id; }} ondblclick={(e) => e.stopPropagation()}><Icon name="lock" size={11} />{cloud.badge}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
+          {:else if item.cloudState}
+            <button type="button" class="flex items-center gap-1 {cloud.tone === 'bad' ? 'text-bad' : cloud.tone === 'ok' ? 'text-ok' : 'text-warn'} hover:underline cursor-pointer" title={cloud.reason || t('Click to see why')} onclick={(e) => explainCloud(e, cloud.tone === 'bad' ? 'error' : cloud.tone === 'ok' ? 'success' : 'warning', item.cloudState === 'clean' ? t('Scanned separately by Multron Cloud') : cloud.reason || t('No details'))} ondblclick={(e) => e.stopPropagation()}><Icon name={cloud.icon === 'shield' ? 'shield' : 'alert'} size={11} />{cloud.badge}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
           {:else if item.status === 'completed' && (app.settings?.cloudScanButton !== false || app.settings?.cloudScan)}
             <button type="button" class="flex items-center gap-1 text-muted font-medium hover:underline cursor-pointer" title={t('Scan for malware with Multron Cloud')} onclick={scanInCloud} ondblclick={(e) => e.stopPropagation()}><Icon name="shield" size={11} />{t('Multron Cloud: not scanned')}<span class="px-1 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span></button>
           {/if}
