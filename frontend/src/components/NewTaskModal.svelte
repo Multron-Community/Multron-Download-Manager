@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CONTAINERS, QUALITIES } from '../lib/qualities';
   import { untrack } from 'svelte';
   import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import { app } from '../lib/store.svelte';
@@ -33,6 +34,7 @@
   let mediaLoading = $state(false);
   let mediaError = $state<string | null>(null);
   let quality = $state('best');
+  let container = $state('mp4-h264');
   let playlist = $state(false);
 
   let preview = $state<TorrentPreview | null>(null);
@@ -72,6 +74,7 @@
     shaSource = null;
     startPaused = false;
     quality = p?.quality ?? s?.mediaQuality ?? 'best';
+    container = s?.mediaContainer ?? 'mp4-h264';
     playlist = p?.playlist ?? false;
     probe = null;
     media = null;
@@ -199,7 +202,7 @@
     if (mode === 'link') {
       req = { ...base, kind: 'http', filename: filename.trim() || null, sha256: sha256.trim() || null };
     } else if (mode === 'media') {
-      req = { ...base, kind: 'media', quality, playlist, pageTitle: media?.title ?? extra.pageTitle ?? null, thumbnail: media?.thumbnail ?? extra.thumbnail ?? null };
+      req = { ...base, kind: 'media', quality, container: quality.startsWith('audio') ? null : container, playlist, pageTitle: media?.title ?? extra.pageTitle ?? null, thumbnail: media?.thumbnail ?? extra.thumbnail ?? null };
     } else {
       req = {
         ...base,
@@ -217,17 +220,7 @@
     if (ok) app.addOpen = false;
   }
 
-  const qualities = [
-    { id: 'best', label: 'Best' },
-    { id: '2160', label: '2160p (4K)' },
-    { id: '1440', label: '1440p' },
-    { id: '1080', label: '1080p' },
-    { id: '720', label: '720p' },
-    { id: '480', label: '480p' },
-    { id: '360', label: '360p' },
-    { id: 'audio-mp3', label: 'Audio only (MP3)' },
-    { id: 'audio-m4a', label: 'Audio only (M4A)' }
-  ];
+  const qualities = QUALITIES;
 </script>
 
 {#if app.addOpen}
@@ -289,7 +282,7 @@
               <div class="min-w-0 text-[12px] space-y-1">
                 <div class="font-medium truncate">{media.title}</div>
                 <div class="text-muted truncate">{[media.site, media.uploader, media.duration ? duration(media.duration) : null, media.isPlaylist ? `${media.entries ?? '?'} items` : null].filter(Boolean).join(' · ')}</div>
-                {#if media.heights.length}<div class="text-dim">Available: {media.heights.slice(0, 6).map((h) => h + 'p').join(', ')}</div>{/if}
+                {#if media.heights.length}<div class="text-dim">{t('Available qualities: {list}', { list: media.heights.map((h) => h + 'p').join(', ') })}</div>{/if}
               </div>
             </div>
           {:else if mediaLoading}
@@ -299,10 +292,16 @@
             <div class="space-y-1.5">
               <label for="q" class="label">{t('Quality')}</label>
               <select id="q" class="field" bind:value={quality}>
-                {#each qualities as q}<option value={q.id}>{t(q.label)}</option>{/each}
+                {#each qualities as q}{@const s = media?.sizes?.[q.id]}<option value={q.id}>{t(q.label)}{s ? ` · ${s.exact ? '' : '~'}${bytes(s.size)}` : ''}</option>{/each}
               </select>
             </div>
-            <label class="flex items-center gap-2 text-[12px] mt-6">
+            <div class="space-y-1.5">
+              <label for="container" class="label">{t('Video format')}</label>
+              <select id="container" class="field" bind:value={container} disabled={quality.startsWith('audio')}>
+                {#each CONTAINERS as c}<option value={c.id}>{c.label}</option>{/each}
+              </select>
+            </div>
+            <label class="flex items-center gap-2 text-[12px] col-span-2">
               <input type="checkbox" class="check" bind:checked={playlist} />{t('Download whole playlist')}
             </label>
           </div>

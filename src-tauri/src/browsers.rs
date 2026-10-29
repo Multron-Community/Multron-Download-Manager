@@ -803,6 +803,18 @@ fn bundled_extension(app: &AppHandle, firefox: bool) -> Option<PathBuf> {
     (cfg!(debug_assertions) && repo.join("manifest.json").is_file()).then_some(repo)
 }
 
+pub fn extension_build(app: &AppHandle) -> Option<String> {
+    static BUILD: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    BUILD
+        .get_or_init(|| {
+            let dir = bundled_extension(app, false)?;
+            let text = std::fs::read_to_string(dir.join("build.json")).ok()?;
+            let v: serde_json::Value = serde_json::from_str(&text).ok()?;
+            v.get("build")?.as_str().map(str::to_string)
+        })
+        .clone()
+}
+
 pub fn extension_folder(app: &AppHandle, firefox: bool) -> Result<PathBuf> {
     let src = bundled_extension(app, firefox)
         .context("the browser extension is not bundled with this build")?;

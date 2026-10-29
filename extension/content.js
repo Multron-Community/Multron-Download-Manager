@@ -66,11 +66,25 @@
 
   const QUALITIES = [
     ['best', 'Best quality'],
+    ['6480', '12K'],
+    ['4320', '8K'],
+    ['2880', '5K'],
+    ['2160', '4K'],
+    ['1440', '1440p'],
     ['1080', '1080p'],
     ['720', '720p'],
     ['480', '480p'],
+    ['360', '360p'],
+    ['240', '240p'],
+    ['144', '144p'],
     ['audio-mp3', 'Audio (MP3)'],
-    ['audio-m4a', 'Audio (M4A)']
+    ['audio-m4a', 'Audio (M4A)'],
+    ['audio-aac', 'Audio (AAC)'],
+    ['audio-opus', 'Audio (Opus)'],
+    ['audio-vorbis', 'Audio (OGG Vorbis)'],
+    ['audio-flac', 'Audio (FLAC)'],
+    ['audio-wav', 'Audio (WAV)'],
+    ['audio-alac', 'Audio (ALAC)']
   ];
 
   function meta(name) {
@@ -429,11 +443,62 @@
   const ICON =
     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg>';
 
+  const FORMATS = [
+    ['default', 'Default'],
+    ['mp4', 'MP4'],
+    ['mp4-h264', 'MP4 H.264'],
+    ['mkv', 'MKV'],
+    ['webm', 'WebM'],
+    ['mov', 'MOV'],
+    ['avi', 'AVI'],
+    ['flv', 'FLV']
+  ];
+  let videoFormat = 'default';
+  const formatPickers = new Set();
+  chrome.storage.local
+    .get('videoFormat')
+    .then((v) => {
+      videoFormat = v?.videoFormat || 'default';
+      formatPickers.forEach((paint) => paint());
+    })
+    .catch(() => {});
+
+  function formatRow() {
+    const row = document.createElement('div');
+    row.className = 'multron-formats';
+    const chips = FORMATS.map(([id, label]) => {
+      const chip = document.createElement('span');
+      chip.className = 'multron-chip';
+      chip.textContent = label;
+      chip.title =
+        id === 'default'
+          ? 'Use the video format set in Multron Download Manager'
+          : id === 'mp4-h264'
+            ? 'MP4 with H.264 and AAC: plays everywhere, also in WhatsApp and on older phones and TVs (up to 1080p on YouTube)'
+            : `Save videos as ${label}`;
+      chip.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        videoFormat = id;
+        chrome.storage.local.set({ videoFormat: id }).catch(() => {});
+        formatPickers.forEach((paint) => paint());
+      });
+      row.appendChild(chip);
+      return [id, chip];
+    });
+    const paint = () => chips.forEach(([id, chip]) => chip.classList.toggle('on', id === videoFormat));
+    formatPickers.add(paint);
+    paint();
+    return row;
+  }
+
   function sendItem(item, quality) {
+    const audio = String(quality || '').startsWith('audio');
     send({
       url: item.url,
       kind: item.kind,
       quality: item.kind === 'media' ? quality : undefined,
+      container: item.kind === 'media' && !audio && videoFormat !== 'default' ? videoFormat : undefined,
       filename: item.filename || null,
       audioUrl: item.audioUrl || undefined,
       pageTitle: resolveName(item),
@@ -442,16 +507,70 @@
     });
   }
 
-  function qualityButton(label, onPick) {
+  function sizeText(s) {
+    if (!s?.size) return '';
+    const gb = s.size / 1073741824;
+    const text = gb >= 1 ? `${gb.toFixed(gb >= 10 ? 0 : 1)} GB` : `${Math.max(0.1, s.size / 1048576).toFixed(1)} MB`;
+    return (s.exact ? '' : '~') + text;
+  }
+
+  function qualityButton(label, onPick, itemOf) {
     const wrap = document.createElement('div');
     const main = document.createElement('button');
     main.className = 'multron-btn';
     main.innerHTML = `${ICON}<span>${label}</span>`;
     const menu = document.createElement('div');
     menu.className = 'multron-menu';
+    const status = document.createElement('div');
+    status.className = 'multron-menu-status';
+    status.hidden = true;
+    menu.appendChild(status);
+    menu.appendChild(formatRow());
+    const sizeCells = new Map();
+    let sizesFor = null;
+    const showStatus = (text, busy) => {
+      status.hidden = !text;
+      status.classList.toggle('busy', !!busy);
+      status.textContent = text || '';
+    };
+    const fill = (sizes) => {
+      for (const [id, cell] of sizeCells) {
+        cell.classList.remove('loading');
+        cell.textContent = sizeText(sizes?.[id]);
+      }
+    };
+    const loadSizes = () => {
+      const item = itemOf?.();
+      const url = item?.kind === 'media' ? item.url : null;
+      if (!url || sizesFor === url) return;
+      sizesFor = url;
+      showStatus('Checking sizes…', true);
+      for (const cell of sizeCells.values()) {
+        cell.textContent = '';
+        cell.classList.add('loading');
+      }
+      chrome.runtime
+        .sendMessage({ type: 'sizes', url })
+        .then((sizes) => {
+          if (sizesFor !== url) return;
+          fill(sizes);
+          showStatus(sizes ? '' : 'Sizes are not available for this video', false);
+          if (!sizes) sizesFor = null;
+        })
+        .catch(() => {
+          fill(null);
+          showStatus('Sizes are not available for this video', false);
+          sizesFor = null;
+        });
+    };
     for (const [id, label] of QUALITIES) {
       const item = document.createElement('button');
-      item.textContent = label;
+      const name = document.createElement('span');
+      name.textContent = label;
+      const size = document.createElement('span');
+      size.className = 'multron-size';
+      sizeCells.set(id, size);
+      item.append(name, size);
       item.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -463,7 +582,7 @@
     main.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
-      menu.classList.toggle('open');
+      if (menu.classList.toggle('open')) loadSizes();
     });
     document.addEventListener('click', () => menu.classList.remove('open'));
     wrap.append(main, menu);
@@ -498,7 +617,7 @@
     fab = document.createElement('div');
     fab.className = 'multron-fab';
     if (kind === 'media') {
-      fab.appendChild(qualityButton('Multron Download Manager', (q) => sendItem(videoItem(document.body), q)));
+      fab.appendChild(qualityButton('Multron Download Manager', (q) => sendItem(videoItem(document.body), q), () => videoItem(document.body)));
     } else {
       const main = document.createElement('button');
       main.className = 'multron-btn';
@@ -556,11 +675,90 @@
     return best;
   }
 
+  const PLACE_KEY = 'overlayPlace';
+  let overlayPlace = null;
+  chrome.storage.local
+    .get(PLACE_KEY)
+    .then((v) => {
+      overlayPlace = v?.[PLACE_KEY]?.[location.hostname] || null;
+      placeOverlay();
+    })
+    .catch(() => {});
+
+  function savePlace() {
+    chrome.storage.local
+      .get(PLACE_KEY)
+      .then((v) => {
+        const all = { ...(v?.[PLACE_KEY] || {}) };
+        if (overlayPlace) all[location.hostname] = overlayPlace;
+        else delete all[location.hostname];
+        return chrome.storage.local.set({ [PLACE_KEY]: all });
+      })
+      .catch(() => {});
+  }
+
   function placeOverlay() {
     if (!overlay || !overlayTarget) return;
     const r = overlayTarget.getBoundingClientRect();
-    overlay.style.top = `${Math.max(8, r.top + 12)}px`;
-    overlay.style.left = `${Math.min(innerWidth - 8, r.right - 12)}px`;
+    const x = overlayPlace ? r.left + overlayPlace.x * r.width : r.right - 12;
+    const y = overlayPlace ? r.top + overlayPlace.y * r.height : r.top + 12;
+    const w = overlay.offsetWidth || 0;
+    overlay.style.top = `${Math.min(innerHeight - 40, Math.max(8, y))}px`;
+    overlay.style.left = `${Math.min(innerWidth - 8, Math.max(8 + w, x))}px`;
+  }
+
+  function makeDraggable(handle) {
+    let start = null;
+    let moved = false;
+    handle.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !overlay) return;
+      const box = overlay.getBoundingClientRect();
+      start = { x: e.clientX, y: e.clientY, right: box.right, top: box.top };
+      moved = false;
+      handle.setPointerCapture?.(e.pointerId);
+    });
+    handle.addEventListener('pointermove', (e) => {
+      if (!start || !overlay || !overlayTarget) return;
+      const dx = e.clientX - start.x;
+      const dy = e.clientY - start.y;
+      if (!moved && Math.hypot(dx, dy) < 5) return;
+      if (!moved) {
+        moved = true;
+        overlay.classList.add('multron-dragging');
+        overlay.querySelector('.multron-menu')?.classList.remove('open');
+      }
+      const r = overlayTarget.getBoundingClientRect();
+      const x = Math.min(innerWidth - 8, Math.max(8 + overlay.offsetWidth, start.right + dx));
+      const y = Math.min(innerHeight - overlay.offsetHeight - 8, Math.max(8, start.top + dy));
+      overlayPlace = { x: (x - r.left) / Math.max(1, r.width), y: (y - r.top) / Math.max(1, r.height) };
+      placeOverlay();
+    });
+    const end = () => {
+      if (!start) return;
+      start = null;
+      overlay?.classList.remove('multron-dragging');
+      if (moved) savePlace();
+    };
+    handle.addEventListener('pointerup', end);
+    handle.addEventListener('pointercancel', end);
+    handle.addEventListener(
+      'click',
+      (e) => {
+        if (!moved) return;
+        moved = false;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+      },
+      true
+    );
+    handle.addEventListener('dblclick', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      overlayPlace = null;
+      overlay?.querySelector('.multron-menu')?.classList.remove('open');
+      savePlace();
+      placeOverlay();
+    });
   }
 
   function updateOverlay() {
@@ -574,9 +772,12 @@
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.className = 'multron-video';
-      overlay.appendChild(qualityButton('Download video', (q) => overlayTarget && sendItem(videoItem(overlayTarget), q)));
+      overlay.appendChild(qualityButton('Download video', (q) => overlayTarget && sendItem(videoItem(overlayTarget), q), () => overlayTarget && videoItem(overlayTarget)));
       overlay.appendChild(closeButton());
       document.documentElement.appendChild(overlay);
+      const handle = overlay.querySelector('.multron-btn');
+      handle.title = 'Drag to move · double-click to put it back';
+      makeDraggable(handle);
     }
     overlayTarget = target;
     const label = overlay.querySelector('.multron-btn span');
@@ -584,7 +785,7 @@
     const wanted = `Download: ${name}`;
     if (label && label.textContent !== wanted) {
       label.textContent = wanted;
-      label.parentElement.title = name;
+      label.parentElement.title = `${name}\nDrag to move · double-click to put it back`;
     }
     placeOverlay();
   }
@@ -626,7 +827,7 @@
     if (!mini) {
       mini = document.createElement('div');
       mini.className = 'multron-mini';
-      mini.appendChild(qualityButton('', (q) => miniTarget && sendItem(videoItem(miniTarget), q)));
+      mini.appendChild(qualityButton('', (q) => miniTarget && sendItem(videoItem(miniTarget), q), () => miniTarget && videoItem(miniTarget)));
       const button = mini.querySelector('.multron-btn');
       button.title = 'Download with Multron Download Manager';
       button.setAttribute('aria-label', 'Download with Multron Download Manager');

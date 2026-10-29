@@ -80,6 +80,7 @@ async function ping(force = false) {
   updateBadge(value);
   if (value && !value.paired) autoPair();
   if (value?.version) reloadIfUpdated(value.version);
+  if (value?.extensionBuild) reloadIfRebuilt(value.extensionBuild);
   if (typeof value?.fullscreenButton === 'boolean') syncFullscreenButton(value.fullscreenButton);
   return value;
 }
@@ -100,6 +101,32 @@ function isNewer(a, b) {
     if ((x[i] ?? 0) !== (y[i] ?? 0)) return (x[i] ?? 0) > (y[i] ?? 0);
   }
   return false;
+}
+
+async function ownBuild() {
+  const session = chrome.storage.session;
+  const saved = session ? (await session.get('loadedBuild')).loadedBuild : null;
+  if (saved) return saved;
+  let build = null;
+  try {
+    const res = await fetch(chrome.runtime.getURL('build.json'));
+    build = (await res.json()).build || null;
+  } catch {
+    build = null;
+  }
+  if (build && session) await session.set({ loadedBuild: build });
+  return build;
+}
+
+ownBuild();
+
+async function reloadIfRebuilt(appBuild) {
+  const mine = await ownBuild();
+  if (!mine || mine === appBuild) return;
+  const { reloadedForBuild } = await chrome.storage.local.get('reloadedForBuild');
+  if (reloadedForBuild === appBuild) return;
+  await chrome.storage.local.set({ reloadedForBuild: appBuild });
+  chrome.runtime.reload();
 }
 
 async function reloadIfUpdated(appVersion) {
@@ -163,6 +190,24 @@ function oembedUrl(url) {
   if (h === 'reddit.com' || h.endsWith('.reddit.com')) return 'https://www.reddit.com/oembed?url=' + enc(url);
   if (h === 'x.com' || h === 'twitter.com') return 'https://publish.twitter.com/oembed?omit_script=1&url=' + enc(url);
   return null;
+}
+
+const sizeCache = new Map();
+
+function qualitySizes(url) {
+  if (!url) return Promise.resolve(null);
+  if (!sizeCache.has(url)) {
+    const pending = call('sizes', { url }, 100000)
+      .then((r) => (r.ok ? r.data?.sizes ?? null : null))
+      .catch(() => null)
+      .then((sizes) => {
+        if (!sizes) sizeCache.delete(url);
+        return sizes;
+      });
+    sizeCache.set(url, pending);
+    if (sizeCache.size > 50) sizeCache.delete(sizeCache.keys().next().value);
+  }
+  return sizeCache.get(url);
 }
 
 async function lookupTitle(url) {
@@ -479,6 +524,9 @@ chrome.runtime.onMessage.addListener((msg, sender, reply) => {
         break;
       case 'title':
         reply(await lookupTitle(String(msg.url || '')));
+        break;
+      case 'sizes':
+        reply(await qualitySizes(String(msg.url || '')));
         break;
       default:
         reply(null);

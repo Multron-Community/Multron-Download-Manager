@@ -28,6 +28,30 @@ async function refreshStatus(force = false) {
   return info;
 }
 
+function sizeText(s) {
+  if (!s?.size) return '';
+  const gb = s.size / 1073741824;
+  const text = gb >= 1 ? `${gb.toFixed(gb >= 10 ? 0 : 1)} GB` : `${Math.max(0.1, s.size / 1048576).toFixed(1)} MB`;
+  return (s.exact ? '' : '~') + text;
+}
+
+async function showSizes(url) {
+  const options = [...$('quality').options];
+  const names = options.map((o) => o.textContent);
+  const status = $('size-status');
+  status.hidden = false;
+  status.classList.add('busy');
+  status.textContent = 'Checking sizes…';
+  const sizes = await chrome.runtime.sendMessage({ type: 'sizes', url }).catch(() => null);
+  options.forEach((o, i) => {
+    const size = sizeText(sizes?.[o.value]);
+    o.textContent = size ? `${names[i]} · ${size}` : names[i];
+  });
+  status.classList.remove('busy');
+  status.textContent = sizes ? '' : 'Sizes are not available for this page';
+  status.hidden = !!sizes;
+}
+
 async function loadOptions() {
   const s = await chrome.runtime.sendMessage({ type: 'settings' });
   for (const key of ['intercept', 'interceptMagnets', 'mediaButton', 'sendCookies']) {
@@ -65,18 +89,26 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (MEDIA.test(host)) {
     $('page-box').hidden = false;
     $('page-label').textContent = tab.title || 'This page';
+    showSizes(tab.url);
   } else if (FILES.test(host)) {
     $('page-box').hidden = false;
     $('quality').hidden = true;
     $('page-label').textContent = 'File on this page';
   }
 
+  $('container').closest('.format-row').hidden = !MEDIA.test(host);
+  chrome.storage.local.get('videoFormat').then((v) => ($('container').value = v?.videoFormat || 'default')).catch(() => {});
+  $('container').addEventListener('change', () => chrome.storage.local.set({ videoFormat: $('container').value }));
+
   $('send-page').addEventListener('click', () => {
     const media = MEDIA.test(host);
+    const quality = media ? $('quality').value : null;
+    const container = $('container').value;
     sendDownload({
       url: tab.url,
       kind: media ? 'media' : 'http',
-      quality: media ? $('quality').value : null,
+      quality,
+      container: media && !String(quality).startsWith('audio') && container !== 'default' ? container : undefined,
       pageTitle: tab.title,
       referrer: tab.url
     });

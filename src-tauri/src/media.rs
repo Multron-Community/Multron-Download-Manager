@@ -98,6 +98,135 @@ pub struct MediaInfo {
     pub is_playlist: bool,
     pub entries: Option<u32>,
     pub filesize: Option<u64>,
+    pub sizes: std::collections::BTreeMap<String, QualitySize>,
+}
+
+#[derive(Serialize, Clone, Copy, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct QualitySize {
+    pub size: u64,
+    pub exact: bool,
+}
+
+fn format_size(f: &Value) -> Option<QualitySize> {
+    let n = |k: &str| f.get(k).and_then(Value::as_u64).filter(|n| *n > 0);
+    n("filesize")
+        .map(|size| QualitySize { size, exact: true })
+        .or_else(|| n("filesize_approx").map(|size| QualitySize { size, exact: false }))
+}
+
+fn codec_rank(vcodec: &str) -> u8 {
+    match vcodec.split('.').next().unwrap_or("") {
+        "avc1" | "h264" => 3,
+        "vp9" | "vp09" => 2,
+        "av01" => 1,
+        _ => 0,
+    }
+}
+
+fn quality_sizes(v: &Value) -> std::collections::BTreeMap<String, QualitySize> {
+    let mut out = std::collections::BTreeMap::new();
+    let Some(formats) = v.get("formats").and_then(Value::as_array) else {
+        return out;
+    };
+    let text = |f: &Value, k: &str| {
+        f.get(k)
+            .and_then(Value::as_str)
+            .unwrap_or("none")
+            .to_string()
+    };
+    let num = |f: &Value, k: &str| f.get(k).and_then(Value::as_f64).unwrap_or(0.0);
+    let videos: Vec<&Value> = formats
+        .iter()
+        .filter(|f| {
+            text(f, "vcodec") != "none" && f.get("height").and_then(Value::as_u64).is_some()
+        })
+        .collect();
+    let audios: Vec<&Value> = formats
+        .iter()
+        .filter(|f| text(f, "vcodec") == "none" && text(f, "acodec") != "none")
+        .collect();
+    let rank = |f: &Value, codec: &str| {
+        (
+            format_size(f).is_some(),
+            text(f, "acodec").starts_with(codec),
+            num(f, "abr").max(num(f, "tbr")) as u64,
+        )
+    };
+    let best_audio = |codec: &str| audios.iter().copied().max_by_key(|f| rank(f, codec));
+    let pick_video = |cap: Option<u32>| {
+        let within: Vec<&Value> = videos
+            .iter()
+            .copied()
+            .filter(|f| cap.is_none_or(|c| f["height"].as_u64().unwrap_or(0) <= c as u64))
+            .collect();
+        let (pool, top) = if within.is_empty() {
+            let low = videos.iter().filter_map(|f| f["height"].as_u64()).min()?;
+            (videos.clone(), low)
+        } else {
+            let high = within.iter().filter_map(|f| f["height"].as_u64()).max()?;
+            (within, high)
+        };
+        pool.into_iter()
+            .filter(|f| f["height"].as_u64() == Some(top))
+            .max_by_key(|f| {
+                (
+                    format_size(f).is_some(),
+                    f.get("dynamic_range")
+                        .and_then(Value::as_str)
+                        .is_none_or(|r| r == "SDR"),
+                    codec_rank(&text(f, "vcodec")),
+                    num(f, "fps") as u64,
+                    num(f, "tbr") as u64,
+                )
+            })
+    };
+    let aac = best_audio("mp4a");
+    let mut add = |id: &str, cap: Option<u32>| {
+        let Some(video) = pick_video(cap) else { return };
+        let Some(vs) = format_size(video) else { return };
+        let total = if text(video, "acodec") == "none" {
+            match aac.and_then(format_size) {
+                Some(a) => QualitySize {
+                    size: vs.size + a.size,
+                    exact: vs.exact && a.exact,
+                },
+                None => return,
+            }
+        } else {
+            vs
+        };
+        out.insert(id.to_string(), total);
+    };
+    add("best", None);
+    for h in HEIGHT_TIERS {
+        add(&h.to_string(), Some(*h));
+    }
+    if let Some(a) = aac.and_then(format_size) {
+        out.insert("audio-m4a".into(), a);
+    }
+    if let Some(a) = best_audio("opus").and_then(format_size) {
+        out.insert("audio-opus".into(), QualitySize { exact: false, ..a });
+    }
+    if let Some(a) = aac.and_then(format_size) {
+        out.insert("audio-aac".into(), QualitySize { exact: false, ..a });
+    }
+    if let Some(d) = v
+        .get("duration")
+        .and_then(Value::as_f64)
+        .filter(|d| *d > 0.0)
+    {
+        let guess = |bytes_per_second: f64| QualitySize {
+            size: (d * bytes_per_second) as u64,
+            exact: false,
+        };
+        out.insert("audio-mp3".into(), guess(245_000.0 / 8.0));
+        out.insert("audio-vorbis".into(), guess(48_000.0));
+        out.insert("audio-wav".into(), guess(192_000.0));
+        out.insert("audio-flac".into(), guess(200_000.0));
+        out.insert("audio-alac".into(), guess(200_000.0));
+    }
+    out
 }
 
 pub struct Tools {
@@ -572,6 +701,7 @@ impl Tools {
             retries: 4,
             transform: None,
             if_range: probe.validator.clone(),
+            max_request: None,
         });
         let mut run = tokio::spawn(engine::run(job));
         let mut tick = tokio::time::interval(Duration::from_millis(250));
@@ -829,6 +959,7 @@ fn parse_info(v: &Value) -> MediaInfo {
             .get("filesize")
             .or_else(|| v.get("filesize_approx"))
             .and_then(Value::as_u64),
+        sizes: quality_sizes(v),
     }
 }
 
@@ -1233,16 +1364,50 @@ pub fn exact_size(line: &str) -> Option<u64> {
 const PROGRESS_PREFIX: &str = "[MDM]";
 
 fn video_sort(height: Option<u32>, container: &str) -> String {
-    let mp4 = container.eq_ignore_ascii_case("mp4");
-    match (height, mp4) {
-        (Some(h), true) => format!("res:{h},vcodec:h264,acodec:aac"),
-        (None, true) => "vcodec:h264,res,acodec:aac".into(),
-        (Some(h), false) => format!("res:{h},ext:mp4:m4a"),
-        (None, false) => "res,ext:mp4:m4a".into(),
+    let res = height.map_or_else(|| "res".to_string(), |h| format!("res:{h}"));
+    match container.to_ascii_lowercase().as_str() {
+        "mp4" | "mp4-h264" | "mov" | "avi" | "flv" => format!("{res},vcodec:h264,fps,acodec:aac"),
+        "webm" => format!("{res},fps,ext:webm:webm"),
+        _ => format!("{res},fps,ext:mp4:m4a"),
     }
 }
 
-const SIZED_VIDEO: &str = "bv*[filesize>0]+ba[filesize>0]/bv*+ba/b";
+const AUDIO_FORMATS: &[&str] = &["m4a", "opus", "aac", "flac", "wav", "alac", "vorbis"];
+
+const HEIGHT_TIERS: &[u32] = &[6480, 4320, 2880, 2160, 1440, 1080, 720, 480, 360, 240, 144];
+
+fn merge_format(container: &str) -> &str {
+    if container.eq_ignore_ascii_case("mp4-h264") {
+        "mp4"
+    } else {
+        container
+    }
+}
+
+fn video_selector(cap: Option<u32>, container: &str) -> String {
+    let (video, only) = match container.to_ascii_lowercase().as_str() {
+        "webm" => ("[ext=webm]", "[ext=webm]"),
+        "mp4-h264" => ("[vcodec^=avc]", "[acodec^=mp4a]"),
+        _ => ("", ""),
+    };
+    let limit = cap
+        .map(|h| format!("[height<=?{h}]{video}"))
+        .unwrap_or_else(|| video.to_string());
+    let mut choices: Vec<String> = HEIGHT_TIERS
+        .iter()
+        .filter(|t| cap.is_none_or(|c| **t <= c))
+        .flat_map(|t| {
+            [
+                format!("bv*[height>={t}]{limit}[filesize>0]+ba{only}[filesize>0]"),
+                format!("bv*[height>={t}]{limit}+ba{only}"),
+            ]
+        })
+        .collect();
+    choices.push(format!("bv*{limit}+ba{only}"));
+    choices.push(format!("b{limit}"));
+    choices.push("bv*+ba/b".into());
+    choices.join("/")
+}
 
 fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> {
     let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
@@ -1256,14 +1421,39 @@ fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> 
             "--audio-quality",
             "0",
         ]),
-        "audio-m4a" | "audio-mp3" | "audio" => {
+        q if has_ffmpeg
+            && q.strip_prefix("audio-")
+                .is_some_and(|f| AUDIO_FORMATS.contains(&f)) =>
+        {
+            let target = &q["audio-".len()..];
+            let source = if target == "m4a" || target == "aac" {
+                "ba[ext=m4a]/ba/b"
+            } else if target == "opus" || target == "vorbis" {
+                "ba[acodec=opus]/ba/b"
+            } else {
+                "ba/b"
+            };
+            let mut args = s(&[
+                "-f",
+                source,
+                "-x",
+                "--audio-format",
+                target,
+                "--audio-quality",
+                "0",
+            ]);
+            if target == "alac" {
+                args.extend(s(&["--postprocessor-args", "ExtractAudio:-c:a alac"]));
+            }
+            args
+        }
+        q if q == "audio" || q.starts_with("audio-") => {
             if has_ffmpeg {
                 s(&["-f", "ba[ext=m4a]/ba/b", "-x", "--audio-format", "m4a"])
             } else {
                 s(&["-f", "ba[ext=m4a]/ba/b"])
             }
         }
-        "audio-opus" if has_ffmpeg => s(&["-f", "ba/b", "-x", "--audio-format", "opus"]),
         q => {
             let height: Option<u32> = q.trim_end_matches('p').parse().ok();
             if !has_ffmpeg {
@@ -1274,11 +1464,11 @@ fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> 
             }
             vec![
                 "-f".into(),
-                SIZED_VIDEO.into(),
+                video_selector(height, container),
                 "-S".into(),
                 video_sort(height, container),
                 "--merge-output-format".into(),
-                container.into(),
+                merge_format(container).into(),
             ]
         }
     }
@@ -1647,15 +1837,15 @@ mod tests {
 
     #[test]
     fn mp4_prefers_codecs_every_player_supports() {
-        assert_eq!(video_sort(None, "mp4"), "vcodec:h264,res,acodec:aac");
+        assert_eq!(video_sort(None, "mp4"), "res,vcodec:h264,fps,acodec:aac");
         assert_eq!(
             video_sort(Some(1080), "mp4"),
-            "res:1080,vcodec:h264,acodec:aac"
+            "res:1080,vcodec:h264,fps,acodec:aac"
         );
-        assert_eq!(video_sort(None, "mkv"), "res,ext:mp4:m4a");
+        assert_eq!(video_sort(None, "mkv"), "res,fps,ext:mp4:m4a");
         let args = format_args("best", true, "mp4");
-        assert!(args.contains(&"vcodec:h264,res,acodec:aac".to_string()));
-        assert!(args.contains(&"bv*[filesize>0]+ba[filesize>0]/bv*+ba/b".to_string()));
+        assert!(args.contains(&"res,vcodec:h264,fps,acodec:aac".to_string()));
+        assert!(args.contains(&video_selector(None, "mp4")));
         assert_eq!(
             format_args("720", false, "mp4"),
             vec!["-f", "b[height<=720]/b"]
@@ -1824,6 +2014,115 @@ mod tests {
     }
 
     #[tokio::test(flavor = "multi_thread")]
+    #[ignore = "reads a YouTube video's formats"]
+    async fn live_quality_sizes() {
+        let tools = PathBuf::from(std::env::var("MULTRON_TOOLS_DIR").expect("MULTRON_TOOLS_DIR"));
+        let url = std::env::var("MULTRON_TEST_URL").expect("MULTRON_TEST_URL");
+        let info = Tools::new(tools, reqwest::Client::new())
+            .probe(&url, None, "")
+            .await
+            .unwrap();
+        for (id, s) in &info.sizes {
+            println!(
+                "size {id}: {}{:.1} MB",
+                if s.exact { "" } else { "~" },
+                s.size as f64 / 1048576.0
+            );
+        }
+        assert!(info.sizes.contains_key("best"));
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 8)]
+    #[ignore = "downloads a YouTube video with the multi-connection engine"]
+    async fn live_youtube_engine_qualities() {
+        let tools = PathBuf::from(std::env::var("MULTRON_TOOLS_DIR").expect("MULTRON_TOOLS_DIR"));
+        let out = PathBuf::from(std::env::var("MULTRON_TEST_DIR").expect("MULTRON_TEST_DIR"));
+        let url = std::env::var("MULTRON_TEST_URL").expect("MULTRON_TEST_URL");
+        let qualities = std::env::var("MULTRON_QUALITIES").unwrap_or_else(|_| "1080".into());
+        let client = reqwest::Client::builder().http1_only().build().unwrap();
+        for quality in qualities.split(',') {
+            let dir = out.join(format!("engine-{quality}"));
+            std::fs::create_dir_all(&dir).unwrap();
+            let mut job = MediaJob {
+                exe: tools.join(exe("yt-dlp")),
+                url: url.clone(),
+                dir: dir.clone(),
+                quality: quality.into(),
+                container: "mp4".into(),
+                playlist: false,
+                fragments: 8,
+                rate_limit: 0,
+                ffmpeg: Some(tools.clone()),
+                cookies_file: None,
+                cookies_browser: String::new(),
+                embed_metadata: true,
+                embed_thumbnail: false,
+                filename: None,
+                js_runtime: Some(tools.join(exe("deno"))),
+                local_info: None,
+            };
+            let started = std::time::Instant::now();
+            let mut info = extract(&job).await.unwrap();
+            let formats = direct_formats(&info).expect("formats are not direct");
+            let found = started.elapsed().as_secs_f64();
+            let mut local = Vec::new();
+            let mut bytes = 0u64;
+            let dl = std::time::Instant::now();
+            for f in &formats {
+                let id = f["format_id"].as_str().unwrap().to_string();
+                let headers = format_headers(f);
+                let probe = crate::engine::probe(&client, f["url"].as_str().unwrap(), &headers)
+                    .await
+                    .unwrap();
+                let part = dir.join(format!(".f{id}.mdmpart"));
+                let progress = crate::engine::Progress::new(probe.total, &[], 8);
+                let done = crate::engine::run(Arc::new(crate::engine::Job {
+                    client: client.clone(),
+                    url: probe.final_url.clone(),
+                    headers,
+                    part: part.clone(),
+                    resumable: probe.resumable,
+                    progress: progress.clone(),
+                    cancel: CancellationToken::new(),
+                    limiters: Vec::new(),
+                    retries: 4,
+                    transform: None,
+                    if_range: probe.validator.clone(),
+                    max_request: Some(8 << 20),
+                }))
+                .await
+                .unwrap();
+                assert!(done);
+                bytes += std::fs::metadata(&part).unwrap().len();
+                local.push((id, part));
+            }
+            let secs = dl.elapsed().as_secs_f64();
+            use_local_files(&mut info, &local);
+            let info_path = dir.join(".info.json");
+            std::fs::write(&info_path, serde_json::to_vec(&info).unwrap()).unwrap();
+            job.local_info = Some(info_path);
+            let mut file = None;
+            let finish = std::time::Instant::now();
+            assert!(run(job, CancellationToken::new(), |ev| {
+                if let MediaEvent::File(f) = ev {
+                    file = Some(f);
+                }
+            })
+            .await
+            .unwrap());
+            let file = file.expect("no file");
+            println!(
+                "{quality}: formats {:?}, found in {found:.1}s, {:.1} MB downloaded in {secs:.1}s = {:.2} MB/s, joined in {:.1}s, file {:.1} MB",
+                local.iter().map(|(i, _)| i.as_str()).collect::<Vec<_>>(),
+                bytes as f64 / 1048576.0,
+                bytes as f64 / 1048576.0 / secs,
+                finish.elapsed().as_secs_f64(),
+                std::fs::metadata(&file).unwrap().len() as f64 / 1048576.0
+            );
+        }
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
     #[ignore = "downloads a YouTube video in every quality"]
     async fn live_youtube_qualities() {
         let tools = PathBuf::from(std::env::var("MULTRON_TOOLS_DIR").expect("MULTRON_TOOLS_DIR"));
@@ -1840,7 +2139,7 @@ mod tests {
                 url: url.clone(),
                 dir: dir.clone(),
                 quality: quality.into(),
-                container: "mp4".into(),
+                container: std::env::var("MULTRON_CONTAINER").unwrap_or_else(|_| "mp4".into()),
                 playlist: false,
                 fragments: 8,
                 rate_limit: 0,
@@ -2084,6 +2383,131 @@ mod tests {
     }
 
     #[test]
+    fn works_out_the_size_of_every_quality() {
+        let info = serde_json::json!({
+            "duration": 100.0,
+            "formats": [
+                { "format_id": "140", "vcodec": "none", "acodec": "mp4a.40.2", "abr": 128, "filesize": 1000 },
+                { "format_id": "251", "vcodec": "none", "acodec": "opus", "abr": 140, "filesize": 1100 },
+                { "format_id": "137", "vcodec": "avc1.640028", "acodec": "none", "height": 1080, "fps": 30, "filesize": 30000 },
+                { "format_id": "299", "vcodec": "avc1.64002a", "acodec": "none", "height": 1080, "fps": 60, "filesize": 50000 },
+                { "format_id": "313", "vcodec": "vp9", "acodec": "none", "height": 2160, "fps": 30, "filesize_approx": 200000 },
+                { "format_id": "136", "vcodec": "avc1.4d401f", "acodec": "none", "height": 720, "fps": 30, "filesize": 15000 }
+            ]
+        });
+        let sizes = quality_sizes(&info);
+        assert_eq!(
+            sizes["best"],
+            QualitySize {
+                size: 201000,
+                exact: false
+            }
+        );
+        assert_eq!(sizes["4320"], sizes["best"]);
+        assert_eq!(
+            sizes["1080"],
+            QualitySize {
+                size: 51000,
+                exact: true
+            }
+        );
+        assert_eq!(
+            sizes["720"],
+            QualitySize {
+                size: 16000,
+                exact: true
+            }
+        );
+        assert_eq!(
+            sizes["144"],
+            QualitySize {
+                size: 16000,
+                exact: true
+            }
+        );
+        assert_eq!(
+            sizes["audio-m4a"],
+            QualitySize {
+                size: 1000,
+                exact: true
+            }
+        );
+        assert_eq!(sizes["audio-opus"].size, 1100);
+        assert_eq!(sizes["audio-mp3"].size, 3_062_500);
+    }
+
+    #[test]
+    fn converts_audio_to_every_format() {
+        for f in ["aac", "flac", "wav", "alac", "vorbis", "opus", "m4a"] {
+            let args = format_args(&format!("audio-{f}"), true, "mp4");
+            let at = args.iter().position(|a| a == "--audio-format").unwrap();
+            assert_eq!(args[at + 1], f);
+            assert!(args.contains(&"-x".to_string()));
+        }
+        assert_eq!(
+            format_args("audio-wav", false, "mp4"),
+            vec!["-f", "ba[ext=m4a]/ba/b"]
+        );
+        assert!(
+            format_args("audio-alac", true, "mp4").contains(&"ExtractAudio:-c:a alac".to_string())
+        );
+    }
+
+    #[test]
+    fn webm_keeps_to_formats_webm_can_hold() {
+        let args = format_args("best", true, "webm");
+        assert!(args.contains(&"res,fps,ext:webm:webm".to_string()));
+        assert!(args.iter().any(
+            |a| a.contains("bv*[height>=2160][ext=webm][filesize>0]+ba[ext=webm][filesize>0]")
+        ));
+        assert!(args.iter().any(|a| a.ends_with("bv*+ba/b")));
+        assert!(format_args("best", true, "mov")
+            .contains(&"res,vcodec:h264,fps,acodec:aac".to_string()));
+        assert!(format_args("best", true, "mov").contains(&"mov".to_string()));
+    }
+
+    #[test]
+    fn plays_everywhere_mp4_takes_only_h264_and_aac() {
+        let args = format_args("best", true, "mp4-h264");
+        let selector = &args[1];
+        assert!(selector.starts_with(
+            "bv*[height>=6480][vcodec^=avc][filesize>0]+ba[acodec^=mp4a][filesize>0]"
+        ));
+        assert!(selector.ends_with("bv*+ba/b"));
+        let at = args
+            .iter()
+            .position(|a| a == "--merge-output-format")
+            .unwrap();
+        assert_eq!(args[at + 1], "mp4");
+        assert!(format_args("1080", true, "mp4")
+            .contains(&"res:1080,vcodec:h264,fps,acodec:aac".to_string()));
+    }
+
+    #[test]
+    fn opus_stays_audio_without_ffmpeg() {
+        assert_eq!(
+            format_args("audio-opus", false, "mp4"),
+            vec!["-f", "ba[ext=m4a]/ba/b"]
+        );
+        assert!(format_args("audio-opus", true, "mp4").contains(&"opus".to_string()));
+    }
+
+    #[test]
+    fn picks_the_highest_resolution_before_a_known_size() {
+        let best = video_selector(None, "mp4");
+        assert!(
+            best.starts_with("bv*[height>=6480][filesize>0]+ba[filesize>0]/bv*[height>=6480]+ba/")
+        );
+        let p4320 = best.find("[height>=4320]").unwrap();
+        let p1080 = best.find("[height>=1080]").unwrap();
+        assert!(p4320 < p1080);
+        let capped = video_selector(Some(2160), "mp4");
+        assert!(!capped.contains("height>=4320"));
+        assert!(capped.starts_with("bv*[height>=2160][height<=?2160][filesize>0]"));
+        assert!(capped.ends_with("bv*+ba/b"));
+    }
+
+    #[test]
     fn progress_lines() {
         match parse_progress("[MDM] 1024 NA 4096.0 512.5 3 2 10") {
             Some(MediaEvent::Progress {
@@ -2111,7 +2535,7 @@ mod tests {
     #[test]
     fn formats() {
         let a = format_args("1080", true, "mkv");
-        assert!(a.contains(&"res:1080,ext:mp4:m4a".to_string()));
+        assert!(a.contains(&"res:1080,fps,ext:mp4:m4a".to_string()));
         let b = format_args("720", false, "mp4");
         assert_eq!(b, vec!["-f", "b[height<=720]/b"]);
     }

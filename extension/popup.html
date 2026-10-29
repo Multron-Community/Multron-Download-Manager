@@ -25,14 +25,42 @@
     <div class="row">
       <select id="quality">
         <option value="best">Best quality</option>
+        <option value="6480">12K</option>
+        <option value="4320">8K</option>
+        <option value="2880">5K</option>
+        <option value="2160">4K</option>
+        <option value="1440">1440p</option>
         <option value="1080">1080p</option>
         <option value="720">720p</option>
         <option value="480">480p</option>
+        <option value="360">360p</option>
+        <option value="240">240p</option>
+        <option value="144">144p</option>
         <option value="audio-mp3">Audio (MP3)</option>
         <option value="audio-m4a">Audio (M4A)</option>
+        <option value="audio-aac">Audio (AAC)</option>
+        <option value="audio-opus">Audio (Opus)</option>
+        <option value="audio-vorbis">Audio (OGG Vorbis)</option>
+        <option value="audio-flac">Audio (FLAC)</option>
+        <option value="audio-wav">Audio (WAV)</option>
+        <option value="audio-alac">Audio (ALAC)</option>
       </select>
       <button id="send-page" class="btn primary">Download</button>
     </div>
+    <div class="row format-row">
+      <span>Video format</span>
+      <select id="container">
+        <option value="default">Default</option>
+        <option value="mp4">MP4</option>
+        <option value="mp4-h264">MP4 (H.264, plays everywhere)</option>
+        <option value="mkv">MKV</option>
+        <option value="webm">WebM</option>
+        <option value="mov">MOV</option>
+        <option value="avi">AVI</option>
+        <option value="flv">FLV</option>
+      </select>
+    </div>
+    <div id="size-status" class="size-status" hidden></div>
   </section>
 
   <section>

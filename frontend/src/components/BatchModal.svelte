@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { QUALITIES } from '../lib/qualities';
   import { open as openDialog } from '@tauri-apps/plugin-dialog';
   import { app } from '../lib/store.svelte';
   import { api, errorText } from '../lib/api';
@@ -14,14 +15,6 @@
     { id: 'audio', label: 'Audio', icon: 'music' },
     { id: 'file', label: 'Files', icon: 'file' },
     { id: 'post', label: 'Posts', icon: 'link' }
-  ];
-  const QUALITIES: [string, string][] = [
-    ['best', 'Best'],
-    ['1080', '1080p'],
-    ['720', '720p'],
-    ['480', '480p'],
-    ['audio-mp3', 'Audio only (MP3)'],
-    ['audio-m4a', 'Audio only (M4A)']
   ];
 
   let filter = $state<Filter>('all');
@@ -234,7 +227,7 @@
             <label class="flex flex-col gap-1">
               <span class="label">{t('Video quality')}</span>
               <select class="field !w-[170px]" bind:value={quality}>
-                {#each QUALITIES as [v, l]}<option value={v}>{t(l)}</option>{/each}
+                {#each QUALITIES as q}<option value={q.id}>{t(q.label)}</option>{/each}
               </select>
             </label>
           {/if}

@@ -32,7 +32,7 @@ const HEURISTIC = [
 ];
 
 const IGNORE =
-  /^(Multron|GitHub|Chromium|Firefox|SHA-256|MP4|MKV|WebM|English|Türkçe|DHT|UPnP|ETA|URL|IPv4|uTP|Mica|Acrylic|Blur|Vibrancy|application\/.*|[A-Z][a-z]+[A-Z].*)$/;
+  /^(Multron|GitHub|Chromium|Firefox|SHA-256|MP4|MKV|WebM|MOV|AVI|FLV|English|Türkçe|DHT|UPnP|ETA|URL|IPv4|uTP|Mica|Acrylic|Blur|Vibrancy|application\/.*|[A-Z][a-z]+[A-Z].*)$/;
 
 const isText = (key) => key.trim() && /[A-Za-z]{2}/.test(key) && !/\$\{/.test(key);
 

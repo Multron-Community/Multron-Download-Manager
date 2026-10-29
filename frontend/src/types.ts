@@ -195,6 +195,7 @@ export interface AddRequest {
   filename?: string | null;
   threads?: number | null;
   quality?: string | null;
+  container?: string | null;
   playlist?: boolean;
   referrer?: string | null;
   userAgent?: string | null;
@@ -234,6 +235,7 @@ export interface MediaInfo {
   isPlaylist: boolean;
   entries: number | null;
   filesize: number | null;
+  sizes: Record<string, { size: number; exact: boolean }>;
 }
 
 export interface TorrentPreview {

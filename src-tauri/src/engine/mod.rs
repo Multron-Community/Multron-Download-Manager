@@ -362,6 +362,7 @@ pub struct Job {
     pub retries: u32,
     pub transform: Option<Arc<dyn ChunkTransform>>,
     pub if_range: Option<String>,
+    pub max_request: Option<u64>,
 }
 
 impl Job {
@@ -580,6 +581,7 @@ async fn run_segmented(job: Arc<Job>, total: u64) -> Result<bool> {
 
 enum SegEnd {
     Done,
+    More,
     Cancelled,
     Retired,
 }
@@ -594,10 +596,16 @@ async fn worker(job: Arc<Job>, file: Arc<File>, cancel: CancellationToken) -> Re
         let Some(idx) = job.progress.claim(speed) else {
             return Ok(());
         };
-        let outcome = fetch_segment(&job, &file, idx, &cancel).await;
+        let outcome = loop {
+            let outcome = fetch_segment(&job, &file, idx, &cancel).await;
+            if matches!(outcome, Ok(SegEnd::More)) && !cancel.is_cancelled() {
+                continue;
+            }
+            break outcome;
+        };
         speed = job.progress.release(idx).or(speed);
         match outcome {
-            Ok(SegEnd::Done) => errors = 0,
+            Ok(SegEnd::Done) | Ok(SegEnd::More) => errors = 0,
             Ok(SegEnd::Cancelled) | Ok(SegEnd::Retired) => return Ok(()),
             Err(e) => {
                 errors += 1;
@@ -649,11 +657,14 @@ async fn fetch_segment(
     if start >= end {
         return Ok(SegEnd::Done);
     }
+    let request_end = job
+        .max_request
+        .map_or(end, |m| end.min(start + m.max(MIN_STEAL)));
     let mut request = job
         .client
         .get(&job.url)
         .headers(job.headers.clone())
-        .header(RANGE, format!("bytes={}-{}", start, end - 1));
+        .header(RANGE, format!("bytes={}-{}", start, request_end - 1));
     if let Some(v) = &job.if_range {
         request = request.header(IF_RANGE, v.as_str());
     }
@@ -716,6 +727,9 @@ async fn fetch_segment(
                 let segs = job.progress.segs.lock();
                 if segs[idx].pos >= segs[idx].end {
                     return Ok(SegEnd::Done);
+                }
+                if segs[idx].pos >= request_end {
+                    return Ok(SegEnd::More);
                 }
                 bail!("connection closed early");
             };
@@ -863,6 +877,7 @@ mod tests {
             retries: 0,
             transform: None,
             if_range,
+            max_request: None,
         })
     }
 
@@ -959,6 +974,25 @@ mod tests {
         })
         .await;
         assert!(took < Duration::from_secs(15), "took {took:?}");
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn caps_each_request_and_continues_on_the_same_connection() {
+        let data: Vec<u8> = (0..6 * 1024 * 1024u32).map(|i| (i % 251) as u8).collect();
+        let expected = {
+            use sha2::Digest;
+            hex::encode(sha2::Sha256::digest(&data))
+        };
+        let total = data.len() as u64;
+        let url = range_server(Arc::new(data), "\"v1\"").await;
+        let dir = std::env::temp_dir().join(format!("mdm-cap-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let part = dir.join("file.bin.part");
+        let mut job = local_job(&url, part.clone(), total, None);
+        Arc::get_mut(&mut job).unwrap().max_request = Some(512 * 1024);
+        assert!(run(job).await.unwrap());
+        assert_eq!(sha256(&part), expected);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]
@@ -1138,6 +1172,7 @@ mod tests {
                 retries: 4,
                 transform: None,
                 if_range: probe.validator.clone(),
+                max_request: None,
             });
             let started = std::time::Instant::now();
             assert!(run(job).await.unwrap(), "download did not complete");

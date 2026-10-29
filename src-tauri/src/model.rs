@@ -67,6 +67,8 @@ pub struct MediaOptions {
     pub partials: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub audio_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub container: Option<String>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -234,6 +236,7 @@ pub struct AddRequest {
     pub trackers: Vec<String>,
     pub allow_duplicate: bool,
     pub audio_url: Option<String>,
+    pub container: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

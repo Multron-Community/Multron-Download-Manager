@@ -160,7 +160,7 @@ impl Default for Settings {
 
             ytdlp_auto_update: true,
             media_quality: "best".into(),
-            media_container: "mp4".into(),
+            media_container: "mp4-h264".into(),
             cookies_from_browser: String::new(),
             embed_metadata: true,
             embed_thumbnail: false,
@@ -274,6 +274,9 @@ impl Settings {
         if self.settings_version < 4 {
             self.cloud_scan = true;
         }
+        if self.settings_version < 5 && self.media_container == "mp4" {
+            self.media_container = "mp4-h264".into();
+        }
         self.settings_version = SETTINGS_VERSION;
         self.auto_update = true;
         self.check_updates_on_startup = true;
@@ -325,8 +328,8 @@ impl Settings {
         if self.bridge_port == 0 {
             self.bridge_port = DEFAULT_BRIDGE_PORT;
         }
-        if !["mp4", "mkv", "webm"].contains(&self.media_container.as_str()) {
-            self.media_container = "mp4".into();
+        if !CONTAINERS.contains(&self.media_container.as_str()) {
+            self.media_container = "mp4-h264".into();
         }
         if !["pause", "remove", "delete"].contains(&self.seed_limit_action.as_str()) {
             self.seed_limit_action = "pause".into();
@@ -379,8 +382,9 @@ pub struct RssRule {
     pub start_paused: bool,
 }
 
-pub const SETTINGS_VERSION: u32 = 4;
+pub const SETTINGS_VERSION: u32 = 5;
 pub const DEFAULT_PEER_LIMIT: u32 = 500;
+pub const CONTAINERS: &[&str] = &["mp4", "mp4-h264", "mkv", "webm", "mov", "avi", "flv"];
 pub const ALL_FILES: &str = "*";
 #[cfg(windows)]
 pub const DEFAULT_CLOUD_EXTENSIONS: &[&str] = &[
@@ -475,6 +479,29 @@ mod tests {
             chosen.cloud_connections,
             crate::cloudscan::MAX_CONNECTIONS as u32
         );
+    }
+
+    #[test]
+    fn saves_videos_that_play_everywhere_by_default() {
+        assert_eq!(Settings::default().media_container, "mp4-h264");
+        let old = Settings {
+            settings_version: 4,
+            media_container: "mp4".into(),
+            ..Default::default()
+        };
+        assert_eq!(old.normalized().media_container, "mp4-h264");
+        let chosen = Settings {
+            settings_version: 4,
+            media_container: "mkv".into(),
+            ..Default::default()
+        };
+        assert_eq!(chosen.normalized().media_container, "mkv");
+        let later = Settings {
+            settings_version: SETTINGS_VERSION,
+            media_container: "mp4".into(),
+            ..Default::default()
+        };
+        assert_eq!(later.normalized().media_container, "mp4");
     }
 
     #[test]

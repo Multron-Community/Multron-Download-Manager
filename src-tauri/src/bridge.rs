@@ -72,6 +72,7 @@ async fn serve(mgr: Arc<Manager>, port: u16, cancel: CancellationToken) {
         .route("/api/ping", get(ping).post(ping))
         .route("/api/pair", post(pair))
         .route("/api/download", post(download))
+        .route("/api/sizes", post(sizes))
         .route("/api/batch", post(batch))
         .route("/stream/{token}/{hash}/{file}", get(stream))
         .layer(middleware::from_fn(guard))
@@ -159,6 +160,7 @@ async fn ping(State(mgr): State<Arc<Manager>>, headers: HeaderMap) -> Json<Value
         "mediaEnabled": s.media_enabled,
         "torrentEnabled": s.torrent_enabled,
         "fullscreenButton": s.fullscreen_video_button,
+        "extensionBuild": crate::browsers::extension_build(&mgr.app),
     }))
 }
 
@@ -272,6 +274,32 @@ async fn batch(
         batch: Box::new(batch),
     });
     (StatusCode::OK, Json(json!({ "ok": true, "items": count })))
+}
+
+#[derive(serde::Deserialize)]
+struct SizesRequest {
+    url: String,
+}
+
+async fn sizes(
+    State(mgr): State<Arc<Manager>>,
+    headers: HeaderMap,
+    Json(req): Json<SizesRequest>,
+) -> (StatusCode, Json<Value>) {
+    if !paired(&mgr, origin(&headers).as_deref()) {
+        return (
+            StatusCode::UNAUTHORIZED,
+            Json(json!({ "error": "pairing_required" })),
+        );
+    }
+    let browser = mgr.settings().cookies_from_browser.clone();
+    match mgr.tools.probe(req.url.trim(), None, &browser).await {
+        Ok(info) => (StatusCode::OK, Json(json!({ "sizes": info.sizes }))),
+        Err(e) => (
+            StatusCode::BAD_GATEWAY,
+            Json(json!({ "error": format!("{e:#}") })),
+        ),
+    }
 }
 
 async fn download(

@@ -7,6 +7,7 @@ desktop.ini
 
 /dist/
 /extension-build/
+/extension/build.json
 src-tauri/target/
 src-tauri/gen/schemas/
 frontend/dist/

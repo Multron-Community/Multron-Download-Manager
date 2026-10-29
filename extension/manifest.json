@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Multron Download Manager",
-  "version": "0.0.10",
+  "version": "0.0.11",
   "description": "Send downloads, videos (YouTube, Reddit, Instagram, X, TikTok…), Google Drive / MEGA files and torrents to Multron Download Manager.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA/Us+MlTZcsvlpmmW2yLzhrRJSMp0jQrGyaIzSHt9fOPhE5Fla0cNEOJQ0sXcQhNQarNnzBQRBukOyAR7Xp1cAzWkTmfA+tx527Zc1oelzkyAj3pBe5sR91VlPpGK3TVVOdwL6JnKtgIN4JILRszm1gcZYpvDu5qZGHCz3zLZU2rHYOdvCZvh+kyIEY1oAF0d8VH1a1cHpm6Fhf82BXNeIunDZOMD7kr2zmeFFl9Bnptfxp2kR0X6PLnthftGRbetDrz0/9CoCDVyYvwn1yEu1Dma/xVL3O8HKCesHZGNrIrSk70EFoXkp88xT5eWcHE9lyiiVUALhomFCZ8DdgS7WwIDAQAB",
   "homepage_url": "https://github.com/Multron-Community/Multron-Download-Manager",

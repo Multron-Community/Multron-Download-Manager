@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { CONTAINERS, QUALITIES } from '../lib/qualities';
   import { onMount, untrack } from 'svelte';
   import { open as openDialog, ask } from '@tauri-apps/plugin-dialog';
   import { app } from '../lib/store.svelte';
@@ -610,13 +611,13 @@
             </div>
             {@render row('Default quality')}
             <select class="field !w-[220px] mt-1" bind:value={draft.mediaQuality}>
-              {#each [['best', 'Best'], ['2160', '2160p'], ['1440', '1440p'], ['1080', '1080p'], ['720', '720p'], ['480', '480p'], ['audio-mp3', 'Audio only (MP3)'], ['audio-m4a', 'Audio only (M4A)']] as [v, l]}
-                <option value={v}>{t(l)}</option>
+              {#each QUALITIES as q}
+                <option value={q.id}>{t(q.label)}</option>
               {/each}
             </select>
             {@render row('Video container')}
             <select class="field !w-[220px] mt-1" bind:value={draft.mediaContainer}>
-              <option value="mp4">MP4</option><option value="mkv">MKV</option><option value="webm">WebM</option>
+              {#each CONTAINERS as c}<option value={c.id}>{c.label}</option>{/each}
             </select>
             {@render row('Use cookies from browser', 'For private, age-restricted or login-only media (Instagram, private Reddit…). The extension already sends the page cookies; this is a fallback for links added by hand.')}
             <select class="field !w-[220px] mt-1" bind:value={draft.cookiesFromBrowser}>

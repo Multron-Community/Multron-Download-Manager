@@ -55,6 +55,13 @@ struct Running {
     peak: u64,
 }
 
+fn youtube_cdn(url: &str) -> bool {
+    url::Url::parse(url)
+        .ok()
+        .and_then(|u| u.host_str().map(|h| h.ends_with(".googlevideo.com")))
+        .unwrap_or(false)
+}
+
 async fn remove_scratch(files: &[PathBuf]) {
     for f in files {
         let _ = tokio::fs::remove_file(f).await;
@@ -877,6 +884,10 @@ impl Manager {
                 filename: req.filename.clone().filter(|f| !f.trim().is_empty()),
                 partials: Vec::new(),
                 audio_url: req.audio_url.clone().filter(|a| a.starts_with("https://")),
+                container: req
+                    .container
+                    .clone()
+                    .filter(|c| crate::settings::CONTAINERS.contains(&c.as_str())),
             });
         }
 
@@ -1290,6 +1301,7 @@ impl Manager {
             retries: settings.retries,
             transform: resolved.transform,
             if_range: probe.validator.clone(),
+            max_request: None,
         });
         let done = engine::run(job).await;
         self.with_entry(id, |e| {
@@ -1553,7 +1565,10 @@ impl Manager {
             url: rec.url.clone(),
             dir: PathBuf::from(&rec.dir),
             quality: media.quality.clone(),
-            container: settings.media_container.clone(),
+            container: media
+                .container
+                .clone()
+                .unwrap_or_else(|| settings.media_container.clone()),
             playlist: media.playlist,
             fragments: rec.threads,
             rate_limit: if rec.speed_limit > 0 {
@@ -1579,7 +1594,7 @@ impl Manager {
             (true, false) => vec![true, false],
         };
         let mut scratch: Vec<PathBuf> = Vec::new();
-        if !media.playlist && !youtube {
+        if !media.playlist {
             let mut first = base.clone();
             if !attempts[0] {
                 first.cookies_file = None;
@@ -2702,6 +2717,7 @@ impl Manager {
                 retries: settings.retries,
                 transform: None,
                 if_range: probe.validator.clone(),
+                max_request: youtube_cdn(&probe.final_url).then_some(8 << 20),
             }))
             .await?;
             if !done {
