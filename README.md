@@ -32,18 +32,10 @@
 
 <div align="center">
   <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank">
-    <img src=".github/assets/Multron_Kapak_Animasyon.gif" width="500" alt="Kurulum Önizleme">
+    <img src=".github/assets/Multron_Kapak_Animasyon.gif" width="700" alt="Kurulum Önizleme">
   </a>
-  <p><i>🎬 Tamamını YouTube'da izlemek için görsele tıklayın.</i></p>
+  <p><i>Click the image to watch the full version on YouTube.</i></p>
 </div>
-
----
-
-</div>
-
-<p align="center">
-  <img src="docs/screenshots/downloads-dark.png" alt="Multron Download Manager: downloads list with the live 8-connection segment view" width="900" />
-</p>
 
 ---
 
@@ -68,6 +60,14 @@
 ---
 
 ## Screenshots
+
+---
+</div>
+
+<p align="center">
+  <img src="docs/screenshots/downloads-dark.png" alt="Multron Download Manager: downloads list with the live 8-connection segment view" width="900" />
+</p>
+---
 
 | | |
 |---|---|
