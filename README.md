@@ -31,8 +31,8 @@
 ---
 
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.gif" width="48%" alt="Setup and overview video (English)"></a>
-  <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank"><img src=".github/assets/DownloadManager_Preview_TR.gif" width="48%" alt="Kurulum ve tanıtım videosu (Türkçe)"></a>
+  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.webp" width="48%" alt="Setup and overview video (English)"></a>
+  <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank"><img src=".github/assets/DownloadManager_Preview_TR.webp" width="48%" alt="Kurulum ve tanıtım videosu (Türkçe)"></a>
   <p><b>🇬🇧 English</b> &nbsp;·&nbsp; <b>🇹🇷 Türkçe</b><br><i>Click an image to watch the full video on YouTube.</i></p>
 </div>
 
