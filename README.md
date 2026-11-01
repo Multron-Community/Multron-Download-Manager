@@ -31,23 +31,9 @@
 ---
 
 <div align="center">
-  <table>
-    <tr>
-      <td align="center">
-        <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank">
-          <img src=".github/assets/DownloadManager_Preview_EN.gif" width="420" alt="Setup and overview video (English)">
-        </a>
-        <br><b>🇬🇧 English</b>
-      </td>
-      <td align="center">
-        <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank">
-          <img src=".github/assets/DownloadManager_Preview_TR.gif" width="420" alt="Kurulum ve tanıtım videosu (Türkçe)">
-        </a>
-        <br><b>🇹🇷 Türkçe</b>
-      </td>
-    </tr>
-  </table>
-  <p><i>Click an image to watch the full video on YouTube.</i></p>
+  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.gif" width="48%" alt="Setup and overview video (English)"></a>
+  <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank"><img src=".github/assets/DownloadManager_Preview_TR.gif" width="48%" alt="Kurulum ve tanıtım videosu (Türkçe)"></a>
+  <p><b>🇬🇧 English</b> &nbsp;·&nbsp; <b>🇹🇷 Türkçe</b><br><i>Click an image to watch the full video on YouTube.</i></p>
 </div>
 
 ---
