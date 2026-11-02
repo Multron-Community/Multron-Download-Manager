@@ -30,10 +30,19 @@
 
 ---
 
+## Please Select a Language
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.webp" width="48%" alt="Setup and overview video (English)"></a>
-  <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank"><img src=".github/assets/DownloadManager_Preview_TR.webp" width="48%" alt="Kurulum ve tanıtım videosu (Türkçe)"></a>
-  <p><b>🇬🇧 English</b> &nbsp;·&nbsp; <b>🇹🇷 Türkçe</b><br><i>Click an image to watch the full video on YouTube.</i></p>
+
+[![English](https://img.shields.io/badge/Language-English-blue.svg?style=for-the-badge)](README.md)
+[![Türkçe](https://img.shields.io/badge/Dil-T%C3%BCrk%C3%A7e-red.svg?style=for-the-badge)](README.tr.md)
+
+</div>
+
+---
+
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.webp" width="700" alt="Setup and overview video"></a>
+  <p><i>Click an image to watch the full video on YouTube.</i></p>
 </div>
 
 ---
