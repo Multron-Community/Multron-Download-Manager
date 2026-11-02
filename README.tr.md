@@ -46,23 +46,33 @@
 
 ---
 
+<div align="center">
+
 ## İçindekiler
 
-- [Ekran Görüntüleri](#ekran-görüntüleri)
-- [Özellikler](#özellikler)
-- [Kurulum](#kurulum)
-- [Tarayıcı eklentisi](#tarayıcı-eklentisi)
-- [İndirme motoru nasıl çalışır](#indirme-motoru-nasıl-çalışır)
-- [Desteklenen kaynaklar](#desteklenen-kaynaklar)
-- [Torrentler](#torrentler)
-- [SHA-256 doğrulaması](#sha-256-doğrulaması)
-- [Ayarlara genel bakış](#ayarlara-genel-bakış)
-- [Kaynaktan derleme](#kaynaktan-derleme)
-- [Sürüm yayınlama](#sürüm-yayınlama)
-- [Proje yapısı](#proje-yapısı)
-- [Çeviri yapma](#çeviri-yapma)
-- [Güvenlik ve gizlilik](#güvenlik-ve-gizlilik)
-- [Lisans](#lisans)
+<table>
+  <tr>
+    <td align="left">
+      <a href="#ekran-görüntüleri"><img src="https://img.shields.io/badge/01-Ekran_G%C3%B6r%C3%BCnt%C3%BCleri-000000?style=for-the-badge" alt="Ekran Görüntüleri" /></a><br>
+      <a href="#özellikler"><img src="https://img.shields.io/badge/02-%C3%96zellikler-1F2228?style=for-the-badge" alt="Özellikler" /></a><br>
+      <a href="#kurulum"><img src="https://img.shields.io/badge/03-Kurulum-000000?style=for-the-badge" alt="Kurulum" /></a><br>
+      <a href="#tarayıcı-eklentisi"><img src="https://img.shields.io/badge/04-Taray%C4%B1c%C4%B1_Eklentisi-1F2228?style=for-the-badge" alt="Tarayıcı Eklentisi" /></a><br>
+      <a href="#indirme-motoru-nasıl-çalışır"><img src="https://img.shields.io/badge/05-%C4%B0ndirme_Motoru-000000?style=for-the-badge" alt="İndirme Motoru" /></a><br>
+      <a href="#desteklenen-kaynaklar"><img src="https://img.shields.io/badge/06-Desteklenen_Kaynaklar-1F2228?style=for-the-badge" alt="Desteklenen Kaynaklar" /></a><br>
+      <a href="#torrentler"><img src="https://img.shields.io/badge/07-Torrentler-000000?style=for-the-badge" alt="Torrentler" /></a><br>
+      <a href="#sha-256-doğrulaması"><img src="https://img.shields.io/badge/08-SHA--256_Do%C4%9Frulamas%C4%B1-1F2228?style=for-the-badge" alt="SHA-256 Doğrulaması" /></a><br>
+      <a href="#ayarlara-genel-bakış"><img src="https://img.shields.io/badge/09-Ayarlara_Genel_Bak%C4%B1%C5%9F-000000?style=for-the-badge" alt="Ayarlara Genel Bakış" /></a><br>
+      <a href="#kaynaktan-derleme"><img src="https://img.shields.io/badge/10-Kaynaktan_Derleme-1F2228?style=for-the-badge" alt="Kaynaktan Derleme" /></a><br>
+      <a href="#sürüm-yayınlama"><img src="https://img.shields.io/badge/11-S%C3%BCr%C3%BCm_Yay%C4%B1nlama-000000?style=for-the-badge" alt="Sürüm Yayınlama" /></a><br>
+      <a href="#proje-yapısı"><img src="https://img.shields.io/badge/12-Proje_Yap%C1%B1s%C4%B1-1F2228?style=for-the-badge" alt="Proje Yapısı" /></a><br>
+      <a href="#çeviri-yapma"><img src="https://img.shields.io/badge/13-%C3%87eviri_Yapma-000000?style=for-the-badge" alt="Çeviri Yapma" /></a><br>
+      <a href="#güvenlik-ve-gizlilik"><img src="https://img.shields.io/badge/14-G%C3%BCvenlik_ve_Gizlilik-1F2228?style=for-the-badge" alt="Güvenlik ve Gizlilik" /></a><br>
+      <a href="#lisans"><img src="https://img.shields.io/badge/15-Lisans-000000?style=for-the-badge" alt="Lisans" /></a>
+    </td>
+  </tr>
+</table>
+
+</div>
 
 ---
 
