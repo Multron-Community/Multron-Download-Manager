@@ -30,31 +30,50 @@
 
 ---
 
+## Please Select a Language
 <div align="center">
-  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.webp" width="48%" alt="Setup and overview video (English)"></a>
-  <a href="https://www.youtube.com/watch?v=4Bk3NDFmTy4" target="_blank"><img src=".github/assets/DownloadManager_Preview_TR.webp" width="48%" alt="Kurulum ve tanıtım videosu (Türkçe)"></a>
-  <p><b>🇬🇧 English</b> &nbsp;·&nbsp; <b>🇹🇷 Türkçe</b><br><i>Click an image to watch the full video on YouTube.</i></p>
+
+[![English](https://img.shields.io/badge/Language-English-blue.svg?style=for-the-badge)](README.md)
+[![Türkçe](https://img.shields.io/badge/Dil-T%C3%BCrk%C3%A7e-red.svg?style=for-the-badge)](README.tr.md)
+
 </div>
 
 ---
 
+<div align="center">
+  <a href="https://www.youtube.com/watch?v=PWFvtYX3gwo" target="_blank"><img src=".github/assets/DownloadManager_Preview_EN.webp" width="700" alt="Setup and overview video"></a>
+  <p><i>Click an image to watch the full video on YouTube.</i></p>
+</div>
+
+---
+
+<div align="center">
+
 ## Contents
 
-- [Screenshots](#screenshots)
-- [Features](#features)
-- [Install](#install)
-- [Browser extension](#browser-extension)
-- [How the download engine works](#how-the-download-engine-works)
-- [Supported sources](#supported-sources)
-- [Torrents](#torrents)
-- [SHA-256 verification](#sha-256-verification)
-- [Settings overview](#settings-overview)
-- [Building from source](#building-from-source)
-- [Releasing](#releasing)
-- [Project structure](#project-structure)
-- [Translating](#translating)
-- [Security & privacy](#security--privacy)
-- [License](#license)
+<table>
+  <tr>
+    <td align="left">
+      <a href="#screenshots"><img src="https://img.shields.io/badge/01-Screenshots-000000?style=for-the-badge" alt="Screenshots" /></a><br>
+      <a href="#features"><img src="https://img.shields.io/badge/02-Features-1F2228?style=for-the-badge" alt="Features" /></a><br>
+      <a href="#install"><img src="https://img.shields.io/badge/03-Install-000000?style=for-the-badge" alt="Install" /></a><br>
+      <a href="#browser-extension"><img src="https://img.shields.io/badge/04-Browser_Extension-1F2228?style=for-the-badge" alt="Browser Extension" /></a><br>
+      <a href="#how-the-download-engine-works"><img src="https://img.shields.io/badge/05-Download_Engine-000000?style=for-the-badge" alt="How the download engine works" /></a><br>
+      <a href="#supported-sources"><img src="https://img.shields.io/badge/06-Supported_Sources-1F2228?style=for-the-badge" alt="Supported Sources" /></a><br>
+      <a href="#torrents"><img src="https://img.shields.io/badge/07-Torrents-000000?style=for-the-badge" alt="Torrents" /></a><br>
+      <a href="#sha-256-verification"><img src="https://img.shields.io/badge/08-SHA--256_Verification-1F2228?style=for-the-badge" alt="SHA-256 Verification" /></a><br>
+      <a href="#settings-overview"><img src="https://img.shields.io/badge/09-Settings_Overview-000000?style=for-the-badge" alt="Settings Overview" /></a><br>
+      <a href="#building-from-source"><img src="https://img.shields.io/badge/10-Building_from_Source-1F2228?style=for-the-badge" alt="Building from Source" /></a><br>
+      <a href="#releasing"><img src="https://img.shields.io/badge/11-Releasing-000000?style=for-the-badge" alt="Releasing" /></a><br>
+      <a href="#project-structure"><img src="https://img.shields.io/badge/12-Project_Structure-1F2228?style=for-the-badge" alt="Project Structure" /></a><br>
+      <a href="#translating"><img src="https://img.shields.io/badge/13-Translating-000000?style=for-the-badge" alt="Translating" /></a><br>
+      <a href="#security--privacy"><img src="https://img.shields.io/badge/14-Security_%26_Privacy-1F2228?style=for-the-badge" alt="Security & Privacy" /></a><br>
+      <a href="#license"><img src="https://img.shields.io/badge/15-License-000000?style=for-the-badge" alt="License" /></a>
+    </td>
+  </tr>
+</table>
+
+</div>
 
 ---
 
