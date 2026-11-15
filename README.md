@@ -57,18 +57,19 @@
       <a href="#screenshots"><img src="https://img.shields.io/badge/01-Screenshots-000000?style=for-the-badge" alt="Screenshots" /></a><br>
       <a href="#features"><img src="https://img.shields.io/badge/02-Features-1F2228?style=for-the-badge" alt="Features" /></a><br>
       <a href="#install"><img src="https://img.shields.io/badge/03-Install-000000?style=for-the-badge" alt="Install" /></a><br>
-      <a href="#browser-extension"><img src="https://img.shields.io/badge/04-Browser_Extension-1F2228?style=for-the-badge" alt="Browser Extension" /></a><br>
-      <a href="#how-the-download-engine-works"><img src="https://img.shields.io/badge/05-Download_Engine-000000?style=for-the-badge" alt="How the download engine works" /></a><br>
-      <a href="#supported-sources"><img src="https://img.shields.io/badge/06-Supported_Sources-1F2228?style=for-the-badge" alt="Supported Sources" /></a><br>
-      <a href="#torrents"><img src="https://img.shields.io/badge/07-Torrents-000000?style=for-the-badge" alt="Torrents" /></a><br>
-      <a href="#sha-256-verification"><img src="https://img.shields.io/badge/08-SHA--256_Verification-1F2228?style=for-the-badge" alt="SHA-256 Verification" /></a><br>
-      <a href="#settings-overview"><img src="https://img.shields.io/badge/09-Settings_Overview-000000?style=for-the-badge" alt="Settings Overview" /></a><br>
-      <a href="#building-from-source"><img src="https://img.shields.io/badge/10-Building_from_Source-1F2228?style=for-the-badge" alt="Building from Source" /></a><br>
-      <a href="#releasing"><img src="https://img.shields.io/badge/11-Releasing-000000?style=for-the-badge" alt="Releasing" /></a><br>
-      <a href="#project-structure"><img src="https://img.shields.io/badge/12-Project_Structure-1F2228?style=for-the-badge" alt="Project Structure" /></a><br>
-      <a href="#translating"><img src="https://img.shields.io/badge/13-Translating-000000?style=for-the-badge" alt="Translating" /></a><br>
-      <a href="#security--privacy"><img src="https://img.shields.io/badge/14-Security_%26_Privacy-1F2228?style=for-the-badge" alt="Security & Privacy" /></a><br>
-      <a href="#license"><img src="https://img.shields.io/badge/15-License-000000?style=for-the-badge" alt="License" /></a>
+      <a href="#package-managers"><img src="https://img.shields.io/badge/04-Package_Managers-1F2228?style=for-the-badge" alt="Package Managers" /></a><br>
+      <a href="#browser-extension"><img src="https://img.shields.io/badge/05-Browser_Extension-000000?style=for-the-badge" alt="Browser Extension" /></a><br>
+      <a href="#how-the-download-engine-works"><img src="https://img.shields.io/badge/06-Download_Engine-1F2228?style=for-the-badge" alt="How the download engine works" /></a><br>
+      <a href="#supported-sources"><img src="https://img.shields.io/badge/07-Supported_Sources-000000?style=for-the-badge" alt="Supported Sources" /></a><br>
+      <a href="#torrents"><img src="https://img.shields.io/badge/08-Torrents-1F2228?style=for-the-badge" alt="Torrents" /></a><br>
+      <a href="#sha-256-verification"><img src="https://img.shields.io/badge/09-SHA--256_Verification-000000?style=for-the-badge" alt="SHA-256 Verification" /></a><br>
+      <a href="#settings-overview"><img src="https://img.shields.io/badge/10-Settings_Overview-1F2228?style=for-the-badge" alt="Settings Overview" /></a><br>
+      <a href="#building-from-source"><img src="https://img.shields.io/badge/11-Building_from_Source-000000?style=for-the-badge" alt="Building from Source" /></a><br>
+      <a href="#releasing"><img src="https://img.shields.io/badge/12-Releasing-1F2228?style=for-the-badge" alt="Releasing" /></a><br>
+      <a href="#project-structure"><img src="https://img.shields.io/badge/13-Project_Structure-000000?style=for-the-badge" alt="Project Structure" /></a><br>
+      <a href="#translating"><img src="https://img.shields.io/badge/14-Translating-1F2228?style=for-the-badge" alt="Translating" /></a><br>
+      <a href="#security--privacy"><img src="https://img.shields.io/badge/15-Security_%26_Privacy-000000?style=for-the-badge" alt="Security & Privacy" /></a><br>
+      <a href="#license"><img src="https://img.shields.io/badge/16-License-1F2228?style=for-the-badge" alt="License" /></a>
     </td>
   </tr>
 </table>
@@ -190,6 +191,24 @@ Every release has a signed `update.json` that lists the SHA-256 of each file. Ch
 - **Multi-connection video downloads** — yt-dlp finds the video, and a video served as one file is downloaded with the multi-connection engine (using the download's *Connections* setting), then handed back to yt-dlp, which joins picture and sound and adds metadata and the thumbnail. YouTube videos also go through the engine, with requests of at most 8 MB so YouTube does not slow them down. Videos served in pieces (HLS / DASH) are fetched with as many pieces at once as the *Connections* setting allows, up to 64. Changing the connections while a video downloads applies within two seconds without losing progress. If the direct way does not work for a video, yt-dlp downloads it on its own.
 - **Deno** (the JavaScript runtime yt-dlp needs to answer YouTube's speed check; without it YouTube slows downloads to about 100 KB/s) is installed automatically the first time you download a YouTube video, on Windows (x86_64), macOS and Linux (x86_64 and ARM64). A Deno already on your system is used instead. It is kept up to date with yt-dlp and FFmpeg.
 - They are downloaded with the same multi-connection engine as your files. While FFmpeg installs, the download shows its own status (`FFmpeg: 61 MB / 142 MB · Installing FFmpeg · 43%`, then *Extracting FFmpeg*), and pause or remove stops the install. If the install fails, a warning says why and the video is saved in a lower quality.
+
+---
+
+## Package Managers
+
+**macOS (Homebrew):**
+
+```bash
+brew tap multron-community/tap
+brew trust multron-community/tap
+brew install --cask multron-download-manager
+```
+
+**Windows (Winget):**
+
+```powershell
+winget install MultronCommunity.MultronDownloadManager
+```
 
 ---
 
