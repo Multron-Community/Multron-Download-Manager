@@ -32,8 +32,7 @@ jobs:
         uses: canonical/action-build@v1
 
       - name: Publish to Snap Store
-        uses: canonical/action-publish@v1
-        with:
-          store_login: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
-          snap: ${{ steps.build.outputs.snap }}
-          release: stable
+        env:
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+        run: |
+          snapcraft upload --release=stable "${{ steps.build.outputs.snap }}"
