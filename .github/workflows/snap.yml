@@ -27,6 +27,20 @@ jobs:
           echo "$VERSION" > SNAP_VERSION
           gh release download "$TAG" --pattern "Multron.Download.Manager_*_amd64.deb" -O multron-download-manager.deb
 
+      - name: Install LXD and Snapcraft with retry
+        run: |
+          sudo groupadd --force --system lxd
+          sudo usermod --append --groups lxd "$USER"
+          for i in 1 2 3 4 5; do
+            if sudo snap install lxd && sudo snap install --classic snapcraft; then
+              sudo lxd init --auto
+              exit 0
+            fi
+            echo "Snap Store API timeout, retrying in 20s ($i/5)..."
+            sleep 20
+          done
+          exit 1
+
       - name: Build Snap package
         id: build
         uses: canonical/action-build@v1
@@ -35,4 +49,11 @@ jobs:
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
-          snapcraft upload --release=stable "${{ steps.build.outputs.snap }}"
+          for i in 1 2 3; do
+            if snapcraft upload --release=stable "${{ steps.build.outputs.snap }}"; then
+              exit 0
+            fi
+            echo "Upload timeout, retrying in 15s ($i/3)..."
+            sleep 15
+          done
+          exit 1
