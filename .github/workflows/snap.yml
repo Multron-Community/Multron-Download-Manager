@@ -1,0 +1,39 @@
+name: Publish to Snap Store
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Fetch release version and .deb package
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="${{ github.event.release.tag_name }}"
+          if [ -z "$TAG" ]; then
+            TAG=$(gh release view --json tagName -q .tagName)
+          fi
+          VERSION="${TAG#v}"
+          echo "$VERSION" > SNAP_VERSION
+          gh release download "$TAG" --pattern "*amd64.deb" -O multron-download-manager.deb
+
+      - name: Build Snap package
+        id: build
+        uses: canonical/action-build@v1
+
+      - name: Publish to Snap Store
+        uses: canonical/action-publish@v1
+        with:
+          store_login: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
+          snap: ${{ steps.build.outputs.snap }}
+          release: stable
