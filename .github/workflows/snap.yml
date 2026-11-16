@@ -25,7 +25,7 @@ jobs:
           fi
           VERSION="${TAG#v}"
           echo "$VERSION" > SNAP_VERSION
-          gh release download "$TAG" --pattern "*amd64.deb" -O multron-download-manager.deb
+          gh release download "$TAG" --pattern "Multron.Download.Manager_*_amd64.deb" -O multron-download-manager.deb
 
       - name: Build Snap package
         id: build
