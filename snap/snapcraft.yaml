@@ -5,7 +5,7 @@ adopt-info: multron-deb
 summary: Fast, lightweight multi-connection download manager
 description: |
   Multron Download Manager is a fast, modern desktop download manager built with Rust, Tauri v2, and Svelte 5—supporting up to 64 concurrent segments, built-in yt-dlp + FFmpeg, BitTorrent, and browser extensions.
-license: LicenseRef-Multron-Source-Available
+license: Proprietary
 website: https://github.com/Multron-Community/Multron-Download-Manager
 source-code: https://github.com/Multron-Community/Multron-Download-Manager
 issues: https://github.com/Multron-Community/Multron-Download-Manager/issues
