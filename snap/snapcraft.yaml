@@ -1,0 +1,32 @@
+name: multron-download-manager
+base: core24
+adopt-info: multron-deb
+summary: Fast, lightweight multi-connection download manager
+description: |
+  Multron Download Manager is a fast, modern desktop download manager built with Rust, Tauri v2, and Svelte 5—supporting up to 64 concurrent segments, built-in yt-dlp + FFmpeg, BitTorrent, and browser extensions.
+grade: stable
+confinement: strict
+
+apps:
+  multron-download-manager:
+    command: usr/bin/multron-download-manager
+    extensions: [gnome]
+    plugs:
+      - network
+      - network-bind
+      - home
+      - removable-media
+      - desktop
+      - desktop-legacy
+      - wayland
+      - x11
+      - opengl
+
+parts:
+  multron-deb:
+    plugin: dump
+    source: multron-download-manager.deb
+    source-type: deb
+    override-pull: |
+      craftctl default
+      craftctl set version="$(cat $CRAFT_PROJECT_DIR/SNAP_VERSION)"
