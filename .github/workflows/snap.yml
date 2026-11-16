@@ -1,4 +1,4 @@
-name: Publish to Snap Store
+name: Build and Publish Snap
 
 on:
   release:
@@ -27,30 +27,41 @@ jobs:
           echo "$VERSION" > SNAP_VERSION
           gh release download "$TAG" --pattern "Multron.Download.Manager_*_amd64.deb" -O multron-download-manager.deb
 
-      - name: Install LXD and Snapcraft with retry
+      - name: Setup LXD and Snapcraft
         run: |
-          sudo groupadd --force --system lxd
+          sudo apt-get update
+          sudo apt-get install -y snapd
+          sudo snap install lxd
+          sudo lxd init --auto
           sudo usermod --append --groups lxd "$USER"
+          sudo iptables -P FORWARD ACCEPT
           for i in 1 2 3 4 5; do
-            if sudo snap install lxd && sudo snap install --classic snapcraft; then
-              sudo lxd init --auto
+            if sudo snap install --classic snapcraft; then
               exit 0
             fi
-            echo "Snap Store API timeout, retrying in 20s ($i/5)..."
-            sleep 20
+            echo "Snapcraft install timeout, retrying in 15s ($i/5)..."
+            sleep 15
           done
           exit 1
 
-      - name: Build Snap package
-        id: build
-        uses: canonical/action-build@v1
+      - name: Build Snap package with retry
+        run: |
+          for i in 1 2 3 4; do
+            if sg lxd -c "snapcraft pack --use-lxd"; then
+              exit 0
+            fi
+            echo "Snapcraft build/store timeout, retrying in 20s ($i/4)..."
+            sleep 20
+          done
+          exit 1
 
       - name: Publish to Snap Store
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
+          SNAP_FILE=$(ls multron-download-manager_*_amd64.snap | head -n 1)
           for i in 1 2 3; do
-            if snapcraft upload --release=stable "${{ steps.build.outputs.snap }}"; then
+            if snapcraft upload --release=stable "$SNAP_FILE"; then
               exit 0
             fi
             echo "Upload timeout, retrying in 15s ($i/3)..."
