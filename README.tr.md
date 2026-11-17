@@ -197,6 +197,7 @@ Her sürüm, her dosyanın SHA-256 karmasını listeleyen imzalı bir `update.js
 
 [![Homebrew](https://img.shields.io/badge/Homebrew-macOS-FBB040?style=flat-square&logo=homebrew&logoColor=white)](https://github.com/Multron-Community/homebrew-tap)
 [![Winget](https://img.shields.io/badge/Winget-Windows-0078D4?style=flat-square&logo=windows&logoColor=white)](https://github.com/microsoft/winget-pkgs)
+[![Scoop](https://img.shields.io/badge/Scoop-Windows-4B8BBE?style=flat-square&logo=scoop&logoColor=white)](https://github.com/Multron-Community/scoop-bucket)
 [![Snap Store](https://img.shields.io/badge/Snap_Store-Linux-82BEA0?style=flat-square&logo=snapcraft&logoColor=white)](https://snapcraft.io/multron-download-manager)
 
 **macOS (Homebrew):**
@@ -213,13 +214,22 @@ brew install --cask multron-download-manager
 winget install MultronCommunity.MultronDownloadManager
 ```
 
+**Windows (Scoop):**
+
+```powershell
+scoop bucket add multron https://github.com/Multron-Community/scoop-bucket
+scoop install multron/multron-download-manager
+```
+
 **Linux (Snap):**
 
 ```bash
 sudo snap install multron-download-manager
 ```
 
-[![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/multron-download-manager)
+[![Snap Store'dan Edinin](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/multron-download-manager)
+
+---
 
 ## Tarayıcı eklentisi
 
