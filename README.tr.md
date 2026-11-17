@@ -218,7 +218,7 @@ winget install MultronCommunity.MultronDownloadManager
 **Windows (Scoop):**
 
 ```powershell
-scoop bucket add multron [https://github.com/Multron-Community/scoop-bucket](https://github.com/Multron-Community/scoop-bucket)
+scoop bucket add multron https://github.com/Multron-Community/scoop-bucket
 scoop install multron/multron-download-manager
 ```
 
