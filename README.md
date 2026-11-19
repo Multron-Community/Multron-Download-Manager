@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Multron_Dowland_Manager_logo.png" alt="Multron Download Manager logo" width="160" />
+  <img src=".github/assets/Multron_Download_Manager_logo.png" alt="Multron Download Manager logo" width="160" />
 </p>
 
 <h1 align="center">Multron Download Manager</h1>
