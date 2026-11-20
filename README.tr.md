@@ -185,7 +185,7 @@ Sisteminiz için uygun dosyayı [en son sürümden](https://github.com/Multron-C
 | Windows 10/11 x64, taşınabilir | `Multron-Download-Manager-<sürüm>-x64-portable.zip` | İstediğiniz yere (USB bellek dahil) çıkarın ve `multron-download-manager.exe` dosyasını çalıştırın. Ayarlar ve indirme listesi yanındaki `data` klasöründe kalır ve yerinde güncellenir. Windows 10/11'de normalde zaten bulunan WebView2'ye ihtiyaç duyar. |
 | macOS Apple Silicon | `*_aarch64.dmg` | DMG dosyasını açın ve uygulamayı Uygulamalar (Applications) klasörüne sürükleyin. |
 | macOS Intel | `*_x64.dmg` | Yukarıdaki ile aynı. |
-| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` (veya `*_arm64.deb`) | `sudo apt install ./<dosya>.deb` |
+| Ubuntu 22.04+ / Mint 21+ / Debian 13+ (apt) | `*_amd64.deb` (veya `*_arm64.deb`) | `sudo apt install ./<dosya>.deb` |
 | Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` (veya `*_debian12_arm64.deb`) | `sudo apt install ./<dosya>.deb` |
 | Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` (veya `*_fedora_aarch64.rpm`) | `sudo dnf install ./<dosya>.rpm` |
 | openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` (veya `*_opensuse_aarch64.rpm`) | `sudo zypper install --allow-unsigned-rpm ./<dosya>.rpm` |
@@ -194,7 +194,7 @@ Sisteminiz için uygun dosyayı [en son sürümden](https://github.com/Multron-C
 
 Her sürüm, her dosyanın SHA-256 karmasını listeleyen imzalı bir `update.json` dosyasına sahiptir. Bu depodan `node scripts/verify-update.mjs update.json update.json.sig <dosya>` komutuyla bir indirmeyi kontrol edin veya `gh attestation verify <dosya> --repo Multron-Community/Multron-Download-Manager` komutuyla nerede derlendiğini doğrulayın (bkz. [Güncellemeler nasıl doğrulanır](#güncellemeler-nasıl-doğrulanır)).
 
-> **Linux:** her paket amaçlandığı dağıtım üzerinde derlenir. Düz `.deb`, Ubuntu 24.04 üzerinde derlenir ve glibc 2.39 veya daha yenisine ihtiyaç duyar (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). AppImage ise Ubuntu 22.04 üzerinde derlenir, bu yüzden glibc 2.35 veya daha yenisinde çalışır: Ubuntu 22.04+, Linux Mint 21+ ve 2022 sonrası çoğu dağıtım. Debian 12 (bookworm) ve LMDE 6, Debian 12 üzerinde derlenen kendi `.deb` paketine sahiptir; Fedora, Fedora 43 üzerinde derlenen kendi `.rpm` paketine sahiptir ve openSUSE, Leap 16 üzerinde derlenen kendi `.rpm` paketine sahiptir (Tumbleweed üzerinde de çalışır). Otomatik güncellemeler her kurulumu kendi dağıtımı için derlenen pakette tutar. Ubuntu 22.04 veya Linux Mint 21 kullanıyorsanız AppImage'ı kullanın; bunlardan eski sürümler desteklenmez.
+> **Linux:** her paket amaçlandığı dağıtım üzerinde derlenir. Düz `.deb` ve AppImage Ubuntu 22.04 üzerinde derlenir, bu yüzden glibc 2.35 veya daha yenisinde çalışır: Ubuntu 22.04+, Linux Mint 21+, Debian 13+ ve 2022 sonrası çoğu dağıtım. Debian 12 (bookworm) ve LMDE 6, Debian 12 üzerinde derlenen kendi `.deb` paketine sahiptir; Fedora, Fedora 43 üzerinde derlenen kendi `.rpm` paketine sahiptir ve openSUSE, Leap 16 üzerinde derlenen kendi `.rpm` paketine sahiptir (Tumbleweed üzerinde de çalışır). Otomatik güncellemeler her kurulumu kendi dağıtımı için derlenen pakette tutar. Ubuntu 22.04 ve Linux Mint 21'den eski sürümler desteklenmez.
 
 > **macOS:** derlemeler henüz noter onayından (notarization) geçmemiştir. İlk seferinde uygulamaya sağ tıklayın → **Aç** seçeneğini kullanın veya `xattr -cr "/Applications/Multron Download Manager.app"` komutunu çalıştırın.
 

@@ -127,7 +127,7 @@ jobs:
               '| Windows 10/11 (x64), portable | `Multron-Download-Manager-*-x64-portable.zip` → extract anywhere (for example a USB stick) and run `multron-download-manager.exe`; settings stay in its `data` folder |',
               '| macOS Apple Silicon | `*_aarch64.dmg` |',
               '| macOS Intel | `*_x64.dmg` |',
-              '| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
+              '| Ubuntu 22.04+ / Mint 21+ / Debian 13+ (apt) | `*_amd64.deb` / `*_arm64.deb` → `sudo apt install ./file.deb` |',
               '| Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` / `*_debian12_arm64.deb` → `sudo apt install ./file.deb` |',
               '| Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` / `*_fedora_aarch64.rpm` → `sudo dnf install ./file.rpm` |',
               '| openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` / `*_opensuse_aarch64.rpm` → `sudo zypper install --allow-unsigned-rpm ./file.rpm` |',
@@ -175,13 +175,13 @@ jobs:
             outputs: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
           - name: Linux deb (x86_64)
             key: linux-x86_64
-            platform: ubuntu-24.04
+            platform: ubuntu-22.04
             args: --bundles deb
             rust_targets: ''
             outputs: src-tauri/target/release/bundle/deb/*.deb
           - name: Linux deb (arm64)
             key: linux-arm64
-            platform: ubuntu-24.04-arm
+            platform: ubuntu-22.04-arm
             args: --bundles deb
             rust_targets: ''
             rustflags: -C link-arg=-fuse-ld=lld

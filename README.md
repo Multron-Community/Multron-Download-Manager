@@ -186,7 +186,7 @@ Download the file for your system from the [latest release](https://github.com/M
 | Windows 10/11 x64, portable | `Multron-Download-Manager-<version>-x64-portable.zip` | Extract it anywhere (also a USB stick) and run `multron-download-manager.exe`. Settings and the download list stay in the `data` folder next to it, and it updates itself in place. Needs WebView2, which Windows 10/11 normally already have. |
 | macOS Apple Silicon | `*_aarch64.dmg` | Open the DMG and drag the app to Applications. |
 | macOS Intel | `*_x64.dmg` | Same as above. |
-| Ubuntu 24.04+ / Mint 22+ / Debian 13+ (apt) | `*_amd64.deb` (or `*_arm64.deb`) | `sudo apt install ./<file>.deb` |
+| Ubuntu 22.04+ / Mint 21+ / Debian 13+ (apt) | `*_amd64.deb` (or `*_arm64.deb`) | `sudo apt install ./<file>.deb` |
 | Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` (or `*_debian12_arm64.deb`) | `sudo apt install ./<file>.deb` |
 | Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` (or `*_fedora_aarch64.rpm`) | `sudo dnf install ./<file>.rpm` |
 | openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` (or `*_opensuse_aarch64.rpm`) | `sudo zypper install --allow-unsigned-rpm ./<file>.rpm` |
@@ -195,7 +195,7 @@ Download the file for your system from the [latest release](https://github.com/M
 
 Every release has a signed `update.json` that lists the SHA-256 of each file. Check a download with `node scripts/verify-update.mjs update.json update.json.sig <file>` from this repository, or check where it was built with `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager` (see [How updates are verified](#how-updates-are-verified)).
 
-> **Linux:** every package is built on the distribution it is meant for. The plain `.deb` is built on Ubuntu 24.04 and needs glibc 2.39 or newer (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). The AppImage is built on Ubuntu 22.04, so it runs on glibc 2.35 or newer: Ubuntu 22.04+, Linux Mint 21+ and most other distributions from 2022 on. Debian 12 (bookworm) and LMDE 6 have their own `.deb` built on Debian 12, Fedora has its own `.rpm` built on Fedora 43, and openSUSE has its own `.rpm` built on Leap 16 (it also runs on Tumbleweed). Automatic updates keep each installation on the package built for its distribution. On Ubuntu 22.04 or Linux Mint 21, use the AppImage; releases older than that are not supported.
+> **Linux:** every package is built on the distribution it is meant for. The plain `.deb` and the AppImage are built on Ubuntu 22.04, so they run on glibc 2.35 or newer: Ubuntu 22.04+, Linux Mint 21+, Debian 13+ and most other distributions from 2022 on. Debian 12 (bookworm) and LMDE 6 have their own `.deb` built on Debian 12, Fedora has its own `.rpm` built on Fedora 43, and openSUSE has its own `.rpm` built on Leap 16 (it also runs on Tumbleweed). Automatic updates keep each installation on the package built for its distribution. Releases older than Ubuntu 22.04 and Linux Mint 21 are not supported.
 
 > **macOS:** builds are not notarized yet. Right-click the app → **Open** the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.
 
