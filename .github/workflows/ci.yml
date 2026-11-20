@@ -49,6 +49,7 @@ jobs:
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: src-tauri -> target
+          key: ${{ matrix.os }}
           cache-on-failure: true
       - name: Placeholder frontend build
         shell: bash
