@@ -1,24 +1,9 @@
 import { listen } from '@tauri-apps/api/event';
 import { api, errorText } from './api';
 import { setLanguage, t } from './i18n.svelte';
-import { message } from '@tauri-apps/plugin-dialog';
+import { ask, message } from '@tauri-apps/plugin-dialog';
 import { applyAppearance, resolveTheme, type Appearance } from './theme';
-import type {
-  Duplicate,
-  CloudReport,
-  AddRequest,
-  AppUpdate,
-  CategoryFilter,
-  Download,
-  GlobalStats,
-  PageBatch,
-  ReadyUpdate,
-  MandatoryUpdate,
-  KindFilter,
-  Settings,
-  StatusFilter,
-  ToolProgress
-} from '../types';
+import type { VtResult, CaptchaRequest, Duplicate, CloudReport, AddRequest, AppUpdate, CategoryFilter, Download, GlobalStats, PageBatch, ReadyUpdate, MandatoryUpdate, KindFilter, Settings, StatusFilter, ToolProgress, CategoryLanguage } from '../types';
 
 export interface Notice {
   id: number;
@@ -30,13 +15,61 @@ export interface Notice {
   detail?: string | null;
 }
 
-import { PROGRAM_FILE } from './files';
-export { PROGRAM_FILE };
+import { DISGUISED_NAME, PROGRAM_FILE } from './files';
+import { grabber } from './grabber.svelte';
+import { linkBatch } from './links';
+export { DISGUISED_NAME, PROGRAM_FILE };
 
 export interface Toast {
   id: number;
   kind: 'info' | 'success' | 'warning' | 'error';
   message: string;
+}
+
+export function doneSound(failed = false) {
+  try {
+    const ctx = new AudioContext();
+    const notes = failed ? [523.25, 392] : [659.25, 783.99, 1046.5];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = failed ? 'triangle' : 'sine';
+      osc.frequency.value = freq;
+      const at = ctx.currentTime + i * 0.13;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.16, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + (i === notes.length - 1 ? 0.6 : 0.25));
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.65);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 1500);
+  } catch {
+    return;
+  }
+}
+
+function chime() {
+  try {
+    const ctx = new AudioContext();
+    const notes = [880, 1320];
+    notes.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.value = freq;
+      const at = ctx.currentTime + i * 0.16;
+      gain.gain.setValueAtTime(0.0001, at);
+      gain.gain.exponentialRampToValueAtTime(0.18, at + 0.02);
+      gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
+      osc.connect(gain).connect(ctx.destination);
+      osc.start(at);
+      osc.stop(at + 0.3);
+    });
+    setTimeout(() => ctx.close().catch(() => {}), 900);
+  } catch {
+    return;
+  }
 }
 
 class AppState {
@@ -56,7 +89,9 @@ class AppState {
   search = $state('');
   selectedId = $state<string | null>(null);
 
-  view = $state<'downloads' | 'settings' | 'rss'>('downloads');
+  view = $state<'downloads' | 'settings' | 'rss' | 'search' | 'grabber' | 'stats' | 'history'>('downloads');
+  tagFilter = $state<string | null>(null);
+  paletteOpen = $state(false);
   createTorrentOpen = $state(false);
   settingsSection = $state<string>('general');
   addOpen = $state(false);
@@ -66,12 +101,23 @@ class AppState {
   extensionSetupOpen = $state(false);
   extensionSetupBrowser = $state<string | null>(null);
   batch = $state<PageBatch | null>(null);
+  categoryLanguage = $state<CategoryLanguage | null>(null);
+  grabbed = $state<string[]>([]);
+  captchas = $state<CaptchaRequest[]>([]);
+  captchaPanel = $state(false);
+  private captchaTimer: ReturnType<typeof setInterval> | undefined;
   appearancePreview = $state<Appearance | null>(null);
   materials = $state<string[]>([]);
   removeTargets = $state<Download[]>([]);
   cloudEulaFor = $state<string | null>(null);
   cloudPasswordFor = $state<string | null>(null);
   startTarget = $state<Download | null>(null);
+  loginFor = $state<Download | null>(null);
+  passwordFor = $state<Download | null>(null);
+  categoryDialog = $state<{ index: number | null } | null>(null);
+  vtResult = $state<VtResult | null>(null);
+  vtBusy = $state<string | null>(null);
+  private openAfterScan = new Set<string>();
   get confirmingOpen() {
     return this.startTarget !== null;
   }
@@ -93,12 +139,20 @@ class AppState {
 
   private toastSeq = 0;
 
+  categoryOf(d: Download): CategoryFilter {
+    const dot = d.name.lastIndexOf('.');
+    const ext = dot > 0 ? d.name.slice(dot + 1).toLowerCase() : '';
+    const custom = ext ? this.settings?.customCategories.find((c) => c.extensions.includes(ext)) : undefined;
+    return custom ? `custom:${custom.name}` : d.category;
+  }
+
   filtered = $derived.by(() => {
     const q = this.search.trim().toLowerCase();
     const list = this.downloads.filter((d) => {
       if (this.statusFilter !== 'all' && d.status !== this.statusFilter) return false;
       if (this.kindFilter !== 'all' && d.kind !== this.kindFilter) return false;
-      if (this.categoryFilter !== 'all' && d.category !== this.categoryFilter) return false;
+      if (this.categoryFilter !== 'all' && this.categoryOf(d) !== this.categoryFilter) return false;
+      if (this.tagFilter && !(d.tags ?? []).includes(this.tagFilter)) return false;
       if (q && !d.name.toLowerCase().includes(q) && !d.url.toLowerCase().includes(q)) return false;
       return true;
     });
@@ -111,7 +165,8 @@ class AppState {
     for (const d of this.downloads) {
       c[d.status] = (c[d.status] ?? 0) + 1;
       c['kind:' + d.kind] = (c['kind:' + d.kind] ?? 0) + 1;
-      c['cat:' + d.category] = (c['cat:' + d.category] ?? 0) + 1;
+      const cat = 'cat:' + this.categoryOf(d);
+      c[cat] = (c[cat] ?? 0) + 1;
     }
     return c;
   });
@@ -162,6 +217,13 @@ class AppState {
     this.downloads = boot.downloads;
     this.settings = boot.settings;
     await setLanguage(boot.settings.language);
+    if (boot.settings.privacyForgetLinkgrabber) {
+      try {
+        localStorage.removeItem('mdm-linkgrabber');
+      } catch {
+        this.grabbed = [];
+      }
+    }
     await applyAppearance(boot.settings);
     if (boot.settings.cloudScan && !boot.settings.cloudScanAccepted) this.cloudEulaFor = 'launch';
     api
@@ -180,12 +242,21 @@ class AppState {
       this.uploadHistory = [...this.uploadHistory.slice(-119), e.payload.uploadSpeed];
     });
     await listen('app://pending', () => this.drainPending());
-    await listen<{ id: string | null; start: boolean }>('app://select', (e) => {
+    await listen('captcha://changed', () => this.refreshCaptchas());
+    this.refreshCaptchas();
+    await listen<string[]>('app://clipboard-links', (e) => {
+      const next = [...this.grabbed];
+      for (const l of e.payload) if (!next.includes(l)) next.push(l);
+      this.grabbed = next.slice(-500);
+      grabber.add(linkBatch(e.payload, t('Copied links')).items);
+    });
+    await listen<{ id: string | null; start: boolean; report?: boolean }>('app://select', (e) => {
       this.view = 'downloads';
       const d = e.payload.id ? this.downloads.find((x) => x.id === e.payload.id) : undefined;
       if (!d) return;
       this.selectedId = d.id;
-      if (e.payload.start) this.confirmStart(d);
+      if (e.payload.report) this.showCloudReport(d);
+      else if (e.payload.start) this.confirmStart(d);
     });
     await listen<CloudReport>('cloud://report', (e) => {
       const before = this.cloudReports[e.payload.id];
@@ -243,6 +314,8 @@ class AppState {
         continue;
       }
       if (o.status !== d.status) this.log(d.id, 'Status: ' + o.status + ' → ' + d.status);
+      if (o.status !== d.status && d.status === 'completed' && this.settings?.soundOnComplete !== false) doneSound();
+      if (o.status !== d.status && d.status === 'failed' && this.settings?.soundOnFail) doneSound(true);
       if (this.settings?.downloadNotices !== false) {
         if (o.status !== d.status && d.status === 'completed') this.notice('finished', d);
         if (o.status !== d.status && d.status === 'failed') this.notice('failed', d);
@@ -263,9 +336,32 @@ class AppState {
       if (o.threads !== d.threads) this.log(d.id, 'Connections set to ' + d.threads);
       if (o.name !== d.name) this.log(d.id, 'File: ' + d.name);
       if (d.seeding && !o.seeding) this.log(d.id, 'Seeding started');
+      if (this.openAfterScan.has(d.id) && o.cloudState === 'scanning' && d.cloudState !== 'scanning') {
+        this.openAfterScan.delete(d.id);
+        if (d.cloudState !== 'threat' && d.cloudState !== 'suspicious' && !d.quarantined) {
+          api.openFile(d.id, false, true).catch((e) => this.handleOpenError(d, String(e)));
+        }
+      }
       if (d.cloudState === 'locked' && o.cloudState === 'scanning' && !this.cloudPasswordFor && !this.cloudEulaFor) {
         this.cloudPasswordFor = d.id;
       }
+    }
+  }
+
+  async refreshCaptchas() {
+    const before = new Set(this.captchas.map((c) => c.id));
+    const list = await api.captchaList().catch(() => [] as CaptchaRequest[]);
+    const fresh = list.some((c) => !before.has(c.id));
+    this.captchas = list;
+    if (fresh) {
+      this.captchaPanel = true;
+      if (this.settings?.captchaSound !== false) chime();
+    }
+    if (!list.length) this.captchaPanel = false;
+    if (list.length && !this.captchaTimer) this.captchaTimer = setInterval(() => this.refreshCaptchas(), 10000);
+    if (!list.length && this.captchaTimer) {
+      clearInterval(this.captchaTimer);
+      this.captchaTimer = undefined;
     }
   }
 
@@ -287,7 +383,13 @@ class AppState {
           if (again) this.run(() => api.add({ ...request, allowDuplicate: true }));
         });
       }
-      else if (p.type === 'batch') this.batch = p.batch;
+      else if (p.type === 'batch') {
+        if (p.batch.items.length && p.batch.items.every((i) => i.mediaType === 'file')) {
+          grabber.add(p.batch.items, p.batch);
+          this.view = 'grabber';
+        } else this.batch = p.batch;
+      }
+      else if (p.type === 'categoryLanguage') this.categoryLanguage = { from: p.from, to: p.to, folders: p.folders };
       else if (p.type === 'openTorrent') this.openAdd({ url: '', kind: 'torrent' }, p.path);
       else if (p.type === 'pair' && !this.pairOrigins.includes(p.origin)) {
         this.pairOrigins = [...this.pairOrigins, p.origin];
@@ -308,7 +410,7 @@ class AppState {
       n.downloadId === d.id && (kind === 'scan' ? n.kind === 'scan' && n.engine === engine : n.kind !== 'scan');
     this.notices = [
       ...this.notices.filter((n) => !same(n)).slice(-3),
-      { id, kind, downloadId: d.id, name: d.name || d.url, engine, result, detail }
+      { id, kind, downloadId: d.id, name: this.settings?.privacyHideNames && kind !== 'scan' ? t('A download') : d.name || d.url, engine, result, detail }
     ];
     const bad = result === 'threat' || result === 'suspicious';
     setTimeout(() => this.dismissNotice(id), bad ? 20000 : kind === 'started' ? 6000 : 9000);
@@ -344,6 +446,15 @@ class AppState {
   }
 
   async askDuplicate(request: AddRequest, existing: Duplicate): Promise<boolean> {
+    if (existing.previous) {
+      const when = existing.at ? new Date(existing.at).toLocaleString() : '';
+      const ok = await message(`${existing.name}\n\n${t('You downloaded this before ({when}). Download it again?', { when })}`, {
+        title: t('Downloaded before'),
+        kind: 'info',
+        buttons: { ok: t('Download again'), cancel: t('Cancel') }
+      }).catch(() => 'Cancel');
+      return ok === t('Download again') || ok === 'Ok';
+    }
     const running = existing.status === 'active' || existing.status === 'queued' || existing.status === 'paused';
     const title = running
       ? t('This file is already downloading')
@@ -365,10 +476,19 @@ class AppState {
     return false;
   }
 
-  async addChecked(request: AddRequest) {
+  async addChecked(request: AddRequest): Promise<string | null> {
     const existing = await api.findDuplicate(request).catch(() => null);
-    if (existing && !(await this.askDuplicate(request, existing))) return false;
-    return this.run(() => api.add({ ...request, allowDuplicate: !!existing }));
+    if (existing && !(await this.askDuplicate(request, existing))) return null;
+    try {
+      return await api.add({ ...request, allowDuplicate: !!existing });
+    } catch (e) {
+      this.toast('error', errorText(e));
+      return null;
+    }
+  }
+
+  disguised(d: Download) {
+    return !!d.typeMismatch || (this.settings?.warnDisguisedNames !== false && DISGUISED_NAME.test(d.name));
   }
 
   confirmStart(d: Download) {
@@ -382,14 +502,53 @@ class AppState {
   }
 
   openDownload(d: Download) {
-    if (PROGRAM_FILE.test(d.name) && this.settings?.askBeforeStartingPrograms !== false) {
+    if (this.disguised(d) || this.settings?.askBeforeOpeningFiles || (PROGRAM_FILE.test(d.name) && this.settings?.askBeforeStartingPrograms !== false)) {
       this.confirmStart(d);
       return;
     }
-    api.openFile(d.id).catch((e) => {
-      if (String(e).includes('confirm_start')) this.confirmStart(d);
-      else this.toast('error', errorText(e));
-    });
+    api.openFile(d.id).catch((e) => this.handleOpenError(d, String(e)));
+  }
+
+  handleOpenError(d: Download, e: string) {
+    if (e.includes('confirm_start') || e.includes('blocked_threat')) this.confirmStart(d);
+    else if (e.includes('in_quarantine')) {
+      this.toast('warning', t('This file is in quarantine. You can restore it in Settings → Multron Cloud.'));
+      this.settingsSection = 'cloud';
+      this.view = 'settings';
+    } else if (e.includes('rescan_needed')) {
+      this.openAfterScan.add(d.id);
+      this.toast('info', t('Checking the file with Multron Cloud before it opens…'));
+      this.scanInCloud(d);
+    } else this.toast('error', errorText(e));
+  }
+
+  async virusTotal(d: Download) {
+    if (this.vtBusy) return;
+    this.vtBusy = d.id;
+    try {
+      if (!this.settings?.virustotalKey) {
+        await api.virustotalOpen(d.id);
+        this.toast('info', t('Opened the file’s page on VirusTotal in your browser. Only its fingerprint was sent.'));
+        return;
+      }
+      let r = await api.virustotalCheck(d.id, false);
+      if (r.state === 'not_found') {
+        const yes = await ask(t('VirusTotal does not know this file yet. Upload it for a scan? Files uploaded to VirusTotal are shared with security companies and can be downloaded by its partners, so do not upload private or personal files.'), {
+          title: 'VirusTotal',
+          kind: 'warning',
+          okLabel: t('Upload'),
+          cancelLabel: t('Cancel')
+        }).catch(() => false);
+        if (!yes) return;
+        this.toast('info', t('Uploading to VirusTotal…'));
+        r = await api.virustotalCheck(d.id, true);
+      }
+      this.vtResult = r;
+    } catch (e) {
+      this.toast('error', errorText(e));
+    } finally {
+      this.vtBusy = null;
+    }
   }
 
   dismissNotice(id: number) {

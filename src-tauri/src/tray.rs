@@ -168,7 +168,14 @@ pub fn start_animation(app: &AppHandle) {
             }
             let accent = app
                 .try_state::<Arc<Manager>>()
-                .map(|m| m.settings().accent_color)
+                .map(|m| {
+                    let s = m.settings();
+                    if s.accent_color == "custom" {
+                        s.accent_custom
+                    } else {
+                        s.accent_color
+                    }
+                })
                 .unwrap_or_default();
             if frames.as_ref().map(|f| f.accent != accent).unwrap_or(true) {
                 frames = Some(build_frames(&app, &accent));

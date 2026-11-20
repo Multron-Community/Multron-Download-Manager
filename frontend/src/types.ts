@@ -5,7 +5,7 @@ export type HashState = 'none' | 'pending' | 'verifying' | 'ok' | 'mismatch' | '
 
 export type StatusFilter = 'all' | Status;
 export type KindFilter = 'all' | Kind;
-export type CategoryFilter = 'all' | Category;
+export type CategoryFilter = 'all' | Category | `custom:${string}`;
 
 export interface Segment {
   start: number;
@@ -60,6 +60,17 @@ export interface Download {
   hashState: HashState;
   scanState: '' | 'scanning' | 'clean' | 'threat' | 'skipped' | 'marked';
   scanDetail?: string | null;
+  cloudScannedAt?: number | null;
+  quarantined?: boolean;
+  typeMismatch?: boolean;
+  later?: boolean;
+  loginUser?: string;
+  tags?: string[];
+  note?: string;
+  mirrors?: string[];
+  signature?: string;
+  extractState?: '' | 'waiting' | 'extracting' | 'done' | 'password' | 'choose' | 'failed';
+  extractDetail?: string | null;
   cloudState: '' | 'scanning' | 'clean' | 'threat' | 'suspicious' | 'skipped' | 'error' | 'locked' | 'unknown' | 'partial';
   cloudDetail?: string | null;
   speed: number;
@@ -85,6 +96,110 @@ export interface Settings {
   transparencyLevel: number;
   downloadDir: string;
   organizeByCategory: boolean;
+  accentCustom: string;
+  accentContrast: 'auto' | 'exact';
+  accentText: string;
+  buttonColor: string;
+  glassEffect: boolean;
+  hoverGlow: boolean;
+  clickRipple: boolean;
+  stateGlow: boolean;
+  motion: 'on' | 'system' | 'off';
+  effectsOff: string[];
+  headingColor: string;
+  lightBrightness: number;
+  darkBrightness: number;
+  torrentDir: string;
+  torrentStartPaused: boolean;
+  torrentSkipEnabled: boolean;
+  torrentSkipPatterns: string;
+  torrentDeleteWatched: boolean;
+  preventSleep: boolean;
+  openFolderWhenDone: boolean;
+  autoRetryMinutes: number;
+  autoRetryMax: number;
+  autoClearDays: number;
+  minFreeGb: number;
+  backgroundImage: string;
+  backgroundOpacity: number;
+  backgroundBlur: number;
+  mediaAvailableQualities: boolean;
+  clickNLoad: boolean;
+  clickNLoadKnownOnly: boolean;
+  checkRealType: boolean;
+  askForPrograms: boolean;
+  torEnabled: boolean;
+  torProxy: string;
+  torBlockTorrents: boolean;
+  privacyNoReferrer: boolean;
+  privacyClearFinishedOnExit: boolean;
+  privacyClearCookiesOnExit: boolean;
+  privacyForgetLinkgrabber: boolean;
+  captchaOpenBrowser: boolean;
+  cloudQuarantine: boolean;
+  cloudHistory: boolean;
+  cloudHistoryDays: number;
+  cloudBlockThreats: boolean;
+  cloudRescanOnOpen: boolean;
+  cloudRescanDays: number;
+  virustotalKey: string;
+  schedulerEnabled: boolean;
+  soundOnComplete: boolean;
+  soundOnFail: boolean;
+  schedulerStart: string;
+  schedulerStopEnabled: boolean;
+  schedulerStop: string;
+  schedulerDays: number[];
+  schedulerScope: 'later' | 'all';
+  siteLogins: SiteLogin[];
+  siteLimits: SiteLimit[];
+  fileRules: FileRule[];
+  historyEnabled: boolean;
+  historyWarn: boolean;
+  showStats: boolean;
+  showHistory: boolean;
+  showTags: boolean;
+  sidebarLayout: SidebarGroup[];
+  progressWindow: boolean;
+  siteOptions: boolean;
+  siteRules: SiteRule[];
+  autoBackup: boolean;
+  autoBackupCount: number;
+  autoBackupUnit: 'day' | 'week' | 'month' | 'year';
+  autoBackupDir: string;
+  autoBackupKeep: number;
+  shortcutsEnabled: boolean;
+  privacyGpc: boolean;
+  privacyHideNames: boolean;
+  privacyClearHistoryOnExit: boolean;
+  checkSignatures: boolean;
+  loginsAuto: boolean;
+  virustotalButton: boolean;
+  captchaSound: boolean;
+  captchaNotice: boolean;
+  captchaAutoRetry: boolean;
+  captchaRetrySecs: number;
+  captchaTimeoutSecs: number;
+  autoExtract: boolean;
+  extractSubfolder: boolean;
+  extractDeleteArchives: boolean;
+  extractPasswords: string[];
+  extractAskPassword: boolean;
+  httpsOnly: boolean;
+  blockInsecurePrograms: boolean;
+  blockPrivateLinks: boolean;
+  askBeforeOpeningFiles: boolean;
+  skipTorrentPrograms: boolean;
+  warnDisguisedNames: boolean;
+  sidebarShortcuts: 'list' | 'tiles';
+  roundedCorners: boolean;
+  deleteFilesByDefault: boolean;
+  clipboardMonitor: boolean;
+  categoryFolders: Record<string, string>;
+  customCategories: CustomCategory[];
+  categoryOrder: string[];
+  categoryFolderLanguage: string;
+  categoryLanguageAsked: string;
   closeToTray: boolean;
   startMinimized: boolean;
   launchAtStartup: boolean;
@@ -136,6 +251,8 @@ export interface Settings {
   rssInterval: number;
   rssFeeds: RssFeed[];
   rssRules: RssRule[];
+  searchSites: SearchSite[];
+  searchDisabled: string[];
   onCompleteCommand: string;
   markDownloads: boolean;
   cloudScan: boolean;
@@ -187,8 +304,94 @@ export interface BrowserCookie {
   expirationDate?: number;
 }
 
+export interface HistoryEntry {
+  id: number;
+  download: string;
+  name: string;
+  state: string;
+  detail: string;
+  files: number;
+  threats: number;
+  at: number;
+  quarantined: boolean;
+}
+
+export interface QuarantineItem {
+  id: number;
+  download: string;
+  name: string;
+  original: string;
+  stored: string;
+  detail: string;
+  size: number;
+  at: number;
+}
+
+export interface VtResult {
+  state: 'found' | 'not_found' | 'queued';
+  name: string;
+  sha256: string;
+  link: string;
+  malicious: number;
+  suspicious: number;
+  harmless: number;
+  undetected: number;
+  engines: number;
+  label: string | null;
+}
+
+export interface CaptchaRequest {
+  id: number;
+  url: string;
+  site: string;
+  kind: string;
+  download: string | null;
+  createdAt: number;
+}
+
+export interface SiteLimit {
+  host: string;
+  speedKb: number;
+  maxConnections: number;
+  enabled: boolean;
+}
+
+export interface FileRule {
+  enabled: boolean;
+  field: 'host' | 'ext' | 'name';
+  pattern: string;
+  action: 'move' | 'rename';
+  target: string;
+}
+
+export interface HistoryItem {
+  id: string;
+  name: string;
+  url: string;
+  size: number | null;
+  kind: string;
+  host: string;
+  dir: string;
+  at: number;
+}
+
+export interface SiteLogin {
+  host: string;
+  user: string;
+  password: string;
+  kind: 'basic' | 'bearer';
+  subdomains: boolean;
+  enabled: boolean;
+}
+
 export interface AddRequest {
   allowDuplicate?: boolean;
+  later?: boolean;
+  mirrors?: string[];
+  tags?: string[];
+  loginUser?: string | null;
+  loginPassword?: string | null;
+  rememberLogin?: boolean;
   url: string;
   kind?: string | null;
   dir?: string | null;
@@ -210,6 +413,55 @@ export interface AddRequest {
   total?: number | null;
   infoHash?: string | null;
   trackers?: string[];
+  note?: string;
+  autoExtract?: boolean | null;
+  extractPassword?: string | null;
+}
+
+export interface FoundLink {
+  url: string;
+  tag: string;
+  text: string | null;
+}
+
+export interface PageScan {
+  url: string;
+  title: string | null;
+  isFile: boolean;
+  contentType: string | null;
+  links: FoundLink[];
+}
+
+export interface Podcast {
+  name: string;
+  author: string;
+  feedUrl: string;
+  artwork: string | null;
+  episodes: number | null;
+}
+
+export interface BackupFile {
+  path: string;
+  name: string;
+  created: number;
+  size: number;
+}
+
+export interface SiteRule {
+  enabled: boolean;
+  name: string;
+  host: string;
+  pattern: string;
+  onlyRule: boolean;
+  follow: boolean;
+  onAdd: boolean;
+}
+
+export interface SidebarGroup {
+  id: string;
+  title: string;
+  items: string[];
+  collapsed: boolean;
 }
 
 export interface ProbeInfo {
@@ -232,6 +484,7 @@ export interface MediaInfo {
   uploader: string | null;
   site: string | null;
   heights: number[];
+  audioOnly?: boolean;
   isPlaylist: boolean;
   entries: number | null;
   filesize: number | null;
@@ -369,7 +622,21 @@ export interface BridgeStatus {
   error: string | null;
 }
 
+export interface CustomCategory {
+  name: string;
+  extensions: string[];
+  folder: string;
+  icon?: string;
+}
+
+export interface CategoryLanguage {
+  from: string;
+  to: string;
+  folders: [string, string][];
+}
+
 export type Pending =
+  | ({ type: 'categoryLanguage' } & CategoryLanguage)
   | { type: 'add'; request: AddRequest }
   | { type: 'duplicate'; request: AddRequest; existing: Duplicate }
   | { type: 'pair'; origin: string }
@@ -418,6 +685,36 @@ export interface PageBatch {
   items: BatchItem[];
   userAgent?: string | null;
   cookies?: BrowserCookie[];
+}
+
+export interface SearchSite {
+  name: string;
+  url: string;
+  enabled: boolean;
+}
+
+export interface SearchSiteView {
+  id: string;
+  name: string;
+  url: string;
+  builtin: boolean;
+  enabled: boolean;
+}
+
+export interface SearchResult {
+  site: string;
+  title: string;
+  download: string;
+  page?: string | null;
+  size?: number | null;
+  seeders?: number | null;
+  leechers?: number | null;
+  published?: string | null;
+}
+
+export interface SearchOutcome {
+  results: SearchResult[];
+  errors: { site: string; error: string }[];
 }
 
 export interface RssFeed {
@@ -502,4 +799,6 @@ export interface Duplicate {
   id: string;
   name: string;
   status: Status;
+  previous?: boolean;
+  at?: number | null;
 }

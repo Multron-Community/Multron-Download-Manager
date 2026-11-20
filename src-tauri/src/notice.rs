@@ -36,7 +36,7 @@ pub fn tone_of(kind: &str, ok: bool) -> &'static str {
     }
 }
 
-fn dark(app: &AppHandle) -> bool {
+pub fn dark(app: &AppHandle) -> bool {
     let theme = app
         .try_state::<std::sync::Arc<crate::manager::Manager>>()
         .map(|m| m.settings().theme)

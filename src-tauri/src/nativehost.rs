@@ -57,6 +57,27 @@ fn app_path() -> Option<PathBuf> {
     std::env::current_exe().ok()
 }
 
+fn host_path(data_dir: &Path) -> Option<PathBuf> {
+    match crate::sandbox::current() {
+        Some(crate::sandbox::Sandbox::Flatpak(id)) if !id.is_empty() => {
+            let binary = std::env::current_exe()
+                .ok()
+                .and_then(|p| p.file_name().map(|n| n.to_string_lossy().into_owned()))
+                .unwrap_or_else(|| "multron-download-manager".into());
+            let script = data_dir.join("native-host").join("flatpak-launcher.sh");
+            write_if_changed(&script, &crate::sandbox::flatpak_launcher(&id, &binary));
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let _ = std::fs::set_permissions(&script, std::fs::Permissions::from_mode(0o755));
+            }
+            Some(script)
+        }
+        Some(crate::sandbox::Sandbox::Snap(name)) => Some(Path::new("/snap/bin").join(name)),
+        _ => app_path(),
+    }
+}
+
 fn launch() -> bool {
     let Some(exe) = app_path() else {
         return false;
@@ -271,7 +292,9 @@ fn register_flatpaks(home: &Path, exe: &Path, trusted: &[String]) {
 }
 
 pub fn register(data_dir: &Path, trusted: &[String]) {
-    let Some(exe) = app_path() else { return };
+    let Some(exe) = host_path(data_dir) else {
+        return;
+    };
     let (chromium, firefox) = manifests(&exe, trusted);
     let file = format!("{HOST_NAME}.json");
     #[cfg(windows)]

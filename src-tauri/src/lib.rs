@@ -1,10 +1,17 @@
 mod appearance;
 mod archive;
+mod askwin;
 mod bridge;
 mod browsers;
+mod captcha;
+mod clicknload;
+mod clipboard;
 mod cloudscan;
 mod commands;
+mod crawl;
 mod engine;
+mod extras;
+mod feeds;
 mod flatpak;
 mod i18n;
 mod ipfilter;
@@ -14,17 +21,25 @@ mod model;
 pub mod nativehost;
 mod notice;
 mod portable;
+mod protection;
 mod resolver;
 mod rss;
+mod sandbox;
+mod search;
+mod secret;
 mod security;
 mod selfupdate;
 mod settings;
 mod spinner;
+mod tor;
 mod torrent;
 mod trackers;
 mod tray;
+mod unpack;
 mod updates;
 mod util;
+mod virustotal;
+mod wallpaper;
 
 use std::sync::Arc;
 
@@ -85,6 +100,9 @@ pub fn run() {
         ))
         .setup(|app| {
             let handle = app.handle().clone();
+            if let Ok(dir) = handle.path().resource_dir() {
+                i18n::set_dir(dir.join("lang"));
+            }
             let mgr = Manager::new(handle.clone())?;
             app.manage(mgr.clone());
             selfupdate::init(&mgr.paths.data);
@@ -106,6 +124,7 @@ pub fn run() {
                 show_main_window(&handle);
             }
             bridge::restart(mgr.clone());
+            clicknload::start(mgr.clone());
             tauri::async_runtime::spawn(mgr.clone().background());
             handle_args(&handle, std::env::args().skip(1));
 
@@ -136,6 +155,9 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() != "main" {
+                    return;
+                }
                 let mgr = window.state::<Arc<Manager>>();
                 if mgr.settings().close_to_tray {
                     api.prevent_close();
@@ -148,6 +170,17 @@ pub fn run() {
             commands::get_downloads,
             commands::get_global_stats,
             commands::probe_url,
+            commands::check_link,
+            commands::scan_page,
+            commands::rss_resolve,
+            commands::reset_settings,
+            commands::virustotal_open,
+            commands::site_rule_test,
+            commands::auto_backups,
+            commands::auto_backup_now,
+            commands::extract_with_password,
+            commands::podcast_search,
+            commands::discover_feeds,
             commands::media_probe,
             commands::torrent_inspect,
             commands::add_download,
@@ -164,6 +197,10 @@ pub fn run() {
             commands::open_file,
             commands::show_in_folder,
             commands::open_path,
+            commands::language_list,
+            commands::language_strings,
+            commands::language_reload,
+            commands::language_folder,
             commands::open_url,
             commands::torrent_details,
             commands::torrent_set_files,
@@ -172,6 +209,7 @@ pub fn run() {
             commands::public_trackers,
             commands::get_settings,
             commands::save_settings,
+            commands::apply_category_language,
             commands::tools_status,
             commands::update_ytdlp,
             commands::install_deno,
@@ -200,6 +238,33 @@ pub fn run() {
             commands::cloud_scan_all,
             commands::find_duplicate,
             commands::notice_list,
+            commands::ask_request,
+            commands::extract_download,
+            commands::captcha_list,
+            commands::cloud_history,
+            commands::set_download_meta,
+            commands::set_download_mirrors,
+            commands::download_history,
+            commands::download_history_remove,
+            commands::download_history_clear,
+            commands::backup_export,
+            commands::backup_import,
+            commands::background_store,
+            commands::background_data,
+            commands::stop_all,
+            commands::set_download_login,
+            commands::tor_detect,
+            commands::tor_check,
+            commands::virustotal_check,
+            commands::cloud_history_clear,
+            commands::quarantine_list,
+            commands::quarantine_restore,
+            commands::quarantine_delete,
+            commands::captcha_open,
+            commands::captcha_dismiss,
+            commands::extract_tool_available,
+            commands::ask_started,
+            commands::ask_progress,
             commands::notice_dismiss,
             commands::notice_layout,
             commands::notice_show_download,
@@ -212,6 +277,8 @@ pub fn run() {
             commands::rss_feeds,
             commands::rss_refresh,
             commands::rss_download,
+            commands::search_sites,
+            commands::torrent_search,
             commands::download_app_update,
             commands::app_update_ready,
             commands::mandatory_update_status,

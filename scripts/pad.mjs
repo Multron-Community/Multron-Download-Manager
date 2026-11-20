@@ -141,7 +141,7 @@ export function padXml({ version, date, size }) {
       tag('Program_Category_Class', 'Internet::Download Managers'),
       tag(
         'Program_System_Requirements',
-        'Windows 10 or 11 (x64), macOS 11 or later (Apple Silicon or Intel), or Linux with glibc 2.36 or newer (x86_64 or arm64). WebView2 on Windows is installed automatically.'
+        'Windows 10 or 11 (x64), macOS 11 or later (Apple Silicon or Intel), or Linux with glibc 2.35 or newer, such as Ubuntu 22.04+ (x86_64 or arm64). WebView2 on Windows is installed automatically.'
       ),
       block(
         'File_Info',

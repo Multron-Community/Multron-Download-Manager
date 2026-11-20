@@ -818,8 +818,13 @@ pub fn extension_build(app: &AppHandle) -> Option<String> {
 pub fn extension_folder(app: &AppHandle, firefox: bool) -> Result<PathBuf> {
     let src = bundled_extension(app, firefox)
         .context("the browser extension is not bundled with this build")?;
-    if std::env::var_os("APPIMAGE").is_none() {
-        return Ok(src);
+    match crate::sandbox::current() {
+        Some(crate::sandbox::Sandbox::Snap(name)) => {
+            return Ok(crate::sandbox::snap_host_path(&name, &src))
+        }
+        Some(crate::sandbox::Sandbox::Flatpak(_)) => {}
+        None if std::env::var_os("APPIMAGE").is_none() => return Ok(src),
+        None => {}
     }
     let dest = app
         .path()
@@ -853,7 +858,11 @@ pub fn extension_folder_for(app: &AppHandle, browser: &Browser) -> Result<PathBu
 
 pub fn refresh_copies(app: &AppHandle) {
     let mut bases = Vec::new();
-    if std::env::var_os("APPIMAGE").is_some() {
+    let flatpak = matches!(
+        crate::sandbox::current(),
+        Some(crate::sandbox::Sandbox::Flatpak(_))
+    );
+    if std::env::var_os("APPIMAGE").is_some() || flatpak {
         bases.extend(app.path().app_data_dir().ok());
     }
     if cfg!(target_os = "linux") {

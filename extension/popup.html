@@ -10,21 +10,21 @@
     <img src="icons/icon64.png" alt="" />
     <div>
       <h1>Multron Download Manager</h1>
-      <p id="status"><span class="dot"></span><span id="status-text">Checking…</span></p>
+      <p id="status"><span class="dot"></span><span id="status-text" data-i18n>Checking…</span></p>
     </div>
-    <button id="connect" class="btn accent" hidden>Connect</button>
+    <button id="connect" class="btn accent" hidden data-i18n>Connect</button>
   </header>
 
   <section id="perm-box" class="warn" hidden>
-    <div>Multron Download Manager needs access to websites to show the <b>Download video</b> button and take over downloads.</div>
-    <button id="grant" class="btn accent">Allow on all sites</button>
+    <div data-i18n>Multron Download Manager needs access to websites to show the Download video button and take over downloads.</div>
+    <button id="grant" class="btn accent" data-i18n>Allow on all sites</button>
   </section>
 
   <section id="page-box" hidden>
-    <div class="label" id="page-label">This page</div>
+    <div class="label" id="page-label" data-i18n>This page</div>
     <div class="row">
       <select id="quality">
-        <option value="best">Best quality</option>
+        <option value="best" data-i18n>Best quality</option>
         <option value="6480">12K</option>
         <option value="4320">8K</option>
         <option value="2880">5K</option>
@@ -36,23 +36,23 @@
         <option value="360">360p</option>
         <option value="240">240p</option>
         <option value="144">144p</option>
-        <option value="audio-mp3">Audio (MP3)</option>
-        <option value="audio-m4a">Audio (M4A)</option>
-        <option value="audio-aac">Audio (AAC)</option>
-        <option value="audio-opus">Audio (Opus)</option>
-        <option value="audio-vorbis">Audio (OGG Vorbis)</option>
-        <option value="audio-flac">Audio (FLAC)</option>
-        <option value="audio-wav">Audio (WAV)</option>
-        <option value="audio-alac">Audio (ALAC)</option>
+        <option value="audio-mp3" data-i18n="Audio ($1)" data-i18n-sub="MP3">Audio (MP3)</option>
+        <option value="audio-m4a" data-i18n="Audio ($1)" data-i18n-sub="M4A">Audio (M4A)</option>
+        <option value="audio-aac" data-i18n="Audio ($1)" data-i18n-sub="AAC">Audio (AAC)</option>
+        <option value="audio-opus" data-i18n="Audio ($1)" data-i18n-sub="Opus">Audio (Opus)</option>
+        <option value="audio-vorbis" data-i18n="Audio ($1)" data-i18n-sub="OGG Vorbis">Audio (OGG Vorbis)</option>
+        <option value="audio-flac" data-i18n="Audio ($1)" data-i18n-sub="FLAC">Audio (FLAC)</option>
+        <option value="audio-wav" data-i18n="Audio ($1)" data-i18n-sub="WAV">Audio (WAV)</option>
+        <option value="audio-alac" data-i18n="Audio ($1)" data-i18n-sub="ALAC">Audio (ALAC)</option>
       </select>
-      <button id="send-page" class="btn primary">Download</button>
+      <button id="send-page" class="btn primary" data-i18n>Download</button>
     </div>
     <div class="row format-row">
-      <span>Video format</span>
+      <span data-i18n>Video format</span>
       <select id="container">
-        <option value="default">Default</option>
+        <option value="default" data-i18n>Default</option>
         <option value="mp4">MP4</option>
-        <option value="mp4-h264">MP4 (H.264, plays everywhere)</option>
+        <option value="mp4-h264" data-i18n>MP4 (H.264, plays everywhere)</option>
         <option value="mkv">MKV</option>
         <option value="webm">WebM</option>
         <option value="mov">MOV</option>
@@ -64,35 +64,36 @@
   </section>
 
   <section>
-    <div class="label">Everything on this page</div>
+    <div class="label" data-i18n>Everything on this page</div>
     <div class="row">
-      <select id="grab-pages" title="Infinite feeds (Reddit, Instagram, X…) load more while scrolling">
-        <option value="0">Visible part</option>
-        <option value="5">Scroll 5 screens</option>
-        <option value="20">Scroll 20 screens</option>
-        <option value="60">Scroll 60 screens</option>
+      <select id="grab-pages" title="Infinite feeds (Reddit, Instagram, X…) load more while scrolling" data-i18n-title>
+        <option value="0" data-i18n>Visible part</option>
+        <option value="5" data-i18n>Scroll 5 screens</option>
+        <option value="20" data-i18n>Scroll 20 screens</option>
+        <option value="60" data-i18n>Scroll 60 screens</option>
       </select>
-      <button id="grab" class="btn">Download all…</button>
+      <button id="grab" class="btn" data-i18n>Download all…</button>
     </div>
   </section>
 
   <section>
-    <div class="label">Link or magnet</div>
+    <div class="label" data-i18n>Link or magnet</div>
     <div class="row">
-      <input id="link" placeholder="https://… or magnet:?…" />
-      <button id="send-link" class="btn">Send</button>
+      <input id="link" placeholder="https://… or magnet:?…" data-i18n-placeholder />
+      <button id="send-link" class="btn" data-i18n>Send</button>
     </div>
   </section>
 
   <section class="opts">
-    <label><input type="checkbox" id="intercept" /> Take over browser downloads</label>
-    <label><input type="checkbox" id="interceptMagnets" /> Open magnet links in Multron Download Manager</label>
-    <label><input type="checkbox" id="mediaButton" /> Show the download button on video pages</label>
-    <label><input type="checkbox" id="sendCookies" /> Send site cookies (private / login-only files)</label>
+    <label><input type="checkbox" id="intercept" /> <span data-i18n>Take over browser downloads</span></label>
+    <label><input type="checkbox" id="interceptMagnets" /> <span data-i18n>Open magnet links in Multron Download Manager</span></label>
+    <label><input type="checkbox" id="mediaButton" /> <span data-i18n>Show the download button on video pages</span></label>
+    <label><input type="checkbox" id="sendCookies" /> <span data-i18n>Send site cookies (private / login-only files)</span></label>
     <div class="grid">
-      <span>Ignore files smaller than (KB)</span><input id="minSizeKB" type="number" min="0" />
-      <span>Never take over from</span><input id="skipDomains" placeholder="example.com other.org" />
-      <span>App port</span><input id="port" type="number" min="1024" max="65535" />
+      <span data-i18n>Ignore files smaller than (KB)</span><input id="minSizeKB" type="number" min="0" />
+      <span data-i18n>Never take over from</span><input id="skipDomains" placeholder="example.com other.org" />
+      <span data-i18n>Never take over these file types</span><input id="skipExtensions" placeholder="pdf torrent" />
+      <span data-i18n>App port</span><input id="port" type="number" min="1024" max="65535" />
     </div>
   </section>
 

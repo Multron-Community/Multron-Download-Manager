@@ -9,6 +9,7 @@
   import SpeedGraph from './SpeedGraph.svelte';
 
   import TorrentTabs from './TorrentTabs.svelte';
+  import NotesPanel from './NotesPanel.svelte';
 
   interface Props {
     item: Download;
@@ -26,9 +27,9 @@
 
   let tabs = $derived(
     item.kind === 'http'
-      ? ['general', 'speed', 'segments', 'integrity', 'log']
+      ? ['general', 'speed', 'segments', 'integrity', 'notes', 'log']
       : item.kind === 'media'
-        ? ['general', 'speed', 'files', 'log']
+        ? ['general', 'speed', 'files', 'notes', 'log']
         : []
   );
   const tabLabels: Record<string, string> = {
@@ -37,6 +38,7 @@
     segments: 'Segments',
     integrity: 'Integrity',
     files: 'Files',
+    notes: 'Tags & notes',
     log: 'Log'
   };
 
@@ -62,12 +64,12 @@
   }
 </script>
 
-<section class="h-[300px] border-t border-line bg-panel flex flex-col flex-shrink-0 min-h-0">
+<section class="details-in h-[300px] border-t border-line bg-panel flex flex-col flex-shrink-0 min-h-0">
   {#if item.kind === 'torrent'}
     <TorrentTabs {item} onClose={() => (app.selectedId = null)} />
   {:else}
-    <div class="flex items-center justify-between border-b border-line px-2 flex-shrink-0">
-      <div class="flex overflow-x-auto">
+    <div class="details-tabs flex items-center justify-between border-b border-line px-2 py-1.5 flex-shrink-0">
+      <div class="flex overflow-x-auto gap-1">
         {#each tabs as id}
           <button class="tab {tab === id ? 'tab-active' : ''}" onclick={() => (tab = id)}>{t(tabLabels[id])}</button>
         {/each}
@@ -77,7 +79,7 @@
 
     <div class="flex-1 overflow-auto p-4 min-h-0 text-[12px]">
       {#if tab === 'general'}
-        <div class="grid grid-cols-[130px_1fr] gap-x-4 gap-y-[7px] max-w-[980px]">
+        <div class="details-grid grid grid-cols-[150px_1fr] max-w-[980px] rounded-[10px] border border-line overflow-hidden">
           <span class="text-muted">URL</span>
           <span class="flex items-center gap-2 min-w-0">
             <span class="truncate mono text-[11.5px]" title={item.url}>{item.url}</span>
@@ -200,6 +202,8 @@
         {:else}
           <p class="text-muted">{t('Files appear here once yt-dlp has written them.')}</p>
         {/if}
+      {:else if tab === 'notes'}
+        <NotesPanel {item} />
       {:else if tab === 'log'}
         <pre class="mono text-[11px] text-muted whitespace-pre-wrap select-text">{(app.logs[item.id] ?? []).join('\n') || 'No events yet.'}</pre>
       {/if}

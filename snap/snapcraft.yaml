@@ -28,12 +28,15 @@ apps:
       - x11
       - opengl
       - audio-playback
+      - browser-support
 
 parts:
   multron-deb:
     plugin: dump
     source: multron-download-manager.deb
     source-type: deb
+    stage-packages:
+      - libayatana-appindicator3-1
     override-pull: |
       craftctl default
       craftctl set version="$(cat $CRAFT_PROJECT_DIR/SNAP_VERSION)"

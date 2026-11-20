@@ -148,9 +148,21 @@ fn now_secs() -> u64 {
         .map_or(0, |d| d.as_secs())
 }
 
+fn write_cache(path: &Path, c: &Cache) {
+    if let Ok(bytes) = serde_json::to_vec(c) {
+        let tmp = path.with_extension("tmp");
+        if std::fs::write(&tmp, bytes).is_ok() {
+            let _ = std::fs::rename(&tmp, path);
+        }
+    }
+}
+
 fn with_cache<T>(cache: &Path, f: impl FnOnce(&mut Cache) -> T) -> Option<T> {
     let mut guard = FINGERPRINTS.lock().ok()?;
     if guard.as_ref().is_none_or(|(p, _)| p != cache) {
+        if let Some((old, c)) = guard.as_ref() {
+            write_cache(old, c);
+        }
         let loaded: Cache = std::fs::read(cache)
             .ok()
             .and_then(|b| serde_json::from_slice(&b).ok())
@@ -204,15 +216,9 @@ fn recently_analyzed(cache: &Path, sha256: &str) -> bool {
 }
 
 fn save_fingerprints(cache: &Path) {
-    let data = FINGERPRINTS.lock().ok().and_then(|g| {
-        g.as_ref()
-            .filter(|(p, _)| p == cache)
-            .map(|(_, c)| serde_json::to_vec(c))
-    });
-    if let Some(Ok(bytes)) = data {
-        let tmp = cache.with_extension("tmp");
-        if std::fs::write(&tmp, bytes).is_ok() {
-            let _ = std::fs::rename(&tmp, cache);
+    if let Ok(g) = FINGERPRINTS.lock() {
+        if let Some((p, c)) = g.as_ref().filter(|(p, _)| p == cache) {
+            write_cache(p, c);
         }
     }
 }
@@ -1416,8 +1422,9 @@ fn normalize_folder(path: &Path) -> String {
             return name.to_string();
         }
         if lower.starts_with(&format!("{v}\\")) || lower.starts_with(&format!("{v}/")) {
-            let rest = &dir[value.len()..];
-            return format!("{name}{rest}").chars().take(260).collect();
+            if let Some(rest) = dir.get(value.len()..) {
+                return format!("{name}{rest}").chars().take(260).collect();
+            }
         }
     }
     dir.rsplit(['\\', '/'])

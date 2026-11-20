@@ -131,8 +131,8 @@ jobs:
               '| Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` / `*_debian12_arm64.deb` → `sudo apt install ./file.deb` |',
               '| Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` / `*_fedora_aarch64.rpm` → `sudo dnf install ./file.rpm` |',
               '| openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` / `*_opensuse_aarch64.rpm` → `sudo zypper install --allow-unsigned-rpm ./file.rpm` |',
-              '| Any Linux | `*.AppImage` |',
-              '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` |',
+              '| Ubuntu 22.04+ / Mint 21+ / any Linux with glibc 2.35+ | `*.AppImage` |',
+              '| Browser extension | `multron-browser-extension-chromium-*.zip` (Chrome, Edge, Brave, Opera, Vivaldi) / `multron-browser-extension-firefox-*.zip` / signed `multron-browser-extension-firefox-*.xpi` (Firefox, installs permanently) |',
               '',
               'Every file is listed with its SHA-256 in `update.json`, which is signed with the Multron Download Manager release key (`update.json.sig`). Verify a download with `node scripts/verify-update.mjs update.json update.json.sig <file>` from the repository, or check its build provenance with `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager`. `SHA256SUMS.txt` lists the same hashes without a signature.',
               '',
@@ -173,23 +173,32 @@ jobs:
             args: --target x86_64-apple-darwin --bundles dmg
             rust_targets: x86_64-apple-darwin
             outputs: src-tauri/target/x86_64-apple-darwin/release/bundle/dmg/*.dmg
-          - name: Linux (x86_64)
+          - name: Linux deb (x86_64)
             key: linux-x86_64
             platform: ubuntu-24.04
-            args: --bundles deb,appimage
+            args: --bundles deb
             rust_targets: ''
-            outputs: |
-              src-tauri/target/release/bundle/deb/*.deb
-              src-tauri/target/release/bundle/appimage/*.AppImage
-          - name: Linux (arm64)
+            outputs: src-tauri/target/release/bundle/deb/*.deb
+          - name: Linux deb (arm64)
             key: linux-arm64
             platform: ubuntu-24.04-arm
-            args: --bundles deb,appimage
+            args: --bundles deb
             rust_targets: ''
             rustflags: -C link-arg=-fuse-ld=lld
-            outputs: |
-              src-tauri/target/release/bundle/deb/*.deb
-              src-tauri/target/release/bundle/appimage/*.AppImage
+            outputs: src-tauri/target/release/bundle/deb/*.deb
+          - name: Linux AppImage (x86_64)
+            key: linux-appimage-x86_64
+            platform: ubuntu-22.04
+            args: --bundles appimage
+            rust_targets: ''
+            outputs: src-tauri/target/release/bundle/appimage/*.AppImage
+          - name: Linux AppImage (arm64)
+            key: linux-appimage-arm64
+            platform: ubuntu-22.04-arm
+            args: --bundles appimage
+            rust_targets: ''
+            rustflags: -C link-arg=-fuse-ld=lld
+            outputs: src-tauri/target/release/bundle/appimage/*.AppImage
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
@@ -198,7 +207,12 @@ jobs:
         if: startsWith(matrix.platform, 'ubuntu')
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file xdg-utils lld libfuse2t64
+          if [ "${{ matrix.platform }}" = "ubuntu-22.04" ] || [ "${{ matrix.platform }}" = "ubuntu-22.04-arm" ]; then
+            FUSE_PKG="libfuse2"
+          else
+            FUSE_PKG="libfuse2t64"
+          fi
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libayatana-appindicator3-dev librsvg2-dev patchelf libssl-dev build-essential file xdg-utils lld "$FUSE_PKG"
 
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
@@ -442,10 +456,32 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: node scripts/package-extension.mjs
+      - name: Sign the Firefox add-on with Mozilla (unlisted)
+        env:
+          AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
+          AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
+            echo "::warning::AMO_JWT_ISSUER and AMO_JWT_SECRET are not set, so the signed Firefox .xpi is not built"
+            exit 0
+          fi
+          npx --yes web-ext@8.3.0 sign \
+            --source-dir extension-build/firefox \
+            --artifacts-dir xpi \
+            --channel unlisted \
+            --approval-timeout 1800000 \
+            --api-key "$AMO_JWT_ISSUER" \
+            --api-secret "$AMO_JWT_SECRET"
+          signed=$(find xpi -name '*.xpi' | head -n 1)
+          test -n "$signed"
+          cp "$signed" "dist/multron-browser-extension-firefox-v${VERSION#v}.xpi"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-extension
-          path: dist/*.zip
+          path: |
+            dist/*.zip
+            dist/*.xpi
           if-no-files-found: error
           retention-days: 7
 
@@ -491,7 +527,7 @@ jobs:
               format: 'der',
               type: 'spki',
             });
-            const types = { '.exe': 'application/vnd.microsoft.portable-executable', '.dmg': 'application/x-apple-diskimage', '.deb': 'application/vnd.debian.binary-package', '.rpm': 'application/x-rpm', '.zip': 'application/zip', '.AppImage': 'application/octet-stream' };
+            const types = { '.exe': 'application/vnd.microsoft.portable-executable', '.dmg': 'application/x-apple-diskimage', '.deb': 'application/vnd.debian.binary-package', '.rpm': 'application/x-rpm', '.zip': 'application/zip', '.xpi': 'application/x-xpinstall', '.AppImage': 'application/octet-stream' };
             fs.mkdirSync('release', { recursive: true });
             const files = {};
             const walk = (dir) => fs.readdirSync(dir, { withFileTypes: true })
@@ -535,7 +571,6 @@ jobs:
               throw new Error(`the draft changed while it was being signed: ${extra.join(', ') || 'missing files'}`);
             }
 
-            // VirusTotal API Otomatik Yükleme
             const vtApiKey = (process.env.VIRUSTOTAL_API_KEY || '').trim();
             if (vtApiKey) {
               core.info('VirusTotal API anahtarı bulundu. Dosyalar taranmak üzere yükleniyor...');
@@ -583,8 +618,7 @@ jobs:
               core.warning('VIRUSTOTAL_API_KEY bulunamadı. Otomatik yükleme adımı atlanıyor.');
             }
 
-            // VirusTotal Linklerini Release Metnine Ekle
-            let vtSection = '\n\n###VirusTotal Scans\n\n| File | VirusTotal Link |\n| --- | --- |\n';
+            let vtSection = '\n\n### VirusTotal Scans\n\n| File | VirusTotal Link |\n| --- | --- |\n';
             for (const [name, hash] of Object.entries(files)) {
               vtSection += `| \`${name}\` | [View Report](https://www.virustotal.com/gui/file/${hash}) |\n`;
             }
@@ -621,3 +655,20 @@ jobs:
               prerelease: prerelease || undefined,
               make_latest: prerelease ? 'false' : 'true',
             });
+
+  snap:
+    name: Snap
+    needs: [create-release, publish]
+    if: needs.create-release.outputs.skip != 'true' && github.event.inputs.draft != 'true'
+    uses: ./.github/workflows/snap.yml
+    with:
+      version: ${{ needs.create-release.outputs.version }}
+    secrets: inherit
+
+  flatpak:
+    name: Flatpak
+    needs: [create-release, publish]
+    if: needs.create-release.outputs.skip != 'true' && github.event.inputs.draft != 'true'
+    uses: ./.github/workflows/flatpak.yml
+    with:
+      version: ${{ needs.create-release.outputs.version }}

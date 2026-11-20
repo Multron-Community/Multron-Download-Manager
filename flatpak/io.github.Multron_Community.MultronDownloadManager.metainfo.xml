@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>io.github.Multron_Community.MultronDownloadManager</id>
+  <name>Multron Download Manager</name>
+  <summary>Fast download manager for files, videos and torrents</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>LicenseRef-proprietary=https://github.com/Multron-Community/Multron-Download-Manager/blob/main/LICENSE</project_license>
+  <developer id="io.github.multron_community">
+    <name>Multron Community</name>
+  </developer>
+  <description>
+    <p>Multron Download Manager downloads direct links, videos, cloud-drive files and torrents in one app.</p>
+    <p>Every file is split across 8 connections by default (1 to 64, changeable while the download runs). Connections that finish early take over the slowest parts, stalled connections are reopened, and downloads continue after a pause, a crash or a network change.</p>
+    <p>Videos and music from YouTube, Instagram, X, TikTok, Reddit, Twitch, SoundCloud and more than 1,800 other sites can be downloaded in every quality up to 12K, as MP4, MKV, WebM or MOV, or as audio only in MP3, FLAC, WAV and other formats. The size of every quality is shown before the download starts.</p>
+    <p>Also included:</p>
+    <ul>
+      <li>A built-in BitTorrent client with magnet links, file selection, RSS feeds and seeding rules</li>
+      <li>Direct downloads from Google Drive, MEGA, Dropbox, MediaFire and Pixeldrain links</li>
+      <li>A browser extension that takes over browser downloads and adds a download button to videos</li>
+      <li>LinkGrabber, which finds every file on a web page and groups the links into packages</li>
+      <li>Automatic extraction of ZIP, 7z and RAR archives, with a password list</li>
+      <li>A scheduler, a download queue, per-site speed limits and rename and move rules</li>
+      <li>Privacy options, including downloads through Tor</li>
+      <li>SHA-256 verification, digital signature checks, VirusTotal and an optional cloud malware scan</li>
+      <li>Download statistics, a download history and automatic backups</li>
+      <li>Light and dark themes with adjustable colors and animations, in 12 languages</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.Multron_Community.MultronDownloadManager.desktop</launchable>
+  <url type="homepage">https://github.com/Multron-Community/Multron-Download-Manager</url>
+  <url type="bugtracker">https://github.com/Multron-Community/Multron-Download-Manager/issues</url>
+  <url type="vcs-browser">https://github.com/Multron-Community/Multron-Download-Manager</url>
+  <url type="contact">https://discord.gg/xXmQw3MUAR</url>
+  <screenshots>
+    <screenshot type="default">
+      <caption>The download list with the live connection view</caption>
+      <image>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/docs/screenshots/downloads-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>A torrent with its sources and peers</caption>
+      <image>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/docs/screenshots/torrent-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Security settings</caption>
+      <image>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/docs/screenshots/security-dark.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Settings in the light theme</caption>
+      <image>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/docs/screenshots/settings-light.png</image>
+    </screenshot>
+  </screenshots>
+  <categories>
+    <category>Network</category>
+    <category>FileTransfer</category>
+  </categories>
+  <keywords>
+    <keyword>download</keyword>
+    <keyword>downloader</keyword>
+    <keyword>torrent</keyword>
+    <keyword>youtube</keyword>
+    <keyword>video</keyword>
+  </keywords>
+  <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="1.0.0" date="2026-11-20">
+      <description>
+        <p>The first full release. LinkGrabber finds every file on a page, archives are extracted by themselves, and downloads can be scheduled, limited per site and sent through Tor. Also new: RSS feed search with built-in feeds, VirusTotal, statistics, a download history, automatic backups and a refreshed interface with adjustable colors and animations.</p>
+      </description>
+    </release>
+    <release version="0.0.11" date="2026-10-29">
+      <description>
+        <p>Every video quality up to 12K with its size, more audio and video formats, faster YouTube downloads and a video download button that can be moved.</p>
+      </description>
+    </release>
+    <release version="0.0.10" date="2026-10-29">
+      <description>
+        <p>Faster downloads when a server or a connection slows down, full-speed YouTube downloads and steady video progress.</p>
+      </description>
+    </release>
+  </releases>
+</component>

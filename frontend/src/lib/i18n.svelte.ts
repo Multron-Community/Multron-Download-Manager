@@ -1,28 +1,27 @@
-const loaders = import.meta.glob<Record<string, string>>('../lang/*.json', { import: 'default' });
+import { invoke } from '@tauri-apps/api/core';
 
-const files: Record<string, () => Promise<Record<string, string>>> = Object.fromEntries(
-  Object.entries(loaders).map(([file, load]) => [file.replace(/^.*\/|\.json$/g, ''), load])
-);
+export type LanguageInfo = { code: string; name: string; english?: string; strings?: number };
 
-const NAMES: [string, string][] = [
-  ['en', 'English'],
-  ['tr', 'Türkçe'],
-  ['de', 'Deutsch'],
-  ['fr', 'Français'],
-  ['es', 'Español'],
-  ['it', 'Italiano'],
-  ['pt-br', 'Português (Brasil)'],
-  ['ru', 'Русский'],
-  ['ja', '日本語'],
-  ['zh-cn', '简体中文'],
-  ['zh-tw', '繁體中文'],
-  ['ko', '한국어']
-];
+export const LANGUAGES: LanguageInfo[] = $state([{ code: 'en', name: 'English' }]);
 
-export const LANGUAGES = NAMES.filter(([code]) => code === 'en' || code in files).map(([code, name]) => ({
-  code,
-  name
-}));
+let listed: Promise<void> | null = null;
+
+function setList(list: LanguageInfo[] | null | undefined) {
+  if (!Array.isArray(list) || !list.length) return;
+  LANGUAGES.splice(0, LANGUAGES.length, ...list);
+  if (!LANGUAGES.some((l) => l.code === 'en')) LANGUAGES.unshift({ code: 'en', name: 'English' });
+}
+
+function ensureList(): Promise<void> {
+  if (!listed) {
+    listed = invoke<LanguageInfo[]>('language_list')
+      .then(setList)
+      .catch(() => {});
+  }
+  return listed;
+}
+
+const known = (code: string) => LANGUAGES.some((l) => l.code === code);
 
 export function systemLanguage(): string {
   const tags = (navigator.languages?.length ? navigator.languages : [navigator.language]).map((l) => l.toLowerCase());
@@ -31,7 +30,7 @@ export function systemLanguage(): string {
     if (tag.startsWith('zh')) candidates.push(/hant|-tw|-hk|-mo/.test(tag) ? 'zh-tw' : 'zh-cn');
     if (tag.startsWith('pt')) candidates.push('pt-br');
     candidates.push(tag.split('-')[0]);
-    const hit = candidates.find((c) => c === 'en' || c in files);
+    const hit = candidates.find(known);
     if (hit) return hit;
   }
   return 'en';
@@ -44,17 +43,18 @@ const cache = new Map<string, Record<string, string>>();
 let request = 0;
 
 async function load(code: string): Promise<Record<string, string>> {
-  if (code === 'en' || !(code in files)) return {};
+  if (!known(code)) return {};
   const hit = cache.get(code);
   if (hit) return hit;
-  const dict = await files[code]();
+  const dict = (await invoke<Record<string, string>>('language_strings', { code })) || {};
   cache.set(code, dict);
   return dict;
 }
 
 export async function setLanguage(setting: string) {
-  const lang = setting === 'auto' ? systemLanguage() : setting;
   const ticket = ++request;
+  await ensureList();
+  const lang = setting === 'auto' ? systemLanguage() : known(setting) ? setting : 'en';
   let dict: Record<string, string> = {};
   try {
     dict = await load(lang);
@@ -66,6 +66,19 @@ export async function setLanguage(setting: string) {
   i18n.lang = lang;
   dictionary = dict;
   document.documentElement.lang = lang;
+}
+
+export async function reloadLanguages() {
+  cache.clear();
+  listed = invoke<LanguageInfo[]>('language_reload')
+    .then(setList)
+    .catch(() => {});
+  await listed;
+  await setLanguage(i18n.setting);
+}
+
+export async function openLanguageFolder(): Promise<string> {
+  return invoke<string>('language_folder');
 }
 
 export function t(key: string, vars?: Record<string, string | number>): string {

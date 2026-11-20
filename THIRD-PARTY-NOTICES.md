@@ -12,6 +12,18 @@ These programs are not part of Multron. Multron Download Manager downloads them 
 | FFmpeg (Windows build by yt-dlp/FFmpeg-Builds) | https://github.com/yt-dlp/FFmpeg-Builds | GPL-3.0-or-later |
 | FFmpeg (macOS build by evermeet.cx) | https://evermeet.cx/ffmpeg/ | GPL-3.0-or-later |
 
+## Built-in background images
+
+The five built-in backgrounds in *Settings → Appearance → Background image* are photos by **Karem Adem**, published on Unsplash and used under the [Unsplash License](https://unsplash.com/license):
+
+| Image | Source |
+| --- | --- |
+| karem-adem-1 | https://unsplash.com/photos/-HDTIxZzgxI |
+| karem-adem-2 | https://unsplash.com/photos/F9_fGS1pC2M |
+| karem-adem-3 | https://unsplash.com/photos/VYhlOMPORj8 |
+| karem-adem-4 | https://unsplash.com/photos/nCk7iiQCn8Y |
+| karem-adem-5 | https://unsplash.com/photos/qPjTJttOByU |
+
 ## Rust components (685)
 
 | Crate | Version | License |

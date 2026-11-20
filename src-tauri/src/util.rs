@@ -156,11 +156,36 @@ pub fn filename_from_disposition(value: &str) -> Option<String> {
     None
 }
 
+pub fn read_json_or_keep<T: serde::de::DeserializeOwned>(path: &Path) -> Option<T> {
+    let bytes = std::fs::read(path).ok()?;
+    match serde_json::from_slice::<T>(&bytes) {
+        Ok(v) => Some(v),
+        Err(e) => {
+            let stamp = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs())
+                .unwrap_or(0);
+            let mut keep = path.as_os_str().to_owned();
+            keep.push(format!(".broken-{stamp}"));
+            let kept = std::fs::copy(path, &keep).is_ok();
+            tracing::warn!(
+                "could not read {} ({e}); {}",
+                path.display(),
+                if kept {
+                    format!("a copy was kept as {}", Path::new(&keep).display())
+                } else {
+                    "no copy could be kept".to_string()
+                }
+            );
+            None
+        }
+    }
+}
+
 fn strip_prefix_ci<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
-    if s.len() >= prefix.len() && s[..prefix.len()].eq_ignore_ascii_case(prefix) {
-        Some(&s[prefix.len()..])
-    } else {
-        None
+    match (s.get(..prefix.len()), s.get(prefix.len()..)) {
+        (Some(head), Some(rest)) if head.eq_ignore_ascii_case(prefix) => Some(rest),
+        _ => None,
     }
 }
 
@@ -296,9 +321,158 @@ pub fn is_sha256_hex(s: &str) -> bool {
     s.len() == 64 && s.chars().all(|c| c.is_ascii_hexdigit())
 }
 
+pub fn same_dir(a: &str, b: &str) -> bool {
+    let norm = |p: &str| {
+        p.trim()
+            .trim_end_matches(['/', '\\'])
+            .replace('\\', "/")
+            .to_lowercase()
+    };
+    norm(a) == norm(b)
+}
+
+pub fn web_link(url: &str) -> bool {
+    url::Url::parse(url.trim()).is_ok_and(|u| matches!(u.scheme(), "http" | "https"))
+}
+
+pub fn private_network_link(url: &str) -> bool {
+    let Ok(u) = url::Url::parse(url.trim()) else {
+        return false;
+    };
+    match u.host() {
+        Some(url::Host::Ipv4(ip)) => {
+            ip.is_private() || ip.is_loopback() || ip.is_link_local() || ip.is_unspecified()
+        }
+        Some(url::Host::Ipv6(ip)) => {
+            let seg = ip.segments()[0];
+            ip.is_loopback()
+                || ip.is_unspecified()
+                || (seg & 0xfe00) == 0xfc00
+                || (seg & 0xffc0) == 0xfe80
+                || ip
+                    .to_ipv4_mapped()
+                    .is_some_and(|v4| v4.is_private() || v4.is_loopback() || v4.is_link_local())
+        }
+        Some(url::Host::Domain(d)) => {
+            let d = d.trim_end_matches('.').to_ascii_lowercase();
+            d == "localhost"
+                || d.ends_with(".localhost")
+                || d.ends_with(".local")
+                || d.ends_with(".lan")
+                || d.ends_with(".home.arpa")
+                || d.ends_with(".internal")
+                || !d.contains('.')
+        }
+        None => false,
+    }
+}
+
+pub fn insecure_link(url: &str) -> bool {
+    url.trim()
+        .get(..7)
+        .is_some_and(|p| p.eq_ignore_ascii_case("http://"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn keeps_a_copy_of_files_it_cannot_read() {
+        let dir = std::env::temp_dir().join(format!("mdm-keep-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let good = dir.join("good.json");
+        std::fs::write(&good, b"[1, 2]").unwrap();
+        assert_eq!(read_json_or_keep::<Vec<u8>>(&good), Some(vec![1, 2]));
+        let bad = dir.join("bad.json");
+        std::fs::write(&bad, b"{ not json").unwrap();
+        assert_eq!(read_json_or_keep::<Vec<u8>>(&bad), None);
+        let kept: Vec<_> = std::fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .filter(|e| {
+                e.file_name()
+                    .to_string_lossy()
+                    .starts_with("bad.json.broken-")
+            })
+            .collect();
+        assert_eq!(kept.len(), 1);
+        assert_eq!(std::fs::read(kept[0].path()).unwrap(), b"{ not json");
+        assert_eq!(
+            read_json_or_keep::<Vec<u8>>(&dir.join("missing.json")),
+            None
+        );
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn reads_file_names_from_headers_with_any_characters() {
+        assert_eq!(
+            strip_prefix_ci("FILENAME=a.zip", "filename="),
+            Some("a.zip")
+        );
+        assert_eq!(strip_prefix_ci("ğğğğğğğğğğ", "filename="), None);
+        assert_eq!(strip_prefix_ci("fileğ", "filename="), None);
+        assert_eq!(strip_prefix_ci("", "filename="), None);
+    }
+
+    #[test]
+    fn spots_links_to_the_local_network() {
+        for url in [
+            "http://192.168.1.1/admin",
+            "http://10.0.0.5/file.zip",
+            "http://172.20.1.1/",
+            "http://127.0.0.1:8080/x",
+            "http://localhost/x",
+            "http://router/",
+            "http://nas.local/share/a.iso",
+            "http://[::1]/x",
+            "http://[fd00::1]/x",
+            "http://169.254.1.1/",
+        ] {
+            assert!(private_network_link(url), "{url}");
+        }
+        for url in [
+            "https://example.com/file.zip",
+            "http://8.8.8.8/x",
+            "https://172.32.0.1/",
+            "https://[2001:db8::1]/",
+            "magnet:?xt=urn:btih:abc",
+        ] {
+            assert!(!private_network_link(url), "{url}");
+        }
+    }
+
+    #[test]
+    fn compares_folders_loosely() {
+        assert!(same_dir(
+            "C:\\Users\\a\\Downloads\\",
+            "c:/users/a/downloads"
+        ));
+        assert!(!same_dir(
+            "C:\\Users\\a\\Downloads",
+            "C:\\Users\\a\\Torrents"
+        ));
+    }
+
+    #[test]
+    fn only_web_links_count() {
+        assert!(web_link("https://a.example/x"));
+        assert!(web_link("http://a.example"));
+        assert!(!web_link("file:///C:/Windows/system32/calc.exe"));
+        assert!(!web_link("javascript:alert(1)"));
+        assert!(!web_link("ms-settings:"));
+    }
+
+    #[test]
+    fn spots_unencrypted_links() {
+        assert!(insecure_link("http://example.com/a.zip"));
+        assert!(insecure_link(" HTTP://example.com"));
+        assert!(!insecure_link("https://example.com/a.zip"));
+        assert!(!insecure_link("magnet:?xt=urn:btih:abc"));
+        assert!(!insecure_link("ftp"));
+    }
 
     #[test]
     fn disposition_parsing() {

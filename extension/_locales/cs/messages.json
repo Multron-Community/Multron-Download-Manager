@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager neběží a nepodařilo se ho spustit. Spusťte aplikaci a zkuste to znovu."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Schvalte tento prohlížeč v okně Multron Download Manager a zkuste to znovu."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: žádost o připojení"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "Aplikace stahování odmítla (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Na této stránce nebylo nalezeno nic ke stažení."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager neběží. Spusťte aplikaci a zkuste to znovu."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Stáhnout odkaz pomocí Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Stáhnout video/zvuk z odkazu pomocí Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Stáhnout toto médium pomocí Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Stáhnout video na této stránce pomocí Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Stáhnout vše z této stránky pomocí Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Stáhnout vybraný odkaz pomocí Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "Výběr není odkaz."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Schvalte tento prohlížeč v okně Multron Download Manager. Stahování do té doby počká."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Odesláno do Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager stahování nepřijal"
+  },
+  "Save_videos_as_1": {
+    "message": "Ukládat videa jako $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Použít formát videa nastavený v Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 s H.264 a AAC: přehraje se všude, i ve WhatsAppu a na starších telefonech a televizích (až 1080p na YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Zjišťování velikostí…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Velikosti nejsou pro toto video dostupné"
+  },
+  "Hide_on_this_page": {
+    "message": "Skrýt na této stránce"
+  },
+  "Download_1": {
+    "message": "Stáhnout: $1"
+  },
+  "Download_video": {
+    "message": "Stáhnout video"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Přetažením přesunete · dvojklikem vrátíte zpět"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Stáhnout pomocí Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Skrýt na celé obrazovce na této stránce (všude vypnete v Multron Download Manager: Nastavení → Integrace s prohlížečem)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Skrýt na celé obrazovce na této stránce"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager neběží: stahuje se v prohlížeči"
+  },
+  "Best_quality": {
+    "message": "Nejlepší kvalita"
+  },
+  "Audio_1": {
+    "message": "Zvuk ($1)"
+  },
+  "Default": {
+    "message": "Výchozí"
+  },
+  "Reddit_post": {
+    "message": "Příspěvek na Redditu"
+  },
+  "Facebook_video": {
+    "message": "Video z Facebooku"
+  },
+  "App_not_running": {
+    "message": "Aplikace neběží"
+  },
+  "Not_approved_v_1": {
+    "message": "Neschváleno · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Připojeno · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Velikosti nejsou pro tuto stránku dostupné"
+  },
+  "Sending": {
+    "message": "Odesílání…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager to nepřijal — zkontrolujte aplikaci."
+  },
+  "This_page": {
+    "message": "Tato stránka"
+  },
+  "File_on_this_page": {
+    "message": "Soubor na této stránce"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Posouvání a sbírání…"
+  },
+  "Collecting": {
+    "message": "Sbírání…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "Nalezeno položek: $1. Vyberte je v Multronu."
+  },
+  "Something_went_wrong": {
+    "message": "Něco se pokazilo."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Zadejte odkaz http(s) nebo magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Přístup udělen. Načtěte stránku znovu, aby se zobrazilo tlačítko."
+  },
+  "Access_was_not_granted": {
+    "message": "Přístup nebyl udělen."
+  },
+  "Connected": {
+    "message": "Připojeno ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Schvalte žádost v okně Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Kontrola…"
+  },
+  "Connect": {
+    "message": "Připojit"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager potřebuje přístup k webům, aby mohl zobrazit tlačítko Stáhnout video a převzít stahování."
+  },
+  "Allow_on_all_sites": {
+    "message": "Povolit na všech webech"
+  },
+  "Download": {
+    "message": "Stáhnout"
+  },
+  "Video_format": {
+    "message": "Formát videa"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, přehraje se všude)"
+  },
+  "Everything_on_this_page": {
+    "message": "Vše na této stránce"
+  },
+  "Visible_part": {
+    "message": "Viditelná část"
+  },
+  "Scroll_5_screens": {
+    "message": "Posunout o 5 obrazovek"
+  },
+  "Scroll_20_screens": {
+    "message": "Posunout o 20 obrazovek"
+  },
+  "Scroll_60_screens": {
+    "message": "Posunout o 60 obrazovek"
+  },
+  "Download_all": {
+    "message": "Stáhnout vše…"
+  },
+  "Link_or_magnet": {
+    "message": "Odkaz nebo magnet"
+  },
+  "Send": {
+    "message": "Odeslat"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Převzít stahování z prohlížeče"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Otevírat magnet odkazy v Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Zobrazit tlačítko stažení na stránkách s videem"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Posílat cookies webu (soukromé soubory / jen po přihlášení)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Ignorovat soubory menší než (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Nikdy nepřebírat z"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Nikdy nepřebírat tyto typy souborů"
+  },
+  "App_port": {
+    "message": "Port aplikace"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Nekonečné kanály (Reddit, Instagram, X…) se při posouvání načítají dál"
+  },
+  "https_or_magnet": {
+    "message": "https://… nebo magnet:?…"
+  },
+  "extDescription": {
+    "message": "Posílejte stahování, videa (YouTube, Reddit, Instagram, X, TikTok…), soubory z Google Drive / MEGA a torrenty do Multron Download Manager."
+  }
+}

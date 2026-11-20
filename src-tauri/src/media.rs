@@ -95,6 +95,7 @@ pub struct MediaInfo {
     pub uploader: Option<String>,
     pub site: Option<String>,
     pub heights: Vec<u32>,
+    pub audio_only: bool,
     pub is_playlist: bool,
     pub entries: Option<u32>,
     pub filesize: Option<u64>,
@@ -834,6 +835,8 @@ pub fn needs_sign_in(error: &str) -> bool {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum Failure {
+    Wait(u64),
+    Expired,
     Network,
     Corrupt,
     Other,
@@ -841,6 +844,25 @@ pub enum Failure {
 
 pub fn classify_failure(error: &str) -> Failure {
     let e = error.to_lowercase();
+    if let Some(at) = e.find("the site asks to wait ") {
+        let digits: String = e[at + "the site asks to wait ".len()..]
+            .chars()
+            .take_while(|c| c.is_ascii_digit())
+            .collect();
+        if let Ok(secs) = digits.parse::<u64>() {
+            return Failure::Wait(secs.max(1));
+        }
+    }
+    const EXPIRED: [&str; 5] = [
+        "http 403",
+        "http 410",
+        "link has expired",
+        "link expired",
+        "url has expired",
+    ];
+    if EXPIRED.iter().any(|k| e.contains(k)) {
+        return Failure::Expired;
+    }
     const CORRUPT: [&str; 7] = [
         "invalid data found",
         "error opening input",
@@ -896,7 +918,16 @@ pub fn cookies_rejected(error: &str) -> bool {
     e.contains("page needs to be reloaded") || e.contains("cookies are no longer valid")
 }
 
+static PROXY: parking_lot::RwLock<Option<String>> = parking_lot::RwLock::new(None);
+
+pub fn set_proxy(proxy: Option<String>) {
+    *PROXY.write() = proxy;
+}
+
 fn apply_cookies(cmd: &mut Command, cookies: Option<&Path>, browser: &str) {
+    if let Some(proxy) = PROXY.read().as_deref() {
+        cmd.arg("--proxy").arg(proxy);
+    }
     if let Some(file) = cookies {
         cmd.arg("--cookies").arg(file);
     } else if !browser.trim().is_empty() {
@@ -920,6 +951,17 @@ fn parse_info(v: &Value) -> MediaInfo {
         .unwrap_or_default();
     heights.sort_unstable_by(|a, b| b.cmp(a));
     heights.dedup();
+    let audio_only = v
+        .get("formats")
+        .and_then(Value::as_array)
+        .filter(|f| !f.is_empty())
+        .is_some_and(|formats| {
+            formats.iter().all(|f| {
+                f.get("vcodec").and_then(Value::as_str) == Some("none")
+                    && f.get("height").and_then(Value::as_u64).is_none()
+                    && f.get("width").and_then(Value::as_u64).is_none()
+            })
+        });
     let thumbnail = v
         .get("thumbnail")
         .and_then(Value::as_str)
@@ -950,6 +992,7 @@ fn parse_info(v: &Value) -> MediaInfo {
             .and_then(Value::as_str)
             .map(str::to_string),
         heights,
+        audio_only,
         is_playlist,
         entries: v
             .get("entries")
@@ -1191,6 +1234,24 @@ pub fn direct_formats(info: &Value) -> Option<Vec<Value>> {
     picked.iter().all(direct).then_some(picked)
 }
 
+pub fn available_in(formats: &[Value], now_secs: f64) -> Option<Duration> {
+    let latest = formats
+        .iter()
+        .filter_map(|f| f.get("available_at").and_then(Value::as_f64))
+        .fold(f64::NAN, f64::max);
+    if !latest.is_finite() || latest <= now_secs {
+        return None;
+    }
+    Some(Duration::from_secs_f64((latest - now_secs + 0.5).min(30.0)))
+}
+
+pub fn unix_now() -> f64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_secs_f64())
+        .unwrap_or(0.0)
+}
+
 pub fn format_headers(format: &Value) -> reqwest::header::HeaderMap {
     use reqwest::header::{HeaderMap, HeaderName, HeaderValue, COOKIE};
     let mut headers = HeaderMap::new();
@@ -1282,6 +1343,7 @@ pub enum MediaEvent {
     Phase(String),
     Title(String),
     Size(u64),
+    Plan(Vec<u64>),
     File(PathBuf),
     Destination(PathBuf),
 }
@@ -1294,12 +1356,21 @@ pub struct MediaTotals {
     exact: Option<u64>,
     shown: u64,
     guess: Option<u64>,
+    plan: Vec<u64>,
+    part_index: usize,
+    planned_total: Option<u64>,
 }
 
 impl MediaTotals {
     pub fn set_exact(&mut self, size: u64) {
         if size > 0 {
             self.exact = Some(size);
+        }
+    }
+
+    pub fn set_plan(&mut self, parts: Vec<u64>) {
+        if parts.len() > 1 && parts.iter().all(|p| *p > 0) {
+            self.plan = parts;
         }
     }
 
@@ -1317,6 +1388,7 @@ impl MediaTotals {
             self.finished += self.part_total.unwrap_or(0).max(self.part_seen);
             self.part_seen = 0;
             self.part_total = None;
+            self.part_index += 1;
         }
         self.part_seen = self.part_seen.max(downloaded);
         if let Some(t) = total {
@@ -1326,7 +1398,21 @@ impl MediaTotals {
         let size = if let Some(e) = self.exact {
             Some(e.max(self.shown))
         } else if let Some(t) = self.part_total {
-            Some(self.finished + t)
+            let ahead: u64 = self
+                .plan
+                .iter()
+                .skip(self.part_index + 1)
+                .map(|p| p + p / 100)
+                .sum();
+            let fresh = self.finished + t + ahead;
+            let kept = match self.planned_total {
+                Some(p) if fresh <= p && p - fresh <= p / 50 && p >= self.shown => p,
+                _ => fresh,
+            };
+            if !self.plan.is_empty() {
+                self.planned_total = Some(kept);
+            }
+            Some(kept)
         } else {
             let fresh = estimate
                 .filter(|e| *e > 0 && self.part_seen as f64 >= *e as f64 * 0.2)
@@ -1345,8 +1431,56 @@ impl MediaTotals {
     }
 }
 
+pub fn planned_sizes(line: &str) -> Option<Vec<u64>> {
+    let fields: Vec<&str> = line.split('|').collect();
+    let list = |i: usize| -> Vec<Option<u64>> {
+        fields
+            .get(i)
+            .and_then(|f| serde_json::from_str::<Vec<Value>>(f.trim()).ok())
+            .unwrap_or_default()
+            .iter()
+            .map(|v| v.as_f64().filter(|n| *n > 0.0).map(|n| n as u64))
+            .collect()
+    };
+    let exact = list(0);
+    let approx = list(3);
+    let rates = fields
+        .get(4)
+        .and_then(|f| serde_json::from_str::<Vec<Value>>(f.trim()).ok())
+        .unwrap_or_default();
+    let duration = fields
+        .get(5)
+        .and_then(|f| f.trim().parse::<f64>().ok())
+        .filter(|d| d.is_finite() && *d > 0.0);
+    let from_rate = |i: usize| {
+        let kbps = rates
+            .get(i)?
+            .as_f64()
+            .filter(|r| r.is_finite() && *r > 0.0)?;
+        Some((kbps * 125.0 * duration?) as u64)
+    };
+    let count = fields
+        .get(1)
+        .and_then(|f| serde_json::from_str::<Vec<Value>>(f.trim()).ok())
+        .map(|v| v.len())
+        .unwrap_or(0);
+    if count < 2 {
+        return None;
+    }
+    (0..count)
+        .map(|i| {
+            exact
+                .get(i)
+                .copied()
+                .flatten()
+                .or_else(|| approx.get(i).copied().flatten())
+                .or_else(|| from_rate(i))
+        })
+        .collect()
+}
+
 pub fn exact_size(line: &str) -> Option<u64> {
-    let mut parts = line.splitn(3, '|');
+    let mut parts = line.splitn(4, '|');
     let sizes: Vec<u64> = serde_json::from_str::<Vec<Value>>(parts.next()?.trim())
         .unwrap_or_default()
         .iter()
@@ -1376,11 +1510,12 @@ const AUDIO_FORMATS: &[&str] = &["m4a", "opus", "aac", "flac", "wav", "alac", "v
 
 const HEIGHT_TIERS: &[u32] = &[6480, 4320, 2880, 2160, 1440, 1080, 720, 480, 360, 240, 144];
 
-fn merge_format(container: &str) -> &str {
-    if container.eq_ignore_ascii_case("mp4-h264") {
-        "mp4"
-    } else {
-        container
+fn merge_format(container: &str) -> String {
+    match container.to_ascii_lowercase().as_str() {
+        "mp4-h264" | "mp4" => "mp4".into(),
+        "webm" => "webm/mp4/mkv".into(),
+        "mov" | "avi" | "flv" => format!("{}/mkv", container.to_ascii_lowercase()),
+        other => other.into(),
     }
 }
 
@@ -1409,9 +1544,156 @@ fn video_selector(cap: Option<u32>, container: &str) -> String {
     choices.join("/")
 }
 
+pub const SAFE_VIDEO: &str = "safe-video";
+
+pub fn has_video_stream(ffmpeg_dir: &Path, file: &Path) -> Option<bool> {
+    let mut cmd = std::process::Command::new(ffmpeg_dir.join(exe("ffmpeg")));
+    cmd.args(["-hide_banner", "-nostdin", "-i"])
+        .arg(file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().ok()?;
+    let text = String::from_utf8_lossy(&out.stderr);
+    if !text.contains("Stream #") {
+        return None;
+    }
+    Some(streams_have_video(&text))
+}
+
+fn probe_text(ffmpeg_dir: &Path, file: &Path) -> Option<String> {
+    let mut cmd = std::process::Command::new(ffmpeg_dir.join(exe("ffmpeg")));
+    cmd.args(["-hide_banner", "-nostdin", "-i"])
+        .arg(file)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        cmd.creation_flags(0x0800_0000);
+    }
+    let out = cmd.output().ok()?;
+    let text = String::from_utf8_lossy(&out.stderr).into_owned();
+    text.contains("Stream #").then_some(text)
+}
+
+fn codec_of(ffmpeg_output: &str, kind: &str) -> Option<String> {
+    let marker = format!("{kind}: ");
+    ffmpeg_output
+        .lines()
+        .filter(|l| l.contains("Stream #") && !l.contains("attached pic"))
+        .find_map(|l| {
+            let rest = &l[l.find(&marker)? + marker.len()..];
+            let codec: String = rest
+                .chars()
+                .take_while(|c| c.is_ascii_alphanumeric() || *c == '_')
+                .collect();
+            (!codec.is_empty()).then(|| codec.to_ascii_lowercase())
+        })
+}
+
+pub async fn to_h264(
+    ffmpeg_dir: &Path,
+    file: &Path,
+    cancel: &CancellationToken,
+) -> Result<Option<PathBuf>> {
+    let (dir, f) = (ffmpeg_dir.to_path_buf(), file.to_path_buf());
+    let Some(text) = tokio::task::spawn_blocking(move || probe_text(&dir, &f)).await? else {
+        return Ok(None);
+    };
+    match codec_of(&text, "Video") {
+        Some(c) if c != "h264" => {}
+        _ => return Ok(None),
+    }
+    let aac = codec_of(&text, "Audio").is_some_and(|c| c == "aac");
+    let stem = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "video".into());
+    let part = file.with_file_name(format!(".{stem}.h264.mdmpart.mp4"));
+    let mut cmd = Command::new(ffmpeg_dir.join(exe("ffmpeg")));
+    cmd.args(["-hide_banner", "-nostdin", "-loglevel", "error", "-y", "-i"])
+        .arg(file)
+        .args([
+            "-map", "0:v:0", "-map", "0:a:0?", "-c:v", "libx264", "-preset", "veryfast", "-crf",
+            "20", "-pix_fmt", "yuv420p",
+        ])
+        .args(if aac {
+            vec!["-c:a", "copy"]
+        } else {
+            vec!["-c:a", "aac", "-b:a", "192k"]
+        })
+        .args(["-movflags", "+faststart", "-f", "mp4"])
+        .arg(&part)
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::piped())
+        .kill_on_drop(true);
+    hide_console(&mut cmd);
+    let mut child = cmd.spawn().context("could not start FFmpeg")?;
+    let pid = child.id();
+    let mut stderr = child.stderr.take();
+    let status = tokio::select! {
+        _ = cancel.cancelled() => {
+            kill_tree(&mut child, pid).await;
+            let _ = tokio::fs::remove_file(&part).await;
+            bail!("cancelled");
+        }
+        s = child.wait() => s?,
+    };
+    if !status.success() {
+        let mut msg = String::new();
+        if let Some(e) = stderr.as_mut() {
+            use tokio::io::AsyncReadExt;
+            let _ = e.read_to_string(&mut msg).await;
+        }
+        let _ = tokio::fs::remove_file(&part).await;
+        bail!(
+            "FFmpeg could not convert the video: {}",
+            msg.lines().last().unwrap_or("unknown error")
+        );
+    }
+    let target = file.with_extension("mp4");
+    tokio::fs::remove_file(file).await?;
+    tokio::fs::rename(&part, &target).await?;
+    Ok(Some(target))
+}
+
+fn streams_have_video(ffmpeg_output: &str) -> bool {
+    ffmpeg_output
+        .lines()
+        .any(|l| l.contains("Stream #") && l.contains("Video:") && !l.contains("attached pic"))
+}
+
+pub fn is_video_file(path: &Path) -> bool {
+    path.extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .is_some_and(|e| {
+            matches!(
+                e.as_str(),
+                "mp4" | "mkv" | "webm" | "mov" | "avi" | "flv" | "m4v"
+            )
+        })
+}
+
 fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> {
     let s = |v: &[&str]| v.iter().map(|x| x.to_string()).collect::<Vec<_>>();
     match quality {
+        SAFE_VIDEO => vec![
+            "-f".into(),
+            "bv*[height>0][vcodec!=none]+ba/b[height>0][vcodec!=none]/b[vcodec!=none]".into(),
+            "-S".into(),
+            video_sort(None, container),
+            "--merge-output-format".into(),
+            merge_format(container),
+        ],
         "audio-mp3" if has_ffmpeg => s(&[
             "-f",
             "ba/b",
@@ -1468,7 +1750,7 @@ fn format_args(quality: &str, has_ffmpeg: bool, container: &str) -> Vec<String> 
                 "-S".into(),
                 video_sort(height, container),
                 "--merge-output-format".into(),
-                merge_format(container).into(),
+                merge_format(container),
             ]
         }
     }
@@ -1656,7 +1938,7 @@ pub async fn run(
         )])
         .args(["--progress-template", "postprocess:MDMPP %(progress.postprocessor)s %(progress.status)s"])
         .args(["--print", "before_dl:MDMTITLE:%(title)s"])
-        .args(["--print", "before_dl:MDMSIZE:%(requested_formats.:.filesize)j|%(requested_formats.:.format_id)j|%(filesize)s"])
+        .args(["--print", "before_dl:MDMSIZE:%(requested_formats.:.filesize)j|%(requested_formats.:.format_id)j|%(filesize)s|%(requested_formats.:.filesize_approx)j|%(requested_formats.:.tbr)j|%(duration)s"])
         .args(["--print", "after_move:MDMFILE:%(filepath)s"])
         .args(["--concurrent-fragments", &job.fragments.clamp(1, crate::settings::MAX_THREADS).to_string()])
         .args(["--retries", "15", "--fragment-retries", "15", "--file-access-retries", "5"])
@@ -1744,6 +2026,8 @@ pub async fn run(
         } else if let Some(size) = line.strip_prefix("MDMSIZE:") {
             if let Some(n) = exact_size(size) {
                 on_event(MediaEvent::Size(n));
+            } else if let Some(parts) = planned_sizes(size) {
+                on_event(MediaEvent::Plan(parts));
             }
         } else if let Some(file) = line.strip_prefix("MDMFILE:") {
             on_event(MediaEvent::File(PathBuf::from(file.trim())));
@@ -1853,6 +2137,31 @@ mod tests {
     }
 
     #[test]
+    fn reads_the_codecs_ffmpeg_reports() {
+        let story = "  Stream #0:0[0x1](und): Video: vp9 (Profile 0) (vp09 / 0x39307076), yuv420p, 720x1280, 18 kb/s, 1 fps\n  Stream #0:1[0x2](und): Audio: aac (HE-AAC) (mp4a / 0x6134706D), 48000 Hz";
+        assert_eq!(codec_of(story, "Video").as_deref(), Some("vp9"));
+        assert_eq!(codec_of(story, "Audio").as_deref(), Some("aac"));
+        let cover = "  Stream #0:0: Audio: opus, 48000 Hz\n  Stream #0:1: Video: mjpeg, yuvj420p (attached pic)";
+        assert_eq!(codec_of(cover, "Video"), None);
+        assert_eq!(
+            codec_of("  Stream #0:0: Video: h264 (High), yuv420p", "Video").as_deref(),
+            Some("h264")
+        );
+    }
+
+    #[test]
+    fn spots_files_without_a_picture() {
+        let audio_only = "Input #0, mov,mp4\n  Stream #0:0[0x1](und): Audio: aac (LC), 44100 Hz\n  Stream #0:1[0x2]: Video: mjpeg, yuvj420p, 320x320 (attached pic)";
+        assert!(!streams_have_video(audio_only));
+        let video = "  Stream #0:0[0x1](und): Video: h264 (High), yuv420p, 720x1280\n  Stream #0:1: Audio: aac";
+        assert!(streams_have_video(video));
+        assert!(is_video_file(Path::new("a/b.MP4")));
+        assert!(!is_video_file(Path::new("a/b.m4a")));
+        let safe = format_args(SAFE_VIDEO, true, "mp4");
+        assert!(safe[1].starts_with("bv*[height>0][vcodec!=none]+ba"));
+    }
+
+    #[test]
     fn classifies_failures() {
         assert_eq!(
             classify_failure("Postprocessing: Error opening input files: Invalid data found when processing input"),
@@ -1901,6 +2210,50 @@ mod tests {
         assert_eq!(parts.update(500, Some(500), None), (500, Some(500)));
         assert_eq!(parts.update(20, Some(100), None), (520, Some(600)));
         assert_eq!(parts.update(100, Some(100), None), (600, Some(600)));
+    }
+
+    #[test]
+    fn plans_the_total_from_approximate_sizes() {
+        assert_eq!(
+            planned_sizes("[null, null]|[\"v\", \"a\"]|NA|[16317000, 882903]"),
+            Some(vec![16317000, 882903])
+        );
+        assert_eq!(
+            planned_sizes("[1000, null]|[\"v\", \"a\"]|NA|[900, 50.5]"),
+            Some(vec![1000, 50])
+        );
+        assert_eq!(
+            planned_sizes("[null, null]|[\"v\", \"a\"]|NA|[16317000, null]"),
+            None
+        );
+        assert_eq!(planned_sizes("NA|NA|NA|NA"), None);
+        assert_eq!(
+            planned_sizes("[]|[\"v\", \"a\"]|NA|[]|[1242.478, 67.226]|105.067"),
+            Some(vec![16_317_929, 882_904])
+        );
+        assert_eq!(
+            planned_sizes("[]|[\"v\", \"a\"]|NA|[]|[1242.478, 67.226]|NA"),
+            None
+        );
+        assert_eq!(
+            exact_size("[700, 300]|[\"137\", \"140\"]|NA|[1, 2]"),
+            Some(1000)
+        );
+
+        let mut t = MediaTotals::default();
+        t.set_plan(vec![16_000_000, 880_000]);
+        let first = t.update(1_000, Some(16_317_376), None).1.unwrap();
+        assert_eq!(first, 16_317_376 + 888_800);
+        assert_eq!(t.update(16_317_376, Some(16_317_376), None).1, Some(first));
+        assert_eq!(t.update(1_000, Some(884_397), None).1, Some(first));
+        assert_eq!(t.update(884_397, Some(884_397), None).1, Some(first));
+
+        let mut bigger = MediaTotals::default();
+        bigger.set_plan(vec![1_000, 1_000]);
+        let start = bigger.update(10, Some(1_000), None).1.unwrap();
+        assert_eq!(start, 2_010);
+        assert_eq!(bigger.update(1_000, Some(1_000), None).1, Some(2_010));
+        assert_eq!(bigger.update(10, Some(3_000), None).1, Some(4_000));
     }
 
     #[test]
@@ -2048,7 +2401,7 @@ mod tests {
                 url: url.clone(),
                 dir: dir.clone(),
                 quality: quality.into(),
-                container: "mp4".into(),
+                container: std::env::var("MULTRON_CONTAINER").unwrap_or_else(|_| "mp4".into()),
                 playlist: false,
                 fragments: 8,
                 rate_limit: 0,
@@ -2064,6 +2417,9 @@ mod tests {
             let started = std::time::Instant::now();
             let mut info = extract(&job).await.unwrap();
             let formats = direct_formats(&info).expect("formats are not direct");
+            if let Some(wait) = available_in(&formats, unix_now()) {
+                tokio::time::sleep(wait).await;
+            }
             let found = started.elapsed().as_secs_f64();
             let mut local = Vec::new();
             let mut bytes = 0u64;
@@ -2162,6 +2518,7 @@ mod tests {
             let mut phases: Vec<String> = Vec::new();
             let started = std::time::Instant::now();
             let ok = run(job, CancellationToken::new(), |ev| match ev {
+                MediaEvent::Plan(p) => totals.set_plan(p),
                 MediaEvent::Size(n) => {
                     exact = Some(n);
                     totals.set_exact(n);
@@ -2463,7 +2820,7 @@ mod tests {
         assert!(args.iter().any(|a| a.ends_with("bv*+ba/b")));
         assert!(format_args("best", true, "mov")
             .contains(&"res,vcodec:h264,fps,acodec:aac".to_string()));
-        assert!(format_args("best", true, "mov").contains(&"mov".to_string()));
+        assert!(format_args("best", true, "mov").contains(&"mov/mkv".to_string()));
     }
 
     #[test]
@@ -2481,6 +2838,37 @@ mod tests {
         assert_eq!(args[at + 1], "mp4");
         assert!(format_args("1080", true, "mp4")
             .contains(&"res:1080,vcodec:h264,fps,acodec:aac".to_string()));
+    }
+
+    #[test]
+    fn waits_until_youtube_makes_the_formats_available() {
+        let formats = vec![
+            serde_json::json!({ "format_id": "134", "available_at": 1000 }),
+            serde_json::json!({ "format_id": "140", "available_at": 1004 }),
+        ];
+        assert_eq!(
+            available_in(&formats, 1001.0),
+            Some(Duration::from_secs_f64(3.5))
+        );
+        assert_eq!(available_in(&formats, 1005.0), None);
+        assert_eq!(available_in(&formats, 900.0), Some(Duration::from_secs(30)));
+        assert_eq!(
+            available_in(&[serde_json::json!({ "format_id": "18" })], 1.0),
+            None
+        );
+    }
+
+    #[test]
+    fn webm_falls_back_when_the_streams_do_not_fit() {
+        let args = format_args("720", true, "webm");
+        let at = args
+            .iter()
+            .position(|a| a == "--merge-output-format")
+            .unwrap();
+        assert_eq!(args[at + 1], "webm/mp4/mkv");
+        assert_eq!(merge_format("MOV"), "mov/mkv");
+        assert_eq!(merge_format("mkv"), "mkv");
+        assert_eq!(merge_format("mp4-h264"), "mp4");
     }
 
     #[test]
@@ -2505,6 +2893,26 @@ mod tests {
         assert!(!capped.contains("height>=4320"));
         assert!(capped.starts_with("bv*[height>=2160][height<=?2160][filesize>0]"));
         assert!(capped.ends_with("bv*+ba/b"));
+    }
+
+    #[test]
+    fn recognizes_host_waits_and_expired_links() {
+        assert_eq!(
+            classify_failure(
+                "server answered HTTP 429 Too Many Requests; the site asks to wait 45 s"
+            ),
+            Failure::Wait(45)
+        );
+        assert_eq!(
+            classify_failure("server answered HTTP 403 Forbidden"),
+            Failure::Expired
+        );
+        assert_eq!(classify_failure("HTTP 410 Gone"), Failure::Expired);
+        assert_eq!(
+            classify_failure("ERROR: HTTP Error 403: Forbidden"),
+            Failure::Network
+        );
+        assert_eq!(classify_failure("something else"), Failure::Other);
     }
 
     #[test]

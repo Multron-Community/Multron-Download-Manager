@@ -1,7 +1,7 @@
 {
   "name": "multron-download-manager",
   "private": true,
-  "version": "0.0.11",
+  "version": "1.0.0",
   "license": "SEE LICENSE IN LICENSE",
   "description": "Multron Download Manager - Rust + Tauri desktop app",
   "scripts": {
@@ -13,6 +13,7 @@
     "build:linux": "tauri build --bundles deb,rpm,appimage",
     "build:mac": "tauri build --bundles app,dmg",
     "build:windows": "node scripts/build-windows.mjs",
+    "build:windows:full": "node scripts/build-windows.mjs --full",
     "test": "node scripts/extension-builds.mjs && cargo test --manifest-path src-tauri/Cargo.toml",
     "check": "node scripts/extension-builds.mjs && cargo clippy --manifest-path src-tauri/Cargo.toml && npm --prefix frontend run check && npm run check:i18n",
     "check:i18n": "node scripts/i18n-check.mjs",

@@ -22,19 +22,54 @@
   const timers = new Map<number, ReturnType<typeof setTimeout>>();
   const hovered = new Set<number>();
 
+  const alarmed = new Set<number>();
+
+  function urgent(n: Notice) {
+    return n.kind === 'threat';
+  }
+
+  function alarm() {
+    try {
+      const ctx = new AudioContext();
+      [0, 0.32, 0.64].forEach((offset, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = 'square';
+        osc.frequency.value = i % 2 ? 660 : 880;
+        const at = ctx.currentTime + offset;
+        gain.gain.setValueAtTime(0.0001, at);
+        gain.gain.exponentialRampToValueAtTime(0.09, at + 0.02);
+        gain.gain.exponentialRampToValueAtTime(0.0001, at + 0.26);
+        osc.connect(gain).connect(ctx.destination);
+        osc.start(at);
+        osc.stop(at + 0.28);
+      });
+      setTimeout(() => ctx.close().catch(() => {}), 1400);
+    } catch {
+      return;
+    }
+  }
+
   function lifetime(n: Notice) {
+    if (urgent(n)) return 0;
     if (n.tone === 'bad') return 20000;
     return n.kind === 'started' ? 6000 : 9000;
   }
 
   function schedule(n: Notice) {
-    if (timers.has(n.id) || hovered.has(n.id)) return;
+    if (timers.has(n.id) || hovered.has(n.id) || !lifetime(n)) return;
     timers.set(n.id, setTimeout(() => dismiss(n.id), lifetime(n)));
   }
 
   async function refresh() {
     notices = await invoke<Notice[]>('notice_list');
     for (const n of notices) schedule(n);
+    for (const n of notices) {
+      if (urgent(n) && !alarmed.has(n.id)) {
+        alarmed.add(n.id);
+        alarm();
+      }
+    }
     for (const id of [...timers.keys()]) {
       if (!notices.some((n) => n.id === id)) {
         clearTimeout(timers.get(id));
@@ -73,7 +108,7 @@
   }
 
   async function show(n: Notice, start = false) {
-    await invoke('notice_show_download', { id: n.download, start }).catch(() => {});
+    await invoke('notice_show_download', { id: n.download, start, report: urgent(n) && !!n.download }).catch(() => {});
     dismiss(n.id);
   }
 
@@ -85,7 +120,7 @@
     }
     const asked = await invoke('open_file', { id: n.download }).then(
       () => false,
-      (e) => String(e).includes('confirm_start')
+      (e) => /confirm_start|blocked_threat|rescan_needed|in_quarantine/.test(String(e))
     );
     if (asked) await show(n, true);
     else dismiss(n.id);
@@ -97,7 +132,7 @@
     dismiss(n.id);
   }
 
-  const icon: Record<string, string> = { started: 'down', done: 'check', failed: 'alert', threat: 'alert', hash_bad: 'alert', hash_ok: 'shield', scan_cloud: 'shield' };
+  const icon: Record<string, string> = { started: 'down', done: 'check', failed: 'alert', threat: 'alert', hash_bad: 'alert', hash_ok: 'shield', scan_cloud: 'shield', captcha: 'lock' };
 
   onMount(() => {
     document.documentElement.style.background = 'var(--color-raised)';
@@ -122,8 +157,34 @@
   });
 </script>
 
-<div bind:this={box} class="flex flex-col bg-raised divide-y divide-line border border-line rounded-[8px] overflow-hidden">
+<div bind:this={box} class="notice-in flex flex-col bg-raised divide-y divide-line border border-line rounded-[10px] overflow-hidden">
   {#each notices as n (n.id)}
+    {#if urgent(n)}
+      <div
+        role="presentation"
+        class="relative cursor-pointer overflow-hidden"
+        onclick={() => show(n)}
+      >
+        <div class="threat-band px-4 py-2.5 flex items-center gap-2.5 text-white">
+          <span class="threat-pulse w-[30px] h-[30px] rounded-full bg-white/20 flex items-center justify-center flex-shrink-0"><Icon name="shield" size={17} stroke={2.4} /></span>
+          <span class="flex-1 min-w-0">
+            <span class="block text-[10.5px] font-semibold uppercase tracking-wider opacity-85">Multron Cloud · {t('Security alert')}</span>
+            <span class="block text-[14px] font-bold leading-tight">{n.title}</span>
+          </span>
+          <button class="w-[22px] h-[22px] rounded-full hover:bg-white/20 flex items-center justify-center flex-shrink-0" title={t('Close')} onclick={(e) => { e.stopPropagation(); dismiss(n.id); }}><Icon name="x" size={12} /></button>
+        </div>
+        <div class="px-4 py-3 bg-raised space-y-2.5">
+          <div class="text-[12.5px] break-words line-clamp-3 select-text" title={n.body}>{n.body}</div>
+          <div class="text-[11.5px] text-muted leading-snug">{t('Do not open this file. Look at the report to see what was found and remove it.')}</div>
+          <div class="flex gap-1.5">
+            <button class="btn btn-primary threat-btn !h-[28px] !text-[12px] flex-1" onclick={(e) => { e.stopPropagation(); show(n); }}><Icon name="alert" size={12} />{t('Show the threat')}</button>
+            {#if n.download}
+              <button class="btn !h-[28px] !text-[12px]" onclick={(e) => { e.stopPropagation(); folder(n); }}><Icon name="folderOpen" size={12} /></button>
+            {/if}
+          </div>
+        </div>
+      </div>
+    {:else}
     <div
       role="presentation"
       class="relative bg-raised hover:bg-hover pl-4 pr-3 py-3 flex gap-3 items-start cursor-pointer transition-colors"
@@ -148,5 +209,24 @@
       </div>
       <button class="icon-btn !w-[22px] !h-[22px]" title={t('Close')} onclick={(e) => { e.stopPropagation(); dismiss(n.id); }}><Icon name="x" size={12} /></button>
     </div>
+    {/if}
   {/each}
 </div>
+
+<style>
+  .threat-band {
+    background: linear-gradient(135deg, #c62828 0%, #e53935 55%, #ff5a4f 100%);
+  }
+  .threat-pulse {
+    animation: threat-pulse 1.4s ease-in-out infinite;
+  }
+  .threat-btn {
+    background: #d32f2f !important;
+    border-color: #d32f2f !important;
+    color: #fff !important;
+  }
+  @keyframes threat-pulse {
+    0%, 100% { box-shadow: 0 0 0 0 rgb(255 255 255 / 0.55); }
+    50% { box-shadow: 0 0 0 7px rgb(255 255 255 / 0); }
+  }
+</style>

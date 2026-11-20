@@ -92,10 +92,12 @@
 |---|---|
 | <img src="docs/screenshots/downloads-dark.png" alt="Downloads with the segment view" /> | <img src="docs/screenshots/torrent-dark.png" alt="Torrent seeding with tracker, DHT and LSD sources" /> |
 | **Downloads** — every connection writes to its own range; the progress bar fills from start to end, and the *Segments* tab shows each connection’s range live. | **Torrents** — seeding with tracker, DHT and LSD sources, peers, pieces and more. |
-| <img src="docs/screenshots/settings-light.png" alt="Appearance settings in the light theme" /> | <img src="docs/screenshots/security-dark.png" alt="Security settings with SmartScreen, Multron Cloud scan and TLS options" /> |
-| **Appearance** — light, dark or system theme, accent colours and transparency. | **Security** — SmartScreen mark, Multron Cloud scan (testing), safe opening of programs, extension approval, TLS and redirect rules. |
+| <img src="docs/screenshots/settings-light.png" alt="Appearance settings in the light theme" /> | <img src="docs/screenshots/security-dark.png" alt="Security settings with the security level, SmartScreen and safer download options" /> |
+| **Appearance** — light, dark or system theme, brightness for each theme, accent colours and transparency. | **Security** — security level from Basic to Strict, SmartScreen mark, safer downloads, safe opening of programs, extension approval, TLS and redirect rules. |
+| <img src="docs/screenshots/background-dark.png" alt="The downloads list over a built-in background by Karem Adem" /> | <img src="docs/screenshots/cloud-dark.png" alt="Multron Cloud settings with cloud-based malware protection" /> |
+| **Background image** — your own picture or one of five built-in backgrounds (photos by Karem Adem on Unsplash) shines through the panels. | **Multron Cloud** — cloud-based malware protection that checks every finished download, separately from your antivirus; the status bar shows *Protected*. |
 | <img src="docs/screenshots/downloads-light-tr.png" alt="The app in Turkish with the light theme" /> | |
-| **12 languages** — follows the system language (Turkish shown here). | |
+| **24 languages** — follows the system language (Turkish shown here). | |
 
 
 ---
@@ -113,6 +115,13 @@
 - Resume after pause, crash or restart; automatic retries with back-off; per-download and global speed limits (unlimited by default).
 - **Survives network changes** — when the connection drops (turning a VPN or GoodbyeDPI on or off, Wi-Fi switching), the download shows *Waiting for the network*, waits until the site is reachable again and continues with fresh links (*Reconnecting*). Video streams whose pieces arrive broken are thrown away and fetched again instead of failing with an FFmpeg error.
 
+**Adding downloads (JDownloader-style)**
+- **Link grabber** — turn on *Settings → Files → Link grabber* and every link you copy (http, https and magnet, also several at once) is collected; a bar at the bottom of the window opens them in a picker where you choose what to download. Links already in the list are skipped. Off by default.
+- **Several links at once** — *Add several links at once…* in the new download window takes one link per line, and a number range such as `file[01-20].zip` adds every number (zeros kept, up to 1,000 links).
+- **Hosts that ask you to wait** — on HTTP 429 or 503 the download waits as long as the site asks (`Retry-After`, up to 15 minutes) with a countdown, then continues by itself.
+- **Expired links are renewed** — when a link ends with HTTP 403 or 410, the download asks the site for a fresh link (*Refreshing the link*) and continues where it stopped.
+- **Ask before every download** — *Settings → Browser Integration → Ask before every download* opens a small window of its own for every download from the browser, separate from the main window. You change the folder, file name, quality or SHA-256 there, and the download then runs in that window with its progress bar and details while it also appears in the main list.
+
 **Queue & speed control**
 - **Sequential mode** — one click on **Parallel / One at a time** in the toolbar downloads files one after another instead of side by side.
 - **Reorder the queue** — every queued download shows its place (`#1`, `#2`…); the ↑ / ↓ buttons move it (double-click: to the top / bottom).
@@ -121,6 +130,8 @@
 **Managing the list**
 - **No accidental duplicates** — adding a link or torrent that is already in the list opens a system warning first that asks whether it should be downloaded again, with *Show existing* to jump to it.
 - **Select several downloads** — Ctrl+click (⌘+click on macOS) picks single downloads, Shift+click picks a range and Ctrl+A picks everything in the current view. A bar above the list then offers *Pause*, *Resume* and *Remove* for all of them; **Delete** removes the selection and **Esc** clears it.
+- **Category folders in your language, and your own categories** — *Sort into category folders* names the folders in the app language (for example *Видео* in Russian) and asks whether to rename them when you change the language; downloads in them move along. Each category can have its own folder, and your own categories (for example *E-books* for `epub mobi`) get their own folder too.
+- **Delete files by default** — an option ticks *Also delete the downloaded files* in the remove window by default.
 - **Clear the list** — the ✓ button in the toolbar opens *Clear finished*, *Clear failed* and *Clear all…*. Removing several downloads asks once and can delete the downloaded files too.
 - **Deleting from disk is thorough** — unfinished media downloads also lose yt-dlp's temporary pieces (`.part`, fragments, separate video and audio streams), and a file that is still open in another program or being scanned is retried for a few seconds. If it still cannot be deleted, Multron Download Manager says which file is left.
 
@@ -131,17 +142,22 @@
   - The real video title is shown right away, even when the page only says "YouTube".
   - **MP4 plays everywhere** — with the MP4 container, *Best quality* picks H.264 video and AAC audio (on YouTube usually up to 1080p), which every player and Windows Films & TV can show. YouTube offers 1440p and 4K only as VP9/AV1; pick those resolutions explicitly to get them (they need a player with VP9/AV1 support, or MKV).
 - Share-link resolvers for **Google Drive** (incl. large-file confirmation and Docs/Sheets/Slides export), **MEGA** (decrypted on the fly with AES-128-CTR), **Dropbox**, **MediaFire**, **Pixeldrain** and **GitHub**.
+- **Torrent search** — searches Torrents-CSV, the Internet Archive and sites you add (any RSS, Atom or Torznab search address with `{query}`, for example Jackett or Prowlarr) at once, with seeders, leechers, size and date.
 - A built-in **BitTorrent client** (librqbit): magnet links, .torrent files, file selection, DHT, uTP, UPnP, LSD, trackers, seeding rules, IP filters, SOCKS5 proxy and a BiglyBT-style detail view (Speed, Files, Options, Sources, Peers, Pieces, Info, Privacy, Log).
 - **SHA-256 verification** — optionally asks for the expected hash of every file and verifies it automatically when the download finishes.
 
 **Appearance**
 - **Light and dark themes**, or **Match the system theme** (follows Windows, macOS and Linux and switches with them). The sun/moon button in the toolbar switches manually.
-- **Nine accent colors** — Blue (default), Cyan, Green, Orange, Purple, Red, Pink, Teal and Gray — used for buttons, progress bars and the tint of transparent backgrounds.
+- **Nine accent colors and your own** — Blue (default), Cyan, Green, Orange, Purple, Red, Pink, Teal and Gray, or any color with *Custom color* — used for buttons, progress bars and the tint of transparent backgrounds.
+- **Glass effect** (on by default) — cards, buttons and fields get a soft sheen and a light top edge, like Multron Win Cleaner.
 - **Transparency effects** with three strengths (Light, Medium, Strong): **Acrylic** or **Mica** on Windows 11, Blur on Windows 10, vibrancy on macOS. Linux keeps solid backgrounds; theme and colors still apply.
+- **Brightness** — a slider for the light and one for the dark theme makes the backgrounds darker or lighter, for example when the light theme is too bright for your screen; text keeps its contrast.
+- **Background image** — your own picture behind the window, or one of five built-in backgrounds (photos by Karem Adem on [Unsplash](https://unsplash.com/license)), with panel opacity and blur.
 
 **Safety**
+- **Security level** — a slider like Windows' User Account Control at the top of *Settings → Security*: Basic, Standard (default), High or Strict, which set all the security options at once; changing one yourself shows *Custom*. High also refuses programs from `http://` links and local network links sent by the browser, Strict also refuses every `http://` link and asks before any downloaded file opens.
 - **SmartScreen / Gatekeeper** — finished files get the "downloaded from the internet" mark, so the system checks them when they are opened, and the download shows a **SmartScreen** (or **Gatekeeper**) badge; when your antivirus blocks or removes a download, it is flagged with a warning. See [Security & privacy](#security--privacy).
-- **Scan for malware with Multron Cloud (testing)** — every finished download has a **Scan for malware** button that checks it in the cloud, separately from your antivirus, with its own **Multron Cloud** badge. Automatic scanning of finished programs and scripts is on by default; the agreement is asked once, when Multron Download Manager starts, and declining it turns automatic scanning off. You pick which file types it checks (programs and scripts by default, or all files).
+- **Cloud-based malware protection with Multron Cloud (testing)** — every finished download has a **Scan for malware** button that checks it in the cloud, separately from your antivirus, with its own **Multron Cloud** badge. Automatic scanning of finished programs and scripts is on by default; the agreement is asked once, when Multron Download Manager starts, and declining it turns automatic scanning off. You pick which file types it checks (programs and scripts by default, or all files).
 - **Password-protected archives** — when a ZIP or 7z archive is locked, Multron Download Manager asks for its password, unpacks it in a private folder and scans the files inside.
 - **Clear scan results** — each download shows its Multron Cloud result (for example *Multron Cloud: not scanned*), and *Blocked by your antivirus* when your antivirus stopped it; click a badge to see why a file was not scanned, or what was found.
 - **Download and scan notices** — Multron Download Manager's own cards pop up in the corner of the screen, above other windows and also while the app is in the background or minimized, when a download starts, finishes (with *Open* and *Show in folder*) or fails, when the Multron Cloud scan of a download finishes, and when your antivirus blocks a download. They do not depend on the Windows, macOS or Linux notification settings. Both kinds can be turned off in *Settings → Startup & Shutdown*; *Also show notices inside the window* shows them inside the window instead while it is in front.
@@ -156,7 +172,7 @@
 - **Mandatory updates** — when Multron Download Manager starts it checks GitHub Releases; if a new version exists it shows *Updating Multron Download Manager to x.y.z* with the download progress, checks the release's signed `update.json` and the file's SHA-256 (see [How updates are verified](#how-updates-are-verified)), installs it and restarts before the app can be used. Without an internet connection Multron Download Manager starts normally and tries again next time; if the download fails three times it lets you continue and retries at the next start. Releases found while Multron Download Manager runs are downloaded in the background and installed when it quits. Development builds never update themselves.
 - **Version check** for the app and for yt-dlp from inside the app (Settings → Updates & About).
 - **Community links** — the Discord and Patreon buttons in the toolbar (also in *Settings → Updates & About*) open the [Multron Download Manager Discord server](https://discord.gg/xXmQw3MUAR) and [Multron Download Manager on Patreon](https://www.patreon.com/cw/multron).
-- **Languages from language files** — follows the Windows / macOS / Linux language by default (English when there is no translation) — English, Turkish, German, French, Spanish, Italian, Portuguese (Brazil), Russian, Japanese, Chinese (Simplified), Chinese (Traditional) and Korean; a language can also be picked by hand. Translations live in `frontend/src/lang/<code>.json` (see [Translating](#translating)).
+- **Languages from language files** — follows the Windows / macOS / Linux language by default (English when there is no translation) — 24 languages: English, Turkish, German, French, Spanish, Italian, Portuguese (Brazil), Russian, Japanese, Chinese (Simplified), Chinese (Traditional), Korean, Polish, Dutch, Ukrainian, Czech, Swedish, Romanian, Hungarian, Greek, Indonesian, Vietnamese, Thai and Hindi; a language can also be picked by hand. Translations are plain `lang/<code>.ini` files next to the program, so a language can be added without rebuilding (see [Translating](#translating)).
 
 ---
 
@@ -174,12 +190,12 @@ Download the file for your system from the [latest release](https://github.com/M
 | Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` (or `*_debian12_arm64.deb`) | `sudo apt install ./<file>.deb` |
 | Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` (or `*_fedora_aarch64.rpm`) | `sudo dnf install ./<file>.rpm` |
 | openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` (or `*_opensuse_aarch64.rpm`) | `sudo zypper install --allow-unsigned-rpm ./<file>.rpm` |
-| Any Linux | `*_amd64.AppImage` (or `*_aarch64.AppImage`) | `chmod +x <file>.AppImage && ./<file>.AppImage` |
+| Ubuntu 22.04+ / Linux Mint 21+ / any Linux with glibc 2.35+ | `*_amd64.AppImage` (or `*_aarch64.AppImage`) | `chmod +x <file>.AppImage && ./<file>.AppImage` |
 | Browser extension | `multron-browser-extension-chromium-v<version>.zip` (Chrome, Edge, Brave, Opera, Vivaldi) or `multron-browser-extension-firefox-v<version>.zip` | See [Browser extension](#browser-extension). |
 
 Every release has a signed `update.json` that lists the SHA-256 of each file. Check a download with `node scripts/verify-update.mjs update.json update.json.sig <file>` from this repository, or check where it was built with `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager` (see [How updates are verified](#how-updates-are-verified)).
 
-> **Linux:** every package is built on the distribution it is meant for. The plain `.deb` and the AppImage are built on Ubuntu 24.04 and need glibc 2.39 or newer (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). Debian 12 (bookworm) and LMDE 6 have their own `.deb` built on Debian 12, Fedora has its own `.rpm` built on Fedora 43, and openSUSE has its own `.rpm` built on Leap 16 (it also runs on Tumbleweed). Automatic updates keep each installation on the package built for its distribution. Older releases such as Ubuntu 22.04 or Linux Mint 21 are not supported.
+> **Linux:** every package is built on the distribution it is meant for. The plain `.deb` is built on Ubuntu 24.04 and needs glibc 2.39 or newer (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). The AppImage is built on Ubuntu 22.04, so it runs on glibc 2.35 or newer: Ubuntu 22.04+, Linux Mint 21+ and most other distributions from 2022 on. Debian 12 (bookworm) and LMDE 6 have their own `.deb` built on Debian 12, Fedora has its own `.rpm` built on Fedora 43, and openSUSE has its own `.rpm` built on Leap 16 (it also runs on Tumbleweed). Automatic updates keep each installation on the package built for its distribution. On Ubuntu 22.04 or Linux Mint 21, use the AppImage; releases older than that are not supported.
 
 > **macOS:** builds are not notarized yet. Right-click the app → **Open** the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.
 
@@ -201,6 +217,7 @@ Every release has a signed `update.json` that lists the SHA-256 of each file. Ch
 [![Scoop](https://img.shields.io/badge/Scoop-Windows-4B8BBE?style=flat-square&logo=scoop&logoColor=white)](https://github.com/Multron-Community/scoop-bucket)
 [![Chocolatey](https://img.shields.io/badge/Chocolatey-Windows-80B5E3?style=flat-square&logo=chocolatey&logoColor=white)](https://community.chocolatey.org/packages/multron-download-manager)
 [![Snap Store](https://img.shields.io/badge/Snap_Store-Linux-82BEA0?style=flat-square&logo=snapcraft&logoColor=white)](https://snapcraft.io/multron-download-manager)
+[![Flathub](https://img.shields.io/badge/Flathub-Linux-4A86CF?style=flat-square&logo=flathub&logoColor=white)](https://flathub.org/apps/io.github.Multron_Community.MultronDownloadManager)
 
 **macOS (Homebrew):**
 
@@ -229,13 +246,23 @@ scoop install multron/multron-download-manager
 choco install multron-download-manager
 ```
 
-**Linux (Snap):**
+**Linux (Snap)** — coming soon:
 
 ```bash
 sudo snap install multron-download-manager
 ```
 
 [![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/multron-download-manager)
+
+**Linux (Flathub)** — coming soon:
+
+```bash
+flatpak install flathub io.github.Multron_Community.MultronDownloadManager
+```
+
+[![Get it on Flathub](https://flathub.org/api/badge?locale=en)](https://flathub.org/apps/io.github.Multron_Community.MultronDownloadManager)
+
+In the Snap and Flatpak versions, updates come from the Snap Store and Flathub instead of the app itself.
 
 ---
 
@@ -256,6 +283,8 @@ The extension (any Chromium-based browser — Chrome, Edge, Brave, Opera, Vivald
 - **"Multron Download Manager" button on file-host pages** (Google Drive, MEGA, MediaFire, Dropbox, Pixeldrain).
 - **Manage it from the app** — *Settings → Browser Integration* shows your installed browsers (each with an *Install extension* button) and every connected extension. *Reinstall* opens the setup assistant; *Remove from browser* makes that extension uninstall itself (within half a minute while the browser is open); *Remove completely* removes it from every browser, forgets all connections and removes Multron Download Manager’s native-messaging registration, which stays off until you connect an extension again.
 - **Updates with the app** — browsers do not reload an unpacked or temporary extension when its files change, so the extension checks the app's version whenever it connects and reloads itself from the updated folder when the app is newer (once per version). The AppImage and Flatpak browsers use a copy of the extension, which is refreshed every time Multron Download Manager starts.
+- **Never takes over the file types you list** — *Never take over these file types* in the popup (for example `pdf torrent`) leaves those downloads to the browser.
+- **24 languages** — the popup, menus, buttons and notifications use the app's language (the same 24 languages as the app).
 - Opens **magnet links** in Multron.
 - Context menu: *Download link*, *Download video/audio from link*, *Download this media*, *Download video on this page*, *Download all from this page*, *Download selected link*.
 - Popup: connection status, quick quality picker for the current page, *Download all…* with a scroll depth, paste-a-link box and options (minimum file size, domains to skip, port).
@@ -268,7 +297,7 @@ Click **Browser extension** in the sidebar (it also opens on the first start):
 2. Press **Prepare and open**. Multron Download Manager uses the extension folder installed with it (same path across updates, refreshed by every update), opens the browser's extensions page and copies the folder path to the clipboard.
 3. In the browser:
    - **Chromium browsers:** turn on **Developer mode**, click **Load unpacked**, paste the path (`Ctrl+V`, or `⌘+Shift+G` then `⌘+V` on macOS) and confirm — or drag the folder onto the page.
-   - **Firefox:** click **Load Temporary Add-on…** and paste the path to `manifest.json`. Firefox removes temporary add-ons when it closes; run the assistant again after a restart.
+   - **Firefox:** click **Load Temporary Add-on…** and paste the path to `manifest.json`. Firefox removes temporary add-ons when it closes. To keep the extension for good, install the signed `multron-browser-extension-firefox-v<version>.xpi` from the [latest release](https://github.com/Multron-Community/Multron-Download-Manager/releases/latest) instead: open it in Firefox (or drag it into the window) and click **Add**. It is signed by Mozilla, so it also works in standard Firefox and stays after a restart.
 4. The extension connects by itself — press **Allow** in Multron. The assistant shows when it is connected.
 
 **Flatpak browsers on Linux** (Flathub: Chrome, Chromium, Ungoogled Chromium, Edge, Brave, Opera, Vivaldi, Yandex, Firefox, LibreWolf, Waterfox, Floorp and Zen) are found too and listed as *(Flatpak)*. The assistant opens them with `flatpak run` and copies the extension into the browser's own folder (`~/.var/app/<app id>/`), which the sandboxed browser can always read. Downloads work right away, because the extension reaches the app over `127.0.0.1`. To let the extension also start Multron Download Manager when it is closed, the browser needs permission to start programs outside its sandbox; the assistant shows the command, for example `flatpak override --user --talk-name=org.freedesktop.Flatpak org.mozilla.firefox`, and you run it yourself once, because it loosens the browser's sandbox.
@@ -334,6 +363,7 @@ cargo test --release --manifest-path src-tauri/Cargo.toml engine_network -- --ig
 - Seeding: keep seeding after completion, stop at a share ratio and/or after a number of minutes, then pause, remove, or remove with files; global download/upload limits.
 - **Queueing:** maximum active downloading and seeding torrents; the rest wait and start in order (reorder with the arrows).
 - **Play while downloading:** video and audio files in a torrent open in your player straight away, streamed in order with seeking (local, token-protected address).
+- **Torrent search:** the *Search* button in the sidebar searches every site you turn on at once and lists the results together, sortable by seeders, size, date or name. Torrents-CSV and the Internet Archive are built in; *Add a site* takes any search address that answers with an RSS, Atom or Torznab feed, with `{query}` where the search words go (for example `http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab/api?apikey=…&t=search&q={query}` for Jackett). *Download* opens the new download window, so you still pick the folder and the files. Only download what you have the right to download.
 - **Create torrent** from a file or folder (trackers, piece size), save the `.torrent` and start seeding at once.
 - **Force recheck** verifies the downloaded data again; **Export .torrent** saves the torrent file of any download.
 - **Watch folder:** `.torrent` files saved into a folder are added automatically.
@@ -363,8 +393,9 @@ The Options window is organised like a classic torrent client, with a searchable
 
 | Section | What you can set |
 | --- | --- |
-| Appearance | Theme (system / dark / light), accent color, transparency effects, material and strength — previewed live |
-| Startup & Shutdown | Language, start with the system (wording follows Windows / macOS / Linux), start minimized, keep running in the tray, resume on startup, update check, notifications |
+| Appearance | Theme (system / dark / light), accent color, transparency effects, material and strength, brightness for each theme — previewed live |
+| Startup & Shutdown | Start with the system (wording follows Windows / macOS / Linux), start minimized, keep running in the tray, resume on startup, update check, notifications |
+| Language | App language (24 languages or the system language), language files, reload |
 | Files | Default folder, sort into category folders |
 | Connection | Connections per download (default 8, up to 64), sequential download, simultaneous downloads, retries, User-Agent |
 | Transfer | Global speed limit |
@@ -374,7 +405,7 @@ The Options window is organised like a classic torrent client, with a searchable
 | Torrent | Listen port, UPnP, uTP, DHT, LSD, peer limit (500 by default) |
 | Trackers · Seeding & Limits · Privacy · IP Filters | See [Torrents](#torrents) |
 | Components | Turn the torrent engine, media engine, bridge, scraper, UPnP, uTP, DHT, LSD and IP filter on or off |
-| Security | SmartScreen / Gatekeeper mark, Multron Cloud scan (testing): the Scan for malware button and its upload limit, automatic scanning with its file types and upload limit, compressed uploads, remembered fingerprints and the number of connections; asking before starting downloaded programs, extension approval and trusted extensions, TLS certificate policy, HTTPS → HTTP redirect blocking, clear stored cookies |
+| Security | Security level (Basic, Standard, High, Strict), SmartScreen / Gatekeeper mark, Multron Cloud scan (testing): the Scan for malware button and its upload limit, automatic scanning with its file types and upload limit, compressed uploads, remembered fingerprints and the number of connections; asking before starting downloaded programs, extension approval and trusted extensions, TLS certificate policy, HTTPS → HTTP redirect blocking, clear stored cookies |
 | Updates & About | How mandatory updates work, *Download and install*, app and yt-dlp version check |
 
 ---
@@ -434,7 +465,9 @@ Version numbers count each part up to 10, and the release after that carries ove
 1. Commit your changes. Write the release notes in `release-notes/v<version>.md` (optional) — the workflow puts them at the top of the GitHub release, above the download table. Without that file it generates the notes from the commits and pull requests since the previous release. Rerunning the workflow refreshes the notes of a release that is still a draft. `npm run release -- --dry-run` prints the version that comes next.
 2. `npm run release` — picks the next version by the rule above (the first release is `0.0.1`), sets it in `package.json`, `frontend/package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` and `extension/manifest.json`, commits and creates the tag `v<version>` **locally** (nothing is pushed). `npm run release -- 0.2.0` releases a specific version instead.
 3. Push when you are ready: `git push origin HEAD --follow-tags`.
-4. The **Release** workflow runs on every push to `main` (and on `v*` tags). If the version in `src-tauri/tauri.conf.json` is not released yet it builds and publishes it, otherwise it stops right away with a notice to raise the version. So pushing a commit that raises the version is enough, a tag is optional. **Actions → Release → Run workflow** builds the current version by hand: *draft* keeps the release as a draft, *pre-release* publishes it without marking it as Latest. The workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer and portable zip, macOS DMGs (Apple Silicon + Intel), Linux `.deb` and `.AppImage` built on Ubuntu 24.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip, `SHA256SUMS.txt` and the signed `update.json`, then publishes the release. The PAD file for software download sites is not attached to the release: it is the `multron-download-manager.xml` file in the repository, at `https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml`. `npm run build:windows` rewrites it for the current version (`node scripts/pad.mjs` does the same from an installer in `dist/`); commit it together with the version change.
+4. The **Release** workflow runs on every push to `main` (and on `v*` tags). If the version in `src-tauri/tauri.conf.json` is not released yet it builds and publishes it, otherwise it stops right away with a notice to raise the version. So pushing a commit that raises the version is enough, a tag is optional. **Actions → Release → Run workflow** builds the current version by hand: *draft* keeps the release as a draft, *pre-release* publishes it without marking it as Latest. The workflow builds everything in parallel and attaches it to **one** GitHub release: Windows Inno Setup installer and portable zip, macOS DMGs (Apple Silicon + Intel), Linux `.deb` built on Ubuntu 24.04 and `.AppImage` built on Ubuntu 22.04 plus native packages built on Debian 12 (`.deb`), Fedora 43 and openSUSE Leap 16 (`.rpm`), all for x86_64 + arm64, the browser extension zip, `SHA256SUMS.txt` and the signed `update.json`, then publishes the release. The PAD file for software download sites is not attached to the release: it is the `multron-download-manager.xml` file in the repository, at `https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml`. `npm run build:windows` rewrites it for the current version (`node scripts/pad.mjs` does the same from an installer in `dist/`); commit it together with the version change.
+
+5. **Snap and Flatpak** are built after the release is published, from its `.deb` packages, for x86_64 and arm64 (`.github/workflows/snap.yml` and `.github/workflows/flatpak.yml`; both can also be run by hand for any version under **Actions**). The snap (`snap/snapcraft.yaml`) is published to the Snap Store's stable channel when the **`SNAPCRAFT_STORE_CREDENTIALS`** secret is set; without it the snap is only kept as a workflow artifact. The Flatpak (`flatpak/io.github.Multron_Community.MultronDownloadManager.yml`, with its AppStream file next to it) is built as a `.flatpak` bundle that is kept as a workflow artifact and can be installed with `flatpak install --user <file>.flatpak`. Flathub builds apps itself, so publishing there means submitting this manifest to [flathub/flathub](https://github.com/flathub/flathub) once, with the local `app.deb` source replaced by the release `.deb` URLs and their SHA-256 for each architecture. Inside a snap or Flatpak, Multron Download Manager does not update itself (the store does), loads the browser extension from a folder the browser can see, and registers a native-messaging helper that starts it through `flatpak run` or `/snap/bin`.
 
 Installed copies pick the new release up through automatic updates: each one downloads the file for its own platform and package format and only installs it when the signed `update.json` and the file's SHA-256 check out. After publishing, the workflow adds a table to the release notes with a VirusTotal link for every file, found by its SHA-256.
 
@@ -476,8 +509,8 @@ Multron-Download-Manager/
 │   └── src/
 │       ├── components/         # Sidebar, Header, DownloadItem, DetailsPane, TorrentTabs,
 │       │                       # NewTaskModal, SettingsView, StatusBar, Dialogs…
-│       ├── lang/               # Language files: tr.json, de.json, ja.json … (keyed by the English text)
 │       └── lib/                # API bindings, store, i18n, theme engine, formatting
+├── lang/                       # Language files: en.ini, tr.ini, de.ini … (installed next to the program)
 ├── extension/                  # Browser extension (Manifest V3, Chrome + Firefox)
 ├── installer/windows/          # Inno Setup script
 ├── release-notes/              # Notes shown on each GitHub release (v<version>.md)
@@ -534,20 +567,27 @@ Multron-Download-Manager/
 
 ## Translating
 
-Each language is one JSON file in `frontend/src/lang/`, keyed by the English text — the same layout as Multron WinCleaner's `Lang/*.json`:
+Each language is one `.ini` file in the `lang` folder — `lang/` in the repository, and the `lang` folder next to the program once it is installed (`C:\Program Files\Multron Download Manager\lang` on Windows, the program's resources folder on macOS and Linux). Lines are keyed by the English text:
 
-```json
-{
-  "Pause all": "Tümünü duraklat",
-  "{count} peers": "{count} eş",
-  "status|Completed": "Tamamlandı"
-}
+```ini
+[language]
+code=tr
+name=Türkçe
+english=Turkish
+
+[strings]
+Pause all=Tümünü duraklat
+{count} peers={count} eş
+status|Completed=Tamamlandı
+0 \= no limit.=0 = sınır yok.
 ```
 
+- To add a language, copy `en.ini`, name the copy after the language code (for example `pl.ini`), set `code` and `name` and translate the text after each `=`. Press **Reload** in Settings → Language (or restart the app) and it appears in the list — no rebuild needed.
 - `{name}` placeholders are filled in by the app; keep them as they are.
 - `context|Text` keys separate words that are the same in English but not in other languages (a download's *Completed* state vs the *Completed* list).
-- The same files translate the tray menu and notifications.
-- `npm run check:i18n` lists every string a language file is missing (CI fails on missing strings). A new file such as `nl.json` appears in the language list automatically; add it to `FILES` in `src-tauri/src/i18n.rs` for the tray menu.
+- An `=` inside the English text is written `\=`; `\n` is a line break. Lines starting with `;` are comments. An empty translation falls back to English.
+- The same files translate the tray menu, notifications and category folder names.
+- `npm run check:i18n` lists every string a language file is missing (CI fails on missing strings).
 
 ---
 

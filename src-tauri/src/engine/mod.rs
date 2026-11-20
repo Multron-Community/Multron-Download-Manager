@@ -271,6 +271,9 @@ pub async fn probe(client: &Client, url: &str, headers: &HeaderMap) -> Result<Pr
         .with_context(|| format!("could not connect to {url}"))?;
     let status = resp.status();
     if !status.is_success() {
+        if let Some(wait) = host_wait(status, resp.headers()) {
+            bail!("server answered HTTP {status}; the site asks to wait {wait} s");
+        }
         bail!("server answered HTTP {status}");
     }
     let final_url = resp.url().to_string();
@@ -308,7 +311,13 @@ pub async fn probe(client: &Client, url: &str, headers: &HeaderMap) -> Result<Pr
             }
         }
     }
-    drop(resp);
+    if status == StatusCode::PARTIAL_CONTENT
+        && resp.content_length().is_some_and(|l| l <= 64 * 1024)
+    {
+        let _ = tokio::time::timeout(Duration::from_secs(2), resp.bytes()).await;
+    } else {
+        drop(resp);
+    }
     Ok(ProbeResult {
         final_url,
         total,
@@ -681,6 +690,9 @@ async fn fetch_segment(
             }
             bail!("server ignored the range request (HTTP {status})");
         }
+        if let Some(wait) = host_wait(status, resp.headers()) {
+            bail!("HTTP {status}; the site asks to wait {wait} s");
+        }
         bail!("HTTP {status}");
     }
     let served = resp
@@ -770,6 +782,19 @@ async fn fetch_segment(
     result
 }
 
+pub const MAX_HOST_WAIT: u64 = 900;
+
+fn host_wait(status: StatusCode, headers: &HeaderMap) -> Option<u64> {
+    if status != StatusCode::TOO_MANY_REQUESTS && status != StatusCode::SERVICE_UNAVAILABLE {
+        return None;
+    }
+    let asked = headers
+        .get(reqwest::header::RETRY_AFTER)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.trim().parse::<u64>().ok());
+    Some(asked.unwrap_or(30).clamp(1, MAX_HOST_WAIT))
+}
+
 fn parse_content_range(v: &str) -> Option<(u64, u64, Option<u64>)> {
     let rest = v.trim().strip_prefix("bytes")?.trim_start();
     let (range, total) = rest.split_once('/')?;
@@ -784,6 +809,20 @@ fn parse_content_range(v: &str) -> Option<(u64, u64, Option<u64>)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_how_long_a_host_asks_to_wait() {
+        let mut h = HeaderMap::new();
+        assert_eq!(host_wait(StatusCode::NOT_FOUND, &h), None);
+        assert_eq!(host_wait(StatusCode::TOO_MANY_REQUESTS, &h), Some(30));
+        h.insert(reqwest::header::RETRY_AFTER, "120".parse().unwrap());
+        assert_eq!(host_wait(StatusCode::SERVICE_UNAVAILABLE, &h), Some(120));
+        h.insert(reqwest::header::RETRY_AFTER, "99999".parse().unwrap());
+        assert_eq!(
+            host_wait(StatusCode::TOO_MANY_REQUESTS, &h),
+            Some(MAX_HOST_WAIT)
+        );
+    }
 
     #[test]
     fn parses_content_range() {
@@ -864,6 +903,59 @@ mod tests {
         format!("http://{addr}/file.bin")
     }
 
+    #[tokio::test]
+    async fn probe_hands_its_connection_to_the_first_request() {
+        use std::net::SocketAddr;
+        let peers = Arc::new(std::sync::Mutex::new(Vec::<SocketAddr>::new()));
+        let seen = peers.clone();
+        let app = axum::Router::new().route(
+            "/file.bin",
+            axum::routing::get(
+                move |axum::extract::ConnectInfo(peer): axum::extract::ConnectInfo<SocketAddr>| {
+                    let seen = seen.clone();
+                    async move {
+                        seen.lock().unwrap().push(peer);
+                        let late = futures_util::stream::once(async {
+                            tokio::time::sleep(Duration::from_millis(80)).await;
+                            Ok::<_, std::io::Error>(bytes::Bytes::from_static(&[7]))
+                        });
+                        (
+                            axum::http::StatusCode::PARTIAL_CONTENT,
+                            [("content-range", "bytes 0-0/1000"), ("content-length", "1")],
+                            axum::body::Body::from_stream(late),
+                        )
+                    }
+                },
+            ),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(
+                listener,
+                app.into_make_service_with_connect_info::<SocketAddr>(),
+            )
+            .await
+            .unwrap()
+        });
+        let url = format!("http://{addr}/file.bin");
+        let client = Client::builder().http1_only().build().unwrap();
+        let probe = probe(&client, &url, &HeaderMap::new()).await.unwrap();
+        assert_eq!(probe.total, Some(1000));
+        client
+            .get(&url)
+            .header(RANGE, "bytes=0-0")
+            .send()
+            .await
+            .unwrap()
+            .bytes()
+            .await
+            .unwrap();
+        let peers = peers.lock().unwrap();
+        assert_eq!(peers.len(), 2);
+        assert_eq!(peers[0], peers[1], "the probe connection was not reused");
+    }
+
     fn local_job(url: &str, part: PathBuf, total: u64, if_range: Option<String>) -> Arc<Job> {
         Arc::new(Job {
             client: Client::new(),
@@ -911,6 +1003,52 @@ mod tests {
         let err = run(changed).await.unwrap_err().to_string();
         assert!(err.contains("changed on the server"), "{err}");
         let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn busy_and_expired_hosts_are_recognized_end_to_end() {
+        use axum::http::StatusCode as S;
+        let hits = Arc::new(std::sync::atomic::AtomicUsize::new(0));
+        let counter = hits.clone();
+        let app = axum::Router::new().route(
+            "/file.bin",
+            axum::routing::get(move || {
+                let n = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                async move {
+                    match n {
+                        0 => (
+                            S::TOO_MANY_REQUESTS,
+                            [("retry-after", "7".to_string())],
+                            Vec::new(),
+                        ),
+                        1 => (S::FORBIDDEN, [("x-n", "1".to_string())], Vec::new()),
+                        _ => (
+                            S::OK,
+                            [("content-length", "4".to_string())],
+                            b"done".to_vec(),
+                        ),
+                    }
+                }
+            }),
+        );
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let url = format!("http://{addr}/file.bin");
+        let client = Client::new();
+
+        let busy = probe(&client, &url, &HeaderMap::new()).await.unwrap_err();
+        assert_eq!(
+            crate::media::classify_failure(&format!("{busy:#}")),
+            crate::media::Failure::Wait(7)
+        );
+        let expired = probe(&client, &url, &HeaderMap::new()).await.unwrap_err();
+        assert_eq!(
+            crate::media::classify_failure(&format!("{expired:#}")),
+            crate::media::Failure::Expired
+        );
+        let ok = probe(&client, &url, &HeaderMap::new()).await.unwrap();
+        assert_eq!(ok.total, Some(4));
     }
 
     #[test]

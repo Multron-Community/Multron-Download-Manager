@@ -7,6 +7,7 @@
   import { bytes, date, decodeBits, duration, percent, speed } from '../lib/format';
   import type { Download, TorrentDetails } from '../types';
   import Icon from './Icon.svelte';
+  import NotesPanel from './NotesPanel.svelte';
   import SpeedGraph from './SpeedGraph.svelte';
 
   interface Props {
@@ -15,7 +16,7 @@
   }
   let { item, onClose }: Props = $props();
 
-  const tabs = ['speed', 'files', 'options', 'sources', 'peers', 'pieces', 'info', 'privacy', 'log'];
+  const tabs = ['speed', 'files', 'options', 'sources', 'peers', 'pieces', 'info', 'privacy', 'notes', 'log'];
   const labels: Record<string, string> = {
     speed: 'Speed',
     files: 'Files',
@@ -25,6 +26,7 @@
     pieces: 'Pieces',
     info: 'Info',
     privacy: 'Privacy',
+    notes: 'Tags & notes',
     log: 'Log'
   };
   let tab = $state('speed');
@@ -301,6 +303,8 @@
       <span></span>
       <button class="btn w-fit" onclick={() => { app.view = 'settings'; app.settingsSection = 'privacy'; }}><Icon name="shield" size={13} />{t('Privacy settings')}</button>
     </div>
+  {:else if tab === 'notes'}
+    <div class="p-4 overflow-auto"><NotesPanel {item} /></div>
   {:else if tab === 'log'}
     <pre class="mono text-[11px] text-muted whitespace-pre-wrap select-text">{(app.logs[item.id] ?? []).join('\n') || 'No events yet.'}{details?.error ? '\nEngine error: ' + details.error : ''}</pre>
   {/if}

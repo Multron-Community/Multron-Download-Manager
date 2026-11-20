@@ -3,6 +3,12 @@ use std::f32::consts::TAU;
 pub const FRAMES: usize = 12;
 
 pub fn accent(id: &str) -> [u8; 3] {
+    let hex = id.strip_prefix('#').unwrap_or_default();
+    if hex.len() == 6 {
+        if let Ok(v) = u32::from_str_radix(hex, 16) {
+            return [(v >> 16) as u8, (v >> 8) as u8, v as u8];
+        }
+    }
     match id {
         "cyan" => [0x4f, 0xc3, 0xd1],
         "green" => [0x2e, 0xb8, 0x5c],
@@ -147,6 +153,13 @@ pub fn overlay_bottom_right(base: &[u8], size: u32, badge: &[u8], badge_size: u3
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn reads_a_custom_hex_accent() {
+        assert_eq!(accent("#ff8800"), [0xff, 0x88, 0x00]);
+        assert_eq!(accent("green"), [0x2e, 0xb8, 0x5c]);
+        assert_eq!(accent("#zz"), [0x2f, 0x8c, 0xf0]);
+    }
 
     #[test]
     fn frames_rotate_and_stay_inside_the_badge() {

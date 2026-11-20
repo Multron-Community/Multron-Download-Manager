@@ -1,13 +1,32 @@
 <script lang="ts">
-  import { app } from '../lib/store.svelte';
+  import { app, PROGRAM_FILE } from '../lib/store.svelte';
   import { api, errorText } from '../lib/api';
   import { bytes } from '../lib/format';
-  import { t } from '../lib/i18n.svelte';
+  import { LANGUAGES, t } from '../lib/i18n.svelte';
   import Icon from './Icon.svelte';
   import { cloudView } from '../lib/cloud';
   import CloudScanWindow from './CloudScanWindow.svelte';
+  import type { Download } from '../types';
+  import { signatureView } from '../lib/tags';
 
   let deleteFiles = $state(false);
+  let removeOpen = false;
+  $effect(() => {
+    const open = app.removeTargets.length > 0;
+    if (open && !removeOpen) deleteFiles = app.settings?.deleteFilesByDefault ?? false;
+    removeOpen = open;
+  });
+
+  async function answerCategoryLanguage(rename: boolean) {
+    app.categoryLanguage = null;
+    try {
+      const moved = await api.applyCategoryLanguage(rename);
+      if (rename && moved > 0) app.toast('success', t('{count} folders renamed', { count: moved }));
+      app.settings = await api.getSettings();
+    } catch (e) {
+      app.toast('error', errorText(e));
+    }
+  }
 
   async function confirmRemove() {
     const targets = app.removeTargets;
@@ -111,6 +130,43 @@
     if (d) app.scanInCloud(d);
   }
 
+  let loginUser = $state('');
+  let loginPass = $state('');
+  let loginRemember = $state(true);
+
+  function focusOnMount(node: HTMLElement) {
+    node.focus();
+  }
+
+  let pwChoice = $state<number | 'all' | 'other'>(0);
+  let pwOther = $state('');
+  let pwShow = $state(false);
+  let savedPasswords = $derived((app.settings?.extractPasswords ?? []).map((p) => p.trim()).filter(Boolean));
+
+  $effect(() => {
+    if (app.passwordFor) {
+      pwChoice = 0;
+      pwOther = '';
+      pwShow = false;
+    }
+  });
+
+  async function submitPassword(d: Download) {
+    const password = pwChoice === 'all' ? null : pwChoice === 'other' ? pwOther.trim() : savedPasswords[pwChoice];
+    if (pwChoice === 'other' && !password) return;
+    app.passwordFor = null;
+    await api.extractWithPassword(d.id, password ?? null).catch((e) => app.toast('error', String(e)));
+  }
+
+  async function submitLogin(d: Download) {
+    const ok = await app.run(() => api.setDownloadLogin(d.id, loginUser.trim(), loginPass, loginRemember));
+    if (ok) {
+      app.loginFor = null;
+      loginUser = '';
+      loginPass = '';
+    }
+  }
+
   const toneText: Record<string, string> = { ok: 'text-ok', warn: 'text-warn', bad: 'text-bad', muted: 'text-muted' };
   const toneBox: Record<string, string> = { ok: 'bg-ok/10 border-ok/30', warn: 'bg-warn/10 border-warn/40', bad: 'bg-bad/10 border-bad/40', muted: 'bg-line/40 border-line' };
 
@@ -170,25 +226,152 @@
 
 <svelte:window onkeydown={(e) => e.key === 'Escape' && app.startTarget && (app.startTarget = null)} />
 
+{#if app.passwordFor}
+  {@const d = app.passwordFor}
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation" onclick={(e) => e.target === e.currentTarget && (app.passwordFor = null)}>
+    <form class="w-full max-w-[440px] bg-menu border border-line rounded-[14px] shadow-2xl p-5 space-y-3" onsubmit={(e) => { e.preventDefault(); submitPassword(d); }}>
+      <div class="flex items-start gap-3">
+        <div class="w-[38px] h-[38px] rounded-full bg-warn/15 text-warn flex items-center justify-center flex-shrink-0"><Icon name="lock" size={17} /></div>
+        <div class="min-w-0">
+          <div class="text-[14px] font-semibold">{t('Choose a password')}</div>
+          <div class="text-[12px] text-muted truncate" title={d.name}>{d.name}</div>
+        </div>
+      </div>
+      <div class="flex items-center justify-between">
+        <span class="text-[11.5px] text-dim">{t('Saved passwords')}</span>
+        <button type="button" class="text-[11.5px] text-accent hover:underline flex items-center gap-1" onclick={() => (pwShow = !pwShow)}><Icon name="eye" size={11} />{pwShow ? t('Hide') : t('Show')}</button>
+      </div>
+      <div class="max-h-[240px] overflow-y-auto rounded-[10px] border border-line">
+        {#each savedPasswords as p, i (i)}
+          <label class="flex items-center gap-2.5 px-3 h-[36px] border-b border-line/60 cursor-pointer hover:bg-hover {pwChoice === i ? 'bg-accent/10' : ''}">
+            <input type="radio" name="pw" class="check" checked={pwChoice === i} onchange={() => (pwChoice = i)} />
+            <span class="mono text-[12.5px] truncate">{pwShow ? p : '•'.repeat(Math.min(12, Math.max(6, p.length)))}</span>
+          </label>
+        {/each}
+        <label class="flex items-center gap-2.5 px-3 h-[36px] border-b border-line/60 cursor-pointer hover:bg-hover {pwChoice === 'all' ? 'bg-accent/10' : ''}">
+          <input type="radio" name="pw" class="check" checked={pwChoice === 'all'} onchange={() => (pwChoice = 'all')} />
+          <span class="text-[12.5px]">{t('Try all saved passwords')}</span>
+        </label>
+        <label class="flex items-center gap-2.5 px-3 h-[40px] cursor-pointer hover:bg-hover {pwChoice === 'other' ? 'bg-accent/10' : ''}">
+          <input type="radio" name="pw" class="check" checked={pwChoice === 'other'} onchange={() => (pwChoice = 'other')} />
+          <input class="field !h-[28px] flex-1 min-w-0 mono text-[12px]" type={pwShow ? 'text' : 'password'} autocomplete="off" placeholder={t('Another password…')} bind:value={pwOther} onfocus={() => (pwChoice = 'other')} />
+        </label>
+      </div>
+      <p class="text-[11px] text-dim">{t('A new password you type here is saved for next time.')}</p>
+      <div class="flex justify-end gap-2 pt-1">
+        <button type="button" class="btn" onclick={() => (app.passwordFor = null)}>{t('Cancel')}</button>
+        <button type="submit" class="btn btn-primary" disabled={pwChoice === 'other' && !pwOther.trim()}><Icon name="archive" size={12} />{t('Extract')}</button>
+      </div>
+    </form>
+  </div>
+{/if}
+
+{#if app.loginFor}
+  {@const d = app.loginFor}
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation" onclick={(e) => e.target === e.currentTarget && (app.loginFor = null)}>
+    <form class="w-full max-w-[400px] bg-menu border border-line rounded-[14px] shadow-2xl p-5 space-y-3" onsubmit={(e) => { e.preventDefault(); submitLogin(d); }}>
+      <div class="flex items-start gap-3">
+        <div class="w-[38px] h-[38px] rounded-full bg-accent/15 text-accent flex items-center justify-center flex-shrink-0"><Icon name="lock" size={17} /></div>
+        <div class="min-w-0">
+          <h2 class="text-[15px] font-semibold">{t('This site needs a login')}</h2>
+          <p class="text-[12px] text-muted truncate" title={d.url}>{host(d.url)}</p>
+        </div>
+      </div>
+      <input class="field" placeholder={t('User name')} autocomplete="username" bind:value={loginUser} use:focusOnMount />
+      <input class="field" type="password" placeholder={t('Password')} autocomplete="current-password" bind:value={loginPass} />
+      <label class="flex items-center gap-2 text-[12px] text-muted"><input type="checkbox" class="check" bind:checked={loginRemember} />{t('Remember for this site, so its other downloads log in by themselves')}</label>
+      <p class="text-[11px] text-dim">{t('The login is only sent over HTTPS. Saved passwords are encrypted with your Windows account.')}</p>
+      <div class="flex justify-end gap-2">
+        <button type="button" class="btn" onclick={() => (app.loginFor = null)}>{t('Cancel')}</button>
+        <button type="submit" class="btn btn-primary" disabled={!loginUser.trim()}>{t('Log in and retry')}</button>
+      </div>
+    </form>
+  </div>
+{/if}
+
+{#if app.vtResult}
+  {@const r = app.vtResult}
+  {@const bad = r.malicious > 0}
+  {@const warn = !bad && r.suspicious > 0}
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation" onclick={(e) => e.target === e.currentTarget && (app.vtResult = null)}>
+    <div class="w-full max-w-[440px] bg-menu border border-line rounded-[14px] shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label="VirusTotal">
+      <div class="p-5 space-y-4">
+        <div class="flex items-start gap-3">
+          <div class="w-[44px] h-[44px] rounded-full flex items-center justify-center flex-shrink-0 {r.state !== 'found' ? 'bg-accent/15 text-accent' : bad ? 'bg-bad/15 text-bad' : warn ? 'bg-warn/15 text-warn' : 'bg-ok/15 text-ok'}">
+            <Icon name={bad || warn ? 'alert' : 'shield'} size={20} />
+          </div>
+          <div class="min-w-0">
+            <div class="text-[11px] text-muted">VirusTotal</div>
+            <h2 class="text-[15px] font-semibold">
+              {#if r.state === 'queued'}{t('Uploaded, the analysis is still running')}{:else if bad}{t('{count} security vendors flagged this file', { count: r.malicious })}{:else if warn}{t('{count} security vendors find this file suspicious', { count: r.suspicious })}{:else}{t('No security vendor flagged this file')}{/if}
+            </h2>
+            <div class="text-[12px] text-muted mono truncate" title={r.name}>{r.name}</div>
+          </div>
+        </div>
+        {#if r.state === 'found'}
+          <div class="space-y-1.5">
+            <div class="flex items-baseline justify-between text-[12px]"><span class="text-muted">{t('Detections')}</span><span class="mono text-[18px] font-bold {bad ? 'text-bad' : warn ? 'text-warn' : 'text-ok'}">{r.malicious + r.suspicious} / {r.engines}</span></div>
+            <div class="w-full h-[8px] bg-line rounded-full overflow-hidden flex">
+              <div class="h-full bg-bad" style="width: {r.engines ? (r.malicious / r.engines) * 100 : 0}%"></div>
+              <div class="h-full bg-warn" style="width: {r.engines ? (r.suspicious / r.engines) * 100 : 0}%"></div>
+            </div>
+            {#if r.label}<div class="text-[12px]"><span class="text-muted">{t('Threat name')}:</span> <span class="mono text-bad">{r.label}</span></div>{/if}
+          </div>
+        {/if}
+        <div class="text-[11px] text-dim mono break-all select-text">SHA-256 {r.sha256}</div>
+        <div class="flex justify-end gap-2">
+          <button class="btn" onclick={() => api.openUrl(r.link).catch(() => {})}><Icon name="globe" size={12} />{t('Open on VirusTotal')}</button>
+          <button class="btn btn-primary" onclick={() => (app.vtResult = null)}>{t('Close')}</button>
+        </div>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if app.captchaPanel && app.captchas.length}
+  <div class="download-card fixed bottom-9 right-3 z-40 w-[min(380px,calc(100vw-24px))] rounded-[12px] border border-line bg-menu shadow-2xl overflow-hidden">
+    <div class="px-4 py-2.5 flex items-center gap-2 border-b border-line">
+      <Icon name="lock" size={14} class="text-warn" />
+      <span class="text-[12.5px] font-semibold flex-1">{t('Sites that wait for you to solve a CAPTCHA')}</span>
+      <button class="icon-btn" aria-label={t('Close')} onclick={() => (app.captchaPanel = false)}><Icon name="x" size={12} /></button>
+    </div>
+    <div class="max-h-[260px] overflow-y-auto">
+      {#each app.captchas as c (c.id)}
+        {@const left = Math.max(0, Math.round(((app.settings?.captchaTimeoutSecs ?? 300) * 1000 - (Date.now() - c.createdAt)) / 1000))}
+        <div class="px-4 py-2.5 flex items-center gap-3 border-b border-line/50 last:border-0">
+          <div class="min-w-0 flex-1">
+            <div class="text-[12.5px] font-medium truncate" title={c.url}>{c.site}</div>
+            <div class="text-[11px] text-muted">{c.kind} · {t('{seconds} s left', { seconds: left })}{app.settings?.captchaAutoRetry && c.download ? ' · ' + t('retrying by itself') : ''}</div>
+          </div>
+          <button class="btn btn-accent !h-[26px] !text-[11.5px]" onclick={() => api.captchaOpen(c.id).catch((e) => app.toast('error', String(e)))}>{t('Solve')}</button>
+          <button class="icon-btn" title={t('Dismiss')} aria-label={t('Dismiss')} onclick={() => api.captchaDismiss(c.id)}><Icon name="x" size={12} /></button>
+        </div>
+      {/each}
+    </div>
+    <div class="px-4 py-2 text-[10.5px] text-dim border-t border-line">{t('You solve the CAPTCHA in your browser. Multron Download Manager never solves it by itself.')}</div>
+  </div>
+{/if}
+
 {#if app.startTarget}
   {@const d = app.startTarget}
   {@const result = startResult(d)}
   {@const danger = result.tone === 'bad' || d.scanState === 'threat'}
   {@const shield = app.platform === 'macos' ? 'Gatekeeper' : 'SmartScreen'}
+  {@const program = PROGRAM_FILE.test(d.name) || app.disguised(d)}
   <div
     class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
     role="presentation"
     onclick={(e) => e.target === e.currentTarget && (app.startTarget = null)}
   >
-    <div class="w-full max-w-[440px] bg-menu border border-line rounded-[14px] shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label={t('Start this program?')}>
+    <div class="w-full max-w-[440px] bg-menu border border-line rounded-[14px] shadow-2xl overflow-hidden" role="dialog" aria-modal="true" aria-label={program ? t('Start this program?') : t('Open this file?')}>
       <div class="p-5 space-y-4">
         <div class="flex items-start gap-3">
           <div class="w-[40px] h-[40px] rounded-full flex items-center justify-center flex-shrink-0 {danger ? 'bg-bad/15 text-bad' : 'bg-warn/15 text-warn'}">
             <Icon name="alert" size={19} />
           </div>
           <div class="min-w-0">
-            <h2 class="text-[15px] font-semibold">{t('Start this program?')}</h2>
-            <p class="text-[12.5px] text-muted leading-relaxed mt-0.5">{t('{name} was downloaded from the internet. Start it only if you trust where it came from.', { name: d.name })}</p>
+            <h2 class="text-[15px] font-semibold">{program ? t('Start this program?') : t('Open this file?')}</h2>
+            <p class="text-[12.5px] text-muted leading-relaxed mt-0.5">{program ? t('{name} was downloaded from the internet. Start it only if you trust where it came from.', { name: d.name }) : t('{name} was downloaded from the internet. Open it only if you trust where it came from.', { name: d.name })}</p>
           </div>
         </div>
         <div class="rounded-[10px] border border-line bg-raised px-3 py-2.5 flex items-center gap-3">
@@ -198,6 +381,20 @@
             <div class="text-[11.5px] text-muted truncate">{bytes(d.total)}{host(d.url) ? ' · ' + host(d.url) : ''}</div>
           </div>
         </div>
+        {#if signatureView(d.signature)}
+          {@const sv = signatureView(d.signature)!}
+          <div class="rounded-[10px] border px-3 py-2 flex items-center gap-2 text-[12.5px] {sv.valid ? toneBox.ok : sv.tone === 'bad' ? toneBox.bad : toneBox.warn}">
+            <Icon name={sv.valid ? 'shield' : 'alert'} size={14} class={sv.valid ? 'text-ok' : sv.tone === 'bad' ? 'text-bad' : 'text-warn'} />
+            <span class="font-medium">{t('Digital signature')}</span>
+            <span class="ml-auto text-right truncate {sv.valid ? 'text-ok' : sv.tone === 'bad' ? 'text-bad' : 'text-warn'}">{sv.valid ? sv.text : t(sv.text)}</span>
+          </div>
+        {/if}
+        {#if app.disguised(d)}
+          <div class="rounded-[10px] border px-3 py-2 flex items-start gap-2 text-[12px] {toneBox.bad}">
+            <Icon name="alert" size={14} class="text-bad mt-[1px] flex-shrink-0" />
+            <span>{t('The name of this file hides that it is a program, for example “invoice.pdf.exe”. This is a common trick of malware.')}</span>
+          </div>
+        {/if}
         <div class="space-y-1.5">
           <div class="rounded-[10px] border px-3 py-2 flex items-center gap-2 text-[12.5px] {toneBox[result.tone]}">
             <Icon name={result.icon} size={14} class={toneText[result.tone]} />
@@ -228,7 +425,7 @@
         {/if}
         <div class="flex gap-2 ml-auto">
           <button class="btn" onclick={() => (app.startTarget = null)}>{t('Cancel')}</button>
-          <button class="btn {danger ? 'btn-danger' : 'btn-accent'}" onclick={() => app.startConfirmed()}>{danger ? t('Start anyway') : t('Start')}</button>
+          <button class="btn {danger ? 'btn-danger' : 'btn-accent'}" onclick={() => app.startConfirmed()}>{danger ? (program ? t('Start anyway') : t('Open anyway')) : program ? t('Start') : t('Open')}</button>
         </div>
       </div>
     </div>
@@ -254,6 +451,38 @@
       <div class="flex justify-end gap-2">
         <button class="btn" onclick={() => (app.removeTargets = [])}>{t('Cancel')}</button>
         <button class="btn btn-danger" onclick={confirmRemove}>{t('Remove')}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
+{#if app.grabbed.length}
+  <div class="download-card fixed bottom-9 left-1/2 -translate-x-1/2 z-[70] w-[min(520px,calc(100vw-32px))] bg-raised border border-line rounded-[12px] shadow-2xl pl-3 pr-2 py-2 flex gap-3 items-center">
+    <div class="w-[32px] h-[32px] rounded-full flex items-center justify-center flex-shrink-0 bg-accent/20 text-accent"><Icon name="link" size={15} /></div>
+    <div class="min-w-0 flex-1">
+      <div class="text-[12.5px] font-semibold">{t('Link grabber')} · <span class="text-accent">{app.grabbed.length === 1 ? t('1 link copied') : t('{count} links copied', { count: app.grabbed.length })}</span></div>
+      <div class="text-[11px] text-dim truncate" title={app.grabbed[app.grabbed.length - 1]}>{app.grabbed[app.grabbed.length - 1]}</div>
+    </div>
+    <button class="btn btn-accent !h-[28px] !text-[11.5px] flex-shrink-0" onclick={() => { app.view = 'grabber'; app.grabbed = []; }}>{t('Show')}</button>
+    <button class="icon-btn flex-shrink-0" title={t('Clear')} aria-label={t('Clear')} onclick={() => (app.grabbed = [])}><Icon name="x" size={13} /></button>
+  </div>
+{/if}
+
+{#if app.categoryLanguage}
+  {@const c = app.categoryLanguage}
+  {@const langName = LANGUAGES.find((l) => l.code === c.to)?.name ?? c.to}
+  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation">
+    <div class="w-full max-w-[440px] bg-menu border border-line rounded-[14px] shadow-2xl p-5 space-y-3" role="dialog" aria-modal="true" aria-label={t('Rename the category folders?')}>
+      <h2 class="text-[15px] font-semibold">{t('Rename the category folders?')}</h2>
+      <p class="text-[12.5px] text-muted leading-relaxed">{t('The app language is now {language}. Rename the category folders in your download folder to match? Downloads in them move along.', { language: langName })}</p>
+      <ul class="text-[12px] rounded-[10px] border border-line bg-raised px-3 py-2 space-y-1 max-h-[180px] overflow-auto">
+        {#each c.folders as [from, to]}
+          <li class="flex items-center gap-2 mono truncate"><span class="text-muted truncate">{from}</span><span class="text-dim">→</span><span class="truncate">{to}</span></li>
+        {/each}
+      </ul>
+      <div class="flex justify-end gap-2">
+        <button class="btn" onclick={() => answerCategoryLanguage(false)}>{t('Keep current names')}</button>
+        <button class="btn btn-accent" onclick={() => answerCategoryLanguage(true)}>{t('Rename folders')}</button>
       </div>
     </div>
   </div>
@@ -311,7 +540,7 @@
     </div>
   {/each}
   {#each app.toasts as toast (toast.id)}
-    <div class="pointer-events-auto bg-raised border {toastStyle[toast.kind]} rounded-[10px] shadow-xl px-3 py-2.5 flex gap-2 items-start text-[12px]">
+    <div class="toast-in pointer-events-auto border {toastStyle[toast.kind]} rounded-[12px] px-3 py-2.5 flex gap-2 items-start text-[12px]">
       <Icon name={toastIcon[toast.kind]} size={14} class="mt-[1px] flex-shrink-0 {toast.kind === 'error' ? 'text-bad' : toast.kind === 'success' ? 'text-ok' : toast.kind === 'warning' ? 'text-warn' : 'text-muted'}" />
       <span class="break-words min-w-0 select-text">{toast.message}</span>
     </div>

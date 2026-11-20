@@ -71,7 +71,7 @@
   <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55] flex items-center justify-center p-4" role="presentation">
     <div class="w-full max-w-[620px] bg-menu border border-line rounded-[14px] shadow-2xl p-5 space-y-4">
       <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-full bg-accent-strong/25 text-accent flex items-center justify-center"><Icon name="magnet" size={18} /></div>
+        <div class="settings-title-icon w-[34px] h-[34px] rounded-[10px] flex items-center justify-center flex-shrink-0"><Icon name="magnet" size={17} /></div>
         <h2 class="text-[15px] font-semibold flex-1">{t('Create torrent')}</h2>
         <button class="icon-btn" title={t('Close')} onclick={() => (app.createTorrentOpen = false)}><Icon name="x" size={14} /></button>
       </div>
@@ -112,7 +112,7 @@
 
       {#if error}<p class="text-[12px] text-bad break-all">{error}</p>{/if}
 
-      <div class="flex justify-end gap-2">
+      <div class="modal-foot flex justify-end gap-2 -mx-5 -mb-5 px-5 py-3">
         <button class="btn" onclick={() => (app.createTorrentOpen = false)}>{t('Cancel')}</button>
         <button class="btn btn-accent" disabled={busy || !source || !saveTo} onclick={create}>
           <Icon name="magnet" size={13} />{busy ? t('Hashing files…') : t('Create torrent')}

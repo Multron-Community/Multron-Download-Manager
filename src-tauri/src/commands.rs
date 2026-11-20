@@ -74,6 +74,36 @@ pub async fn probe_url(
 }
 
 #[tauri::command]
+pub async fn check_link(
+    mgr: Mgr<'_>,
+    url: String,
+    referrer: Option<String>,
+    cookies: Option<Vec<BrowserCookie>>,
+) -> R<ProbeInfo> {
+    Ok(mgr
+        .check_link(&url, referrer, cookies.as_deref().unwrap_or_default())
+        .await)
+}
+
+#[tauri::command]
+pub async fn scan_page(
+    mgr: Mgr<'_>,
+    url: String,
+    referrer: Option<String>,
+    cookies: Option<Vec<BrowserCookie>>,
+    timeout: Option<u64>,
+) -> R<crate::crawl::PageScan> {
+    mgr.scan_page(
+        &url,
+        referrer,
+        cookies.as_deref().unwrap_or_default(),
+        timeout.unwrap_or(25),
+    )
+    .await
+    .map_err(err)
+}
+
+#[tauri::command]
 pub async fn media_probe(
     mgr: Mgr<'_>,
     url: String,
@@ -180,10 +210,23 @@ pub async fn set_expected_hash(mgr: Mgr<'_>, id: String, hash: Option<String>) -
 }
 
 #[tauri::command]
-pub fn open_file(app: AppHandle, mgr: Mgr<'_>, id: String, confirmed: Option<bool>) -> R<()> {
+pub fn open_file(
+    app: AppHandle,
+    mgr: Mgr<'_>,
+    id: String,
+    confirmed: Option<bool>,
+    skip_scan: Option<bool>,
+) -> R<()> {
+    mgr.open_check(
+        &id,
+        confirmed == Some(true),
+        skip_scan == Some(true) || confirmed == Some(true),
+    )
+    .map_err(|e| e.to_string())?;
     let path = mgr.file_path(&id).map_err(anyhow_err)?;
-    if crate::security::is_program(&path)
-        && mgr.settings().ask_before_starting_programs
+    let s = mgr.settings();
+    if (s.ask_before_opening_files
+        || (crate::security::is_program(&path) && s.ask_before_starting_programs))
         && confirmed != Some(true)
     {
         return Err(CONFIRM_START.into());
@@ -208,6 +251,31 @@ pub fn show_in_folder(app: AppHandle, mgr: Mgr<'_>, id: String) -> R<()> {
 #[tauri::command]
 pub fn open_path(app: AppHandle, path: String) -> R<()> {
     app.opener().open_path(path, None::<&str>).map_err(err)
+}
+
+#[tauri::command]
+pub fn language_list() -> Vec<crate::i18n::LanguageInfo> {
+    crate::i18n::list()
+}
+
+#[tauri::command]
+pub fn language_strings(code: String) -> std::collections::HashMap<String, String> {
+    crate::i18n::strings(&code)
+}
+
+#[tauri::command]
+pub fn language_reload() -> Vec<crate::i18n::LanguageInfo> {
+    crate::i18n::reload();
+    crate::i18n::list()
+}
+
+#[tauri::command]
+pub fn language_folder(app: AppHandle) -> R<String> {
+    let dir = crate::i18n::dir().ok_or("The language folder was not found")?;
+    app.opener()
+        .open_path(dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(err)?;
+    Ok(dir.to_string_lossy().to_string())
 }
 
 #[tauri::command]
@@ -237,7 +305,224 @@ pub async fn cloud_scan_with_password(mgr: Mgr<'_>, id: String, password: String
         .clone()
         .scan_locked_in_cloud(&id, password)
         .await
-        .map_err(anyhow_err)
+        .map_err(err)
+}
+
+#[tauri::command]
+pub async fn virustotal_open(app: tauri::AppHandle, mgr: Mgr<'_>, id: String) -> R<String> {
+    use tauri_plugin_opener::OpenerExt;
+    let path = mgr.file_path(&id).map_err(anyhow_err)?;
+    if !path.is_file() {
+        return Err("this download is a folder; VirusTotal checks one file at a time".into());
+    }
+    let sha = tauri::async_runtime::spawn_blocking(move || crate::virustotal::sha256_file(&path))
+        .await
+        .map_err(err)?
+        .map_err(anyhow_err)?;
+    app.opener()
+        .open_url(
+            format!("https://www.virustotal.com/gui/file/{sha}"),
+            None::<&str>,
+        )
+        .map_err(err)?;
+    Ok(sha)
+}
+
+#[tauri::command]
+pub async fn virustotal_check(
+    mgr: Mgr<'_>,
+    id: String,
+    upload: bool,
+) -> R<crate::virustotal::VtResult> {
+    let key = mgr.settings().virustotal_key;
+    if key.is_empty() {
+        return Err("add your VirusTotal API key in Settings → VirusTotal first".into());
+    }
+    let path = mgr.file_path(&id).map_err(anyhow_err)?;
+    if !path.is_file() {
+        return Err("this download is a folder; VirusTotal checks one file at a time".into());
+    }
+    let name = path
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let hashed = path.clone();
+    let sha = tauri::async_runtime::spawn_blocking(move || crate::virustotal::sha256_file(&hashed))
+        .await
+        .map_err(err)?
+        .map_err(anyhow_err)?;
+    let client = mgr.api_client.clone();
+    let result = if upload {
+        crate::virustotal::upload(&client, &key, &path, &sha, &name).await
+    } else {
+        crate::virustotal::lookup(&client, &key, &sha, &name).await
+    };
+    result.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn tor_detect() -> Option<String> {
+    crate::tor::detect().await
+}
+
+#[tauri::command]
+pub async fn tor_check(proxy: String) -> R<crate::tor::TorCheck> {
+    crate::tor::check(&proxy).await.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn stop_all(mgr: Mgr<'_>) -> R<()> {
+    mgr.inner().clone().stop_all().await;
+    Ok(())
+}
+
+#[tauri::command]
+pub async fn set_download_login(
+    mgr: Mgr<'_>,
+    id: String,
+    user: String,
+    password: String,
+    remember: bool,
+) -> R<()> {
+    mgr.inner()
+        .clone()
+        .set_download_login(&id, &user, &password, remember)
+        .await
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn background_store(mgr: Mgr<'_>, path: String) -> R<String> {
+    crate::wallpaper::store(&mgr.paths.data, std::path::Path::new(&path))
+        .map(|p| p.to_string_lossy().into_owned())
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn background_data(mgr: Mgr<'_>, path: String) -> Option<String> {
+    crate::wallpaper::data_url(&mgr.paths.data, std::path::Path::new(&path))
+}
+
+#[tauri::command]
+pub fn set_download_meta(mgr: Mgr<'_>, id: String, tags: Vec<String>, note: String) -> R<()> {
+    mgr.set_download_meta(&id, tags, note).map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn set_download_mirrors(mgr: Mgr<'_>, id: String, mirrors: Vec<String>) -> R<()> {
+    mgr.set_download_mirrors(&id, mirrors).map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn download_history(mgr: Mgr<'_>) -> Vec<crate::extras::HistoryItem> {
+    mgr.history.list()
+}
+
+#[tauri::command]
+pub fn download_history_remove(mgr: Mgr<'_>, id: String) {
+    mgr.history.remove(&id);
+}
+
+#[tauri::command]
+pub fn download_history_clear(mgr: Mgr<'_>) {
+    mgr.history.clear();
+}
+
+#[tauri::command]
+pub fn backup_export(mgr: Mgr<'_>, path: String, secrets: bool) -> R<()> {
+    mgr.export_backup(std::path::Path::new(&path), secrets)
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn auto_backups(mgr: Mgr<'_>) -> (String, Vec<crate::extras::BackupFile>) {
+    let dir = mgr.auto_backup_dir();
+    let list = crate::extras::auto_backups(&dir);
+    (dir.to_string_lossy().into_owned(), list)
+}
+
+#[tauri::command]
+pub fn auto_backup_now(mgr: Mgr<'_>) -> R<crate::extras::BackupFile> {
+    mgr.auto_backup_now().map_err(err)
+}
+
+#[tauri::command]
+pub fn backup_import(mgr: Mgr<'_>, path: String) -> R<(usize, Settings)> {
+    mgr.inner()
+        .clone()
+        .import_backup(std::path::Path::new(&path))
+        .map_err(err)
+}
+
+#[tauri::command]
+pub fn cloud_history(mgr: Mgr<'_>) -> Vec<crate::protection::HistoryEntry> {
+    mgr.protection.prune(mgr.settings().cloud_history_days);
+    mgr.protection.history()
+}
+
+#[tauri::command]
+pub fn cloud_history_clear(mgr: Mgr<'_>) {
+    mgr.protection.clear_history();
+}
+
+#[tauri::command]
+pub fn quarantine_list(mgr: Mgr<'_>) -> Vec<crate::protection::QuarantineItem> {
+    mgr.protection.quarantine()
+}
+
+#[tauri::command]
+pub fn quarantine_restore(mgr: Mgr<'_>, id: u64) -> R<()> {
+    mgr.quarantine_restore(id).map_err(err)
+}
+
+#[tauri::command]
+pub fn quarantine_delete(mgr: Mgr<'_>, id: u64) -> R<()> {
+    mgr.quarantine_delete(id).map_err(err)
+}
+
+#[tauri::command]
+pub fn captcha_list(mgr: Mgr<'_>) -> Vec<crate::captcha::Request> {
+    mgr.captcha_list()
+}
+
+#[tauri::command]
+pub fn captcha_open(mgr: Mgr<'_>, id: u64) -> R<()> {
+    mgr.captcha_open(id).map_err(err)
+}
+
+#[tauri::command]
+pub fn captcha_dismiss(mgr: Mgr<'_>, id: u64) {
+    mgr.captcha_dismiss(id);
+}
+
+#[tauri::command]
+pub fn extract_download(mgr: Mgr<'_>, id: String) -> R<()> {
+    mgr.inner().clone().extract_download(&id).map_err(err)
+}
+
+#[tauri::command]
+pub fn extract_tool_available() -> bool {
+    crate::unpack::tool_available()
+}
+
+#[tauri::command]
+pub fn ask_request(mgr: Mgr<'_>, window: tauri::WebviewWindow) -> Option<(AddRequest, Settings)> {
+    let key = crate::askwin::key_of(window.label())?;
+    crate::askwin::request(key).map(|r| (r, mgr.settings()))
+}
+
+#[tauri::command]
+pub fn ask_progress(mgr: Mgr<'_>, window: tauri::WebviewWindow) -> Option<(String, Settings)> {
+    let key = crate::askwin::key_of(window.label())?;
+    crate::askwin::progress(key).map(|id| (id, mgr.settings()))
+}
+
+#[tauri::command]
+pub fn ask_started(window: tauri::WebviewWindow) {
+    if let Some(key) = crate::askwin::key_of(window.label()) {
+        crate::askwin::forget(key);
+    }
+    let _ = window.set_always_on_top(false);
 }
 
 #[tauri::command]
@@ -256,12 +541,12 @@ pub fn notice_layout(app: AppHandle, height: f64) -> R<()> {
 }
 
 #[tauri::command]
-pub fn notice_show_download(app: AppHandle, id: Option<String>, start: bool) {
+pub fn notice_show_download(app: AppHandle, id: Option<String>, start: bool, report: Option<bool>) {
     crate::show_main_window(&app);
     let _ = app.emit_to(
         "main",
         "app://select",
-        serde_json::json!({ "id": id, "start": start }),
+        serde_json::json!({ "id": id, "start": start, "report": report.unwrap_or(false) }),
     );
 }
 
@@ -332,7 +617,7 @@ pub async fn create_torrent(
         seed,
     )
     .await
-    .map_err(anyhow_err)
+    .map_err(err)
 }
 
 #[tauri::command]
@@ -360,8 +645,61 @@ pub async fn rss_refresh(mgr: Mgr<'_>) -> R<usize> {
 }
 
 #[tauri::command]
+pub fn extract_with_password(mgr: Mgr<'_>, id: String, password: Option<String>) -> R<()> {
+    mgr.inner()
+        .clone()
+        .extract_with_password(&id, password)
+        .map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn site_rule_test(
+    mgr: Mgr<'_>,
+    rule: crate::settings::SiteRule,
+    url: String,
+) -> R<crate::crawl::PageScan> {
+    mgr.test_site_rule(rule, &url).await.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn rss_resolve(mgr: Mgr<'_>, url: String) -> R<crate::feeds::ResolvedFeed> {
+    crate::feeds::resolve(&mgr.api_client, &url)
+        .await
+        .map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn discover_feeds(mgr: Mgr<'_>, url: String) -> R<Vec<crate::feeds::FoundFeed>> {
+    crate::feeds::discover(&mgr.api_client, &url)
+        .await
+        .map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn podcast_search(mgr: Mgr<'_>, term: String) -> R<Vec<crate::feeds::Podcast>> {
+    crate::feeds::search_podcasts(&mgr.api_client, &term)
+        .await
+        .map_err(anyhow_err)
+}
+
+#[tauri::command]
 pub async fn rss_download(mgr: Mgr<'_>, feed: String, item: String) -> R<String> {
     mgr.rss_download(&feed, &item).await.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn search_sites(mgr: Mgr<'_>) -> Vec<crate::search::SiteView> {
+    crate::search::sites(&mgr.settings())
+}
+
+#[tauri::command]
+pub async fn torrent_search(
+    mgr: Mgr<'_>,
+    query: String,
+    sites: Option<Vec<String>>,
+) -> R<crate::search::SearchOutcome> {
+    let s = mgr.settings();
+    Ok(crate::search::search(&mgr.api_client, &s, &query, &sites.unwrap_or_default()).await)
 }
 
 #[tauri::command]
@@ -387,7 +725,7 @@ pub async fn start_torrent_engine(mgr: Mgr<'_>) -> R<()> {
 pub async fn public_trackers(mgr: Mgr<'_>) -> R<Vec<String>> {
     crate::trackers::fetch_public_trackers(&mgr.api_client)
         .await
-        .map_err(anyhow_err)
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -398,6 +736,22 @@ pub fn get_settings(mgr: Mgr<'_>) -> Settings {
 #[tauri::command]
 pub async fn save_settings(mgr: Mgr<'_>, settings: Settings) -> R<Settings> {
     mgr.save_settings(settings).await.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub async fn reset_settings(mgr: Mgr<'_>) -> R<Settings> {
+    let current = mgr.settings();
+    let fresh = Settings {
+        trusted_extensions: current.trusted_extensions.clone(),
+        bridge_port: current.bridge_port,
+        ..Settings::default()
+    };
+    mgr.save_settings(fresh).await.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn apply_category_language(mgr: Mgr<'_>, rename: bool) -> R<usize> {
+    mgr.apply_category_language(rename).map_err(anyhow_err)
 }
 
 #[tauri::command]
@@ -412,7 +766,7 @@ pub async fn update_ytdlp(app: AppHandle, mgr: Mgr<'_>) -> R<String> {
             let _ = app.emit(EVT_TOOLS, p);
         })
         .await
-        .map_err(anyhow_err)
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -425,7 +779,7 @@ pub async fn install_ffmpeg(app: AppHandle, mgr: Mgr<'_>) -> R<()> {
             &tokio_util::sync::CancellationToken::new(),
         )
         .await
-        .map_err(anyhow_err)
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -438,7 +792,7 @@ pub async fn install_deno(app: AppHandle, mgr: Mgr<'_>) -> R<String> {
             &tokio_util::sync::CancellationToken::new(),
         )
         .await
-        .map_err(anyhow_err)
+        .map_err(err)
 }
 
 #[derive(Serialize)]
@@ -575,7 +929,7 @@ pub async fn find_sha256(mgr: Mgr<'_>, url: String, filename: Option<String>) ->
 pub fn extension_dir(app: AppHandle, firefox: Option<bool>) -> R<String> {
     crate::browsers::extension_folder(&app, firefox.unwrap_or(false))
         .map(|d| d.to_string_lossy().into_owned())
-        .map_err(anyhow_err)
+        .map_err(err)
 }
 
 #[tauri::command]
@@ -615,7 +969,7 @@ pub async fn setup_extension(app: AppHandle, mgr: Mgr<'_>, browser: String) -> R
     })
     .await
     .map_err(err)?
-    .map_err(anyhow_err)
+    .map_err(err)
 }
 
 #[tauri::command]
@@ -630,7 +984,7 @@ pub async fn download_app_update(
 ) -> R<Option<crate::selfupdate::ReadyUpdate>> {
     crate::selfupdate::fetch_latest(&app, &mgr.api_client)
         .await
-        .map_err(anyhow_err)
+        .map_err(err)
 }
 
 #[tauri::command]

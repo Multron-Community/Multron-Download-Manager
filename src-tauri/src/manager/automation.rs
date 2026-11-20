@@ -58,6 +58,43 @@ impl Default for AutoState {
     }
 }
 
+static SCHEDULER_FIRED: parking_lot::Mutex<Option<String>> = parking_lot::Mutex::new(None);
+static RETRIES: parking_lot::Mutex<Option<HashMap<String, (u32, Instant)>>> =
+    parking_lot::Mutex::new(None);
+static LOW_DISK: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static OPENED_DIRS: parking_lot::Mutex<Option<HashMap<PathBuf, Instant>>> =
+    parking_lot::Mutex::new(None);
+
+fn retryable(error: Option<&str>) -> bool {
+    let e = error.unwrap_or_default().to_ascii_lowercase();
+    ![
+        "401",
+        "403",
+        "404",
+        "410",
+        "451",
+        "captcha",
+        "sha-256",
+        "threat",
+        "not encrypted",
+        "blocked",
+        "disabled",
+    ]
+    .iter()
+    .any(|w| e.contains(w))
+}
+
+#[cfg(windows)]
+fn keep_awake() {
+    use windows_sys::Win32::System::Power::{SetThreadExecutionState, ES_SYSTEM_REQUIRED};
+    unsafe {
+        SetThreadExecutionState(ES_SYSTEM_REQUIRED);
+    }
+}
+
+#[cfg(not(windows))]
+fn keep_awake() {}
+
 pub fn in_schedule(s: &Settings, weekday: u8, minute: u32) -> bool {
     let (Some(from), Some(to)) = (
         parse_hhmm(&s.alt_schedule_from),
@@ -130,6 +167,213 @@ impl Manager {
         )
     }
 
+    fn busy(&self) -> bool {
+        self.entries
+            .lock()
+            .iter()
+            .any(|e| e.rec.status == Status::Active)
+    }
+
+    fn keep_awake_tick(&self) {
+        if self.settings.read().prevent_sleep && self.busy() {
+            keep_awake();
+        }
+    }
+
+    fn disk_guard_tick(self: &Arc<Self>) {
+        let s = self.settings();
+        if s.min_free_gb == 0 {
+            LOW_DISK.store(false, Ordering::Relaxed);
+            return;
+        }
+        let dir = if s.download_dir.trim().is_empty() {
+            self.paths.data.clone()
+        } else {
+            PathBuf::from(s.download_dir.trim())
+        };
+        let Ok(free) = fs4::available_space(&dir) else {
+            return;
+        };
+        let limit = u64::from(s.min_free_gb) * 1024 * 1024 * 1024;
+        if free >= limit {
+            LOW_DISK.store(false, Ordering::Relaxed);
+            return;
+        }
+        if !self.busy() || LOW_DISK.swap(true, Ordering::Relaxed) {
+            return;
+        }
+        self.toast(
+            "warning",
+            format!(
+                "Downloads were paused: less than {} GB is free on the download drive",
+                s.min_free_gb
+            ),
+        );
+        let this = self.clone();
+        tauri::async_runtime::spawn(async move { this.pause_all().await });
+    }
+
+    fn auto_retry_tick(self: &Arc<Self>) {
+        let s = self.settings();
+        let mut guard = RETRIES.lock();
+        let map = guard.get_or_insert_with(HashMap::new);
+        if s.auto_retry_minutes == 0 {
+            map.clear();
+            return;
+        }
+        let failed: Vec<(String, bool)> = self
+            .entries
+            .lock()
+            .iter()
+            .filter(|e| e.rec.status == Status::Failed)
+            .map(|e| (e.rec.id.clone(), retryable(e.rec.error.as_deref())))
+            .collect();
+        map.retain(|id, _| failed.iter().any(|(f, _)| f == id));
+        let wait = Duration::from_secs(u64::from(s.auto_retry_minutes) * 60);
+        let mut due = Vec::new();
+        for (id, ok) in failed {
+            if !ok {
+                continue;
+            }
+            let entry = map.entry(id.clone()).or_insert((0, Instant::now()));
+            if entry.0 < s.auto_retry_max && entry.1.elapsed() >= wait {
+                entry.0 += 1;
+                entry.1 = Instant::now();
+                due.push(id);
+            }
+        }
+        drop(guard);
+        if due.is_empty() {
+            return;
+        }
+        let this = self.clone();
+        tauri::async_runtime::spawn(async move {
+            for id in due {
+                let _ = this.resume(&id).await;
+            }
+        });
+    }
+
+    fn auto_backup_tick(&self) {
+        let s = self.settings();
+        if !s.auto_backup {
+            return;
+        }
+        let dir = self.auto_backup_dir();
+        let days = crate::extras::backup_interval_days(s.auto_backup_count, &s.auto_backup_unit);
+        if !crate::extras::backup_due(&dir, days, now_ms()) {
+            return;
+        }
+        if let Err(e) = self.auto_backup_now() {
+            tracing::warn!("automatic backup failed: {e:#}");
+        }
+    }
+
+    fn auto_clear_tick(&self) {
+        let days = self.settings.read().auto_clear_days;
+        if days == 0 {
+            return;
+        }
+        let limit = now_ms() - i64::from(days) * 24 * 3600 * 1000;
+        let before = self.entries.lock().len();
+        self.entries.lock().retain(|e| {
+            !(e.rec.status == Status::Completed
+                && e.rec.completed_at.is_some_and(|t| t < limit)
+                && !(e.rec.kind == Kind::Torrent && e.live.seeding))
+        });
+        if self.entries.lock().len() != before {
+            self.mark_dirty();
+            self.persist();
+        }
+    }
+
+    fn open_folder_of(&self, rec: &DownloadRecord) {
+        use tauri_plugin_opener::OpenerExt;
+        let path = PathBuf::from(&rec.dir).join(&rec.name);
+        let folder = PathBuf::from(&rec.dir);
+        {
+            let mut guard = OPENED_DIRS.lock();
+            let map = guard.get_or_insert_with(HashMap::new);
+            map.retain(|_, t| t.elapsed() < Duration::from_secs(60));
+            if map.contains_key(&folder) {
+                return;
+            }
+            map.insert(folder.clone(), Instant::now());
+        }
+        let res = if path.is_file() {
+            self.app.opener().reveal_item_in_dir(&path)
+        } else {
+            self.app
+                .opener()
+                .open_path(folder.to_string_lossy(), None::<&str>)
+        };
+        if let Err(e) = res {
+            tracing::warn!("could not open the download folder: {e}");
+        }
+    }
+
+    fn scheduler_tick(self: &Arc<Self>) {
+        let s = self.settings();
+        if !s.scheduler_enabled {
+            return;
+        }
+        let now = Local::now();
+        let minute = now.hour() * 60 + now.minute();
+        let day = now.weekday().num_days_from_monday() as u8;
+        if !s.scheduler_days.contains(&day) {
+            return;
+        }
+        let today = now.format("%Y-%m-%d").to_string();
+        let fire = |what: &str, at: &str| -> bool {
+            if parse_hhmm(at) != Some(minute) {
+                return false;
+            }
+            let key = format!("{today} {what} {at}");
+            let mut last = SCHEDULER_FIRED.lock();
+            if last.as_deref() == Some(key.as_str()) {
+                return false;
+            }
+            *last = Some(key);
+            true
+        };
+        let only_later = s.scheduler_scope != "all";
+        if fire("start", &s.scheduler_start) {
+            let ids: Vec<String> = self
+                .entries
+                .lock()
+                .iter()
+                .filter(|e| e.rec.status == Status::Paused && (!only_later || e.rec.later))
+                .map(|e| e.rec.id.clone())
+                .collect();
+            tracing::info!("scheduler: starting {} downloads", ids.len());
+            let this = self.clone();
+            tauri::async_runtime::spawn(async move {
+                for id in ids {
+                    let _ = this.resume(&id).await;
+                }
+            });
+        }
+        if s.scheduler_stop_enabled && fire("stop", &s.scheduler_stop) {
+            let ids: Vec<String> = self
+                .entries
+                .lock()
+                .iter()
+                .filter(|e| {
+                    matches!(e.rec.status, Status::Active | Status::Queued)
+                        && (!only_later || e.rec.later)
+                })
+                .map(|e| e.rec.id.clone())
+                .collect();
+            tracing::info!("scheduler: stopping {} downloads", ids.len());
+            let this = self.clone();
+            tauri::async_runtime::spawn(async move {
+                for id in ids {
+                    let _ = this.pause(&id).await;
+                }
+            });
+        }
+    }
+
     pub fn stream_token(&self) -> String {
         self.auto.lock().stream_token.clone()
     }
@@ -149,6 +393,24 @@ impl Manager {
         }
         if ticks % 20 == 0 {
             self.watch_folder_scan();
+        }
+        if ticks % 10 == 5 {
+            self.scheduler_tick();
+        }
+        if ticks % 60 == 7 {
+            self.keep_awake_tick();
+        }
+        if ticks % 20 == 3 {
+            self.disk_guard_tick();
+        }
+        if ticks % 30 == 11 {
+            self.auto_retry_tick();
+        }
+        if ticks % 7200 == 240 {
+            self.auto_backup_tick();
+        }
+        if ticks % 7200 == 40 {
+            self.auto_clear_tick();
         }
         if ticks % 20 == 10 {
             let s = self.settings();
@@ -365,7 +627,12 @@ impl Manager {
             }
             let mut done = path.clone().into_os_string();
             done.push(".added");
-            if std::fs::rename(&path, &done).is_err() {
+            let handled = if s.torrent_delete_watched {
+                std::fs::remove_file(&path)
+            } else {
+                std::fs::rename(&path, &done)
+            };
+            if handled.is_err() {
                 let _ = std::fs::remove_file(&copy);
                 continue;
             }
@@ -684,8 +951,377 @@ pub(super) fn matches_extension(path: &Path, wanted: &[String]) -> bool {
 }
 
 impl Manager {
+    pub fn captcha_needed(self: &Arc<Self>, url: &str, kind: &str, download: Option<&str>) {
+        use tauri::Emitter;
+        let s = self.settings();
+        let Some(req) = crate::captcha::add(url, kind, download, s.captcha_timeout_secs) else {
+            return;
+        };
+        let _ = self.app.emit(crate::captcha::EVT_CHANGED, ());
+        if s.captcha_open_browser && crate::util::web_link(url) {
+            use tauri_plugin_opener::OpenerExt;
+            let _ = self.app.opener().open_url(url, None::<&str>);
+        }
+        if s.captcha_notice {
+            self.notify(download, "captcha", &format!("{} · {}", req.site, req.kind));
+        }
+        let Some(id) = download.map(str::to_string) else {
+            return;
+        };
+        if !s.captcha_auto_retry {
+            return;
+        }
+        let this = self.clone();
+        let step = std::time::Duration::from_secs(s.captcha_retry_secs);
+        let timeout = s.captcha_timeout_secs;
+        tauri::async_runtime::spawn(async move {
+            loop {
+                tokio::time::sleep(step).await;
+                if !crate::captcha::list(timeout).iter().any(|r| r.id == req.id) {
+                    let _ = this.app.emit(crate::captcha::EVT_CHANGED, ());
+                    break;
+                }
+                match this.record(&id).map(|r| r.status) {
+                    Ok(Status::Failed) => {
+                        let _ = this.resume(&id).await;
+                    }
+                    Ok(Status::Queued) => {}
+                    _ => {
+                        crate::captcha::remove(req.id);
+                        let _ = this.app.emit(crate::captcha::EVT_CHANGED, ());
+                        break;
+                    }
+                }
+            }
+        });
+    }
+
+    pub fn open_check(&self, id: &str, confirmed: bool, skip_scan: bool) -> Result<()> {
+        let rec = self.record(id)?;
+        let s = self.settings();
+        if rec.quarantined && self.protection.in_quarantine(id) {
+            bail!("in_quarantine");
+        }
+        if !confirmed
+            && (rec.type_mismatch
+                || (s.cloud_block_threats
+                    && matches!(rec.cloud_state.as_str(), "threat" | "suspicious")))
+        {
+            bail!("blocked_threat");
+        }
+        if s.cloud_rescan_on_open
+            && s.cloud_scan_accepted
+            && !skip_scan
+            && rec.cloud_state != "scanning"
+        {
+            let max_age = i64::from(s.cloud_rescan_days) * 24 * 3600 * 1000;
+            let stale = rec
+                .cloud_scanned_at
+                .is_none_or(|at| now_ms() - at > max_age);
+            let wanted = downloaded_files(&rec)
+                .iter()
+                .any(|f| matches_extension(f, &s.cloud_scan_extensions));
+            if stale && wanted {
+                bail!("rescan_needed");
+            }
+        }
+        Ok(())
+    }
+
+    pub fn quarantine_restore(&self, item: u64) -> Result<()> {
+        let restored = self.protection.restore(item)?;
+        if !self.protection.in_quarantine(&restored.download) {
+            self.with_entry(&restored.download, |e| e.rec.quarantined = false);
+            self.mark_dirty();
+            self.save_needed.store(true, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    pub fn quarantine_delete(&self, item: u64) -> Result<()> {
+        let deleted = self.protection.delete(item)?;
+        if !self.protection.in_quarantine(&deleted.download) {
+            self.with_entry(&deleted.download, |e| e.rec.quarantined = false);
+            self.mark_dirty();
+            self.save_needed.store(true, Ordering::Relaxed);
+        }
+        Ok(())
+    }
+
+    pub fn captcha_list(&self) -> Vec<crate::captcha::Request> {
+        crate::captcha::list(self.settings().captcha_timeout_secs)
+    }
+
+    pub fn captcha_open(&self, id: u64) -> Result<()> {
+        use tauri_plugin_opener::OpenerExt;
+        let req =
+            crate::captcha::get(id).ok_or_else(|| anyhow!("this CAPTCHA is no longer waiting"))?;
+        if !crate::util::web_link(&req.url) {
+            bail!("only web links can be opened");
+        }
+        self.app
+            .opener()
+            .open_url(&req.url, None::<&str>)
+            .map_err(|e| anyhow!("{e}"))
+    }
+
+    pub fn captcha_dismiss(&self, id: u64) {
+        use tauri::Emitter;
+        if crate::captcha::remove(id) {
+            let _ = self.app.emit(crate::captcha::EVT_CHANGED, ());
+        }
+    }
+
+    pub fn extract_with_password(
+        self: &Arc<Self>,
+        id: &str,
+        password: Option<String>,
+    ) -> Result<()> {
+        let all = self.settings().extract_passwords;
+        let chosen = match password.map(|p| p.trim().to_string()) {
+            Some(p) if !p.is_empty() => {
+                if !all.contains(&p) {
+                    self.remember_extract_passwords(std::slice::from_ref(&p));
+                }
+                vec![p]
+            }
+            _ => all,
+        };
+        self.with_entry(id, |e| e.rec.extract_with = Some(chosen.clone()))
+            .ok_or_else(|| anyhow!("download not found"))?;
+        self.extract_download(id)
+    }
+
+    pub fn extract_download(self: &Arc<Self>, id: &str) -> Result<()> {
+        let rec = self.record(id)?;
+        if !self.start_extract(&rec, true) {
+            bail!("this download has no archive to extract");
+        }
+        Ok(())
+    }
+
+    fn start_extract(self: &Arc<Self>, rec: &DownloadRecord, forced: bool) -> bool {
+        let s = self.settings();
+        let mut archives: Vec<PathBuf> = Vec::new();
+        for f in downloaded_files(rec) {
+            let Some(name) = f.file_name().and_then(|n| n.to_str()) else {
+                continue;
+            };
+            let Some(v) = crate::unpack::volume(name) else {
+                continue;
+            };
+            let first = if v.first {
+                f.clone()
+            } else {
+                match crate::unpack::parts_of(&f).into_iter().find(|p| {
+                    p.file_name()
+                        .and_then(|n| n.to_str())
+                        .and_then(crate::unpack::volume)
+                        .is_some_and(|o| o.first)
+                }) {
+                    Some(p) => p,
+                    None => continue,
+                }
+            };
+            if !archives.contains(&first) {
+                archives.push(first);
+            }
+        }
+        if archives.is_empty() {
+            return false;
+        }
+        let busy: Vec<PathBuf> = self
+            .entries
+            .lock()
+            .iter()
+            .filter(|e| e.rec.id != rec.id && e.rec.status != Status::Completed)
+            .map(|e| PathBuf::from(&e.rec.dir).join(&e.rec.name))
+            .collect();
+        let owner = archives.iter().find_map(|a| {
+            let parts = crate::unpack::parts_of(a);
+            let others = self
+                .entries
+                .lock()
+                .iter()
+                .find(|e| {
+                    e.rec.extract_state == "done"
+                        && e.rec.id != rec.id
+                        && parts.contains(&PathBuf::from(&e.rec.dir).join(&e.rec.name))
+                })
+                .map(|e| e.rec.id.clone());
+            others
+        });
+        if owner.is_some() && !forced {
+            return true;
+        }
+        let ready: Vec<PathBuf> = archives
+            .into_iter()
+            .filter(|a| {
+                let parts = crate::unpack::parts_of(a);
+                let name = a
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .unwrap_or_default()
+                    .to_string();
+                let set = crate::unpack::volume(&name).map(|v| v.set);
+                !busy.iter().any(|b| {
+                    parts.contains(b)
+                        || b.file_name()
+                            .and_then(|n| n.to_str())
+                            .and_then(crate::unpack::volume)
+                            .map(|v| Some(v.set) == set && b.parent() == a.parent())
+                            .unwrap_or(false)
+                })
+            })
+            .collect();
+        if ready.is_empty() {
+            self.with_entry(&rec.id, |e| {
+                e.rec.extract_state = "waiting".into();
+                e.rec.extract_detail = None;
+            });
+            self.mark_dirty();
+            return true;
+        }
+        let chosen = self
+            .with_entry(&rec.id, |e| {
+                e.rec.extract_state = "extracting".into();
+                e.rec.extract_detail = None;
+                e.rec.extract_with.take()
+            })
+            .flatten();
+        let saved: Vec<String> = s
+            .extract_passwords
+            .iter()
+            .map(|p| p.trim().to_string())
+            .filter(|p| !p.is_empty())
+            .collect();
+        let ask = chosen.is_none() && s.extract_ask_password && saved.len() > 1;
+        let passwords: Vec<String> = match chosen {
+            Some(list) => list,
+            None if ask => Vec::new(),
+            None => saved.clone(),
+        };
+        self.mark_dirty();
+        let this = self.clone();
+        let id = rec.id.clone();
+        tauri::async_runtime::spawn_blocking(move || {
+            let mut files = 0usize;
+            let mut error: Option<(String, String)> = None;
+            let mut dests: Vec<String> = Vec::new();
+            for archive in &ready {
+                let dest = crate::unpack::target_dir(archive, s.extract_subfolder);
+                match crate::unpack::extract(archive, &dest, &passwords) {
+                    Ok(out) => {
+                        files += out.files;
+                        dests.push(dest.to_string_lossy().into_owned());
+                        if s.extract_delete_archives {
+                            for p in crate::unpack::parts_of(archive) {
+                                let _ = std::fs::remove_file(p);
+                            }
+                        }
+                    }
+                    Err(e) if crate::unpack::is_wrong_password(&e) && ask => {
+                        error = Some((
+                            "choose".into(),
+                            "the archive is locked. Choose which saved password to use".into(),
+                        ));
+                    }
+                    Err(e) if crate::unpack::is_wrong_password(&e) => {
+                        error = Some(("password".into(), "the archive needs a password that is not in Settings → Files → Passwords for archives".into()));
+                    }
+                    Err(e) => error = Some(("failed".into(), format!("{e:#}"))),
+                }
+            }
+            this.with_entry(&id, |e| match &error {
+                Some((state, why)) => {
+                    e.rec.extract_state = state.clone();
+                    e.rec.extract_detail = Some(why.clone());
+                }
+                None => {
+                    e.rec.extract_state = "done".into();
+                    e.rec.extract_detail = Some(format!("{files}\n{}", dests.join("\n")));
+                }
+            });
+            this.mark_dirty();
+            this.save_needed.store(true, Ordering::Relaxed);
+        });
+        true
+    }
+
     pub(super) fn after_download(self: &Arc<Self>, rec: DownloadRecord) {
         let s = self.settings();
+        if s.history_enabled {
+            self.history.record(&rec, now_ms());
+        }
+        if s.check_signatures && cfg!(windows) {
+            let programs: Vec<PathBuf> = downloaded_files(&rec)
+                .into_iter()
+                .filter(|f| crate::security::is_program(f))
+                .take(3)
+                .collect();
+            if let Some(first) = programs.into_iter().next() {
+                let this = self.clone();
+                let id = rec.id.clone();
+                tauri::async_runtime::spawn_blocking(move || {
+                    let sig = crate::extras::signature(&first);
+                    if sig.is_empty() {
+                        return;
+                    }
+                    this.with_entry(&id, |e| e.rec.signature = sig);
+                    this.mark_dirty();
+                    this.save_needed.store(true, Ordering::Relaxed);
+                });
+            }
+        }
+        if s.open_folder_when_done && rec.kind != Kind::Torrent {
+            self.open_folder_of(&rec);
+        }
+        if s.check_real_type {
+            let files = downloaded_files(&rec);
+            let id = rec.id.clone();
+            let this = self.clone();
+            tauri::async_runtime::spawn_blocking(move || {
+                let hidden = files
+                    .iter()
+                    .take(500)
+                    .any(|f| crate::protection::hidden_program(f));
+                if hidden {
+                    this.with_entry(&id, |e| e.rec.type_mismatch = true);
+                    this.mark_dirty();
+                    this.save_needed.store(true, Ordering::Relaxed);
+                    let name = this.record(&id).map(|r| r.name).unwrap_or_default();
+                    this.notify(
+                        Some(&id),
+                        "threat",
+                        &format!("{name}: {}", this.word("hidden_program")),
+                    );
+                }
+            });
+        }
+        if crate::captcha::remove_download(&rec.id) {
+            use tauri::Emitter;
+            let _ = self.app.emit(crate::captcha::EVT_CHANGED, ());
+        }
+        if rec.auto_extract.unwrap_or(s.auto_extract) {
+            self.start_extract(&rec, false);
+            let name = rec.name.clone();
+            if crate::unpack::volume(&name).is_some() {
+                let waiting: Vec<DownloadRecord> = self
+                    .entries
+                    .lock()
+                    .iter()
+                    .filter(|e| {
+                        e.rec.id != rec.id
+                            && e.rec.extract_state == "waiting"
+                            && e.rec.dir == rec.dir
+                    })
+                    .map(|e| e.rec.clone())
+                    .collect();
+                for w in waiting {
+                    self.start_extract(&w, false);
+                }
+            }
+        }
         if s.cloud_scan && s.cloud_scan_accepted {
             let files: Vec<PathBuf> = downloaded_files(&rec)
                 .into_iter()
@@ -1098,6 +1734,54 @@ impl Manager {
                 let result = (!nothing_checked).then(|| (summary.state, summary.detail.clone()));
                 end_cloud(&mut e.rec, result);
             });
+            let s = this.settings();
+            let mut moved = 0;
+            if summary.state == "threat" && s.cloud_quarantine {
+                let findings = this
+                    .cloud_reports
+                    .lock()
+                    .get(&id)
+                    .map(|r| r.findings.clone())
+                    .unwrap_or_default();
+                let mut targets: Vec<(PathBuf, String)> = findings
+                    .iter()
+                    .filter(|f| f.verdict == "malicious")
+                    .map(|f| (PathBuf::from(&f.path), f.detail.clone()))
+                    .filter(|(p, _)| p.is_file())
+                    .collect();
+                if targets.is_empty() {
+                    if let Ok(rec) = this.record(&id) {
+                        targets = downloaded_files(&rec)
+                            .into_iter()
+                            .map(|p| (p, summary.detail.clone()))
+                            .collect();
+                    }
+                }
+                moved = this.protection.quarantine_files(&id, &targets);
+                if moved > 0 {
+                    this.with_entry(&id, |e| e.rec.quarantined = true);
+                    this.toast("warning", format!("{name}: moved to quarantine"));
+                }
+            }
+            this.protection.prune(s.cloud_history_days);
+            if s.cloud_history && summary.state != "locked" && !nothing_checked {
+                let (files, threats) = this
+                    .cloud_reports
+                    .lock()
+                    .get(&id)
+                    .map(|r| (r.done, r.threats + r.suspicious))
+                    .unwrap_or((0, 0));
+                this.protection.record(crate::protection::HistoryEntry {
+                    download: id.clone(),
+                    name: name.clone(),
+                    state: summary.state.to_string(),
+                    detail: summary.detail.clone(),
+                    files,
+                    threats,
+                    quarantined: moved > 0,
+                    ..Default::default()
+                });
+            }
             match summary.state {
                 "threat" | "suspicious" => {
                     this.notify(Some(&id), "threat", &format!("{name}: {}", summary.detail));
@@ -1329,6 +2013,7 @@ impl Manager {
             let (title, items, error) = match result {
                 Ok(xml) => {
                     let (title, items) = rss::parse(&xml);
+                    let items = crate::feeds::only_matching(&feed.url, items);
                     if items.is_empty() && title.is_none() {
                         (
                             None,
@@ -1462,6 +2147,7 @@ pub(crate) fn end_cloud(rec: &mut DownloadRecord, result: Option<(&str, String)>
         Some((state, detail)) => {
             rec.cloud_state = state.into();
             rec.cloud_detail = Some(detail);
+            rec.cloud_scanned_at = Some(now_ms());
         }
         None => {
             rec.cloud_state.clear();

@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager tidak berjalan dan tidak dapat dijalankan. Jalankan aplikasinya lalu coba lagi."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Setujui browser ini di jendela Multron Download Manager, lalu coba lagi."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: permintaan koneksi"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "Aplikasi menolak unduhan (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Tidak ada yang bisa diunduh di halaman ini."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager tidak berjalan. Jalankan aplikasinya lalu coba lagi."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Unduh tautan dengan Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Unduh video/audio dari tautan dengan Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Unduh media ini dengan Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Unduh video di halaman ini dengan Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Unduh semua dari halaman ini dengan Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Unduh tautan yang dipilih dengan Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "Pilihan bukan tautan."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Setujui browser ini di jendela Multron Download Manager. Unduhan menunggu sampai saat itu."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Dikirim ke Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager tidak menerima unduhan"
+  },
+  "Save_videos_as_1": {
+    "message": "Simpan video sebagai $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Pakai format video yang diatur di Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 dengan H.264 dan AAC: bisa diputar di mana saja, juga di WhatsApp dan di ponsel serta TV lama (hingga 1080p di YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Memeriksa ukuran…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Ukuran tidak tersedia untuk video ini"
+  },
+  "Hide_on_this_page": {
+    "message": "Sembunyikan di halaman ini"
+  },
+  "Download_1": {
+    "message": "Unduh: $1"
+  },
+  "Download_video": {
+    "message": "Unduh video"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Seret untuk memindahkan · klik dua kali untuk mengembalikan"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Unduh dengan Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Sembunyikan saat layar penuh di halaman ini (matikan di mana saja di Multron Download Manager: Pengaturan → Integrasi Browser)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Sembunyikan saat layar penuh di halaman ini"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager tidak berjalan: mengunduh di browser"
+  },
+  "Best_quality": {
+    "message": "Kualitas terbaik"
+  },
+  "Audio_1": {
+    "message": "Audio ($1)"
+  },
+  "Default": {
+    "message": "Bawaan"
+  },
+  "Reddit_post": {
+    "message": "Postingan Reddit"
+  },
+  "Facebook_video": {
+    "message": "Video Facebook"
+  },
+  "App_not_running": {
+    "message": "Aplikasi tidak berjalan"
+  },
+  "Not_approved_v_1": {
+    "message": "Belum disetujui · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Terhubung · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Ukuran tidak tersedia untuk halaman ini"
+  },
+  "Sending": {
+    "message": "Mengirim…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager tidak menerimanya — periksa aplikasinya."
+  },
+  "This_page": {
+    "message": "Halaman ini"
+  },
+  "File_on_this_page": {
+    "message": "File di halaman ini"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Menggulir dan mengumpulkan…"
+  },
+  "Collecting": {
+    "message": "Mengumpulkan…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "Ditemukan $1 item. Pilih di Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Terjadi kesalahan."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Masukkan tautan http(s) atau magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Akses diberikan. Muat ulang halaman untuk melihat tombolnya."
+  },
+  "Access_was_not_granted": {
+    "message": "Akses tidak diberikan."
+  },
+  "Connected": {
+    "message": "Terhubung ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Setujui permintaan di jendela Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Memeriksa…"
+  },
+  "Connect": {
+    "message": "Hubungkan"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager memerlukan akses ke situs web untuk menampilkan tombol Unduh video dan mengambil alih unduhan."
+  },
+  "Allow_on_all_sites": {
+    "message": "Izinkan di semua situs"
+  },
+  "Download": {
+    "message": "Unduh"
+  },
+  "Video_format": {
+    "message": "Format video"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, bisa diputar di mana saja)"
+  },
+  "Everything_on_this_page": {
+    "message": "Semua di halaman ini"
+  },
+  "Visible_part": {
+    "message": "Bagian yang terlihat"
+  },
+  "Scroll_5_screens": {
+    "message": "Gulir 5 layar"
+  },
+  "Scroll_20_screens": {
+    "message": "Gulir 20 layar"
+  },
+  "Scroll_60_screens": {
+    "message": "Gulir 60 layar"
+  },
+  "Download_all": {
+    "message": "Unduh semua…"
+  },
+  "Link_or_magnet": {
+    "message": "Tautan atau magnet"
+  },
+  "Send": {
+    "message": "Kirim"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Ambil alih unduhan browser"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Buka tautan magnet di Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Tampilkan tombol unduh di halaman video"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Kirim cookie situs (file pribadi / khusus login)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Abaikan file lebih kecil dari (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Jangan pernah ambil alih dari"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Jangan pernah ambil alih jenis file ini"
+  },
+  "App_port": {
+    "message": "Port aplikasi"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Feed tanpa akhir (Reddit, Instagram, X…) memuat lebih banyak saat digulir"
+  },
+  "https_or_magnet": {
+    "message": "https://… atau magnet:?…"
+  },
+  "extDescription": {
+    "message": "Kirim unduhan, video (YouTube, Reddit, Instagram, X, TikTok…), file Google Drive / MEGA, dan torrent ke Multron Download Manager."
+  }
+}

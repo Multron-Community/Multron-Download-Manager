@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager non è in esecuzione e non è stato possibile avviarlo. Avvia l’app e riprova."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Approva questo browser nella finestra di Multron Download Manager, poi riprova."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: richiesta di connessione"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "L’app ha rifiutato il download (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Non è stato trovato nulla da scaricare in questa pagina."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager non è in esecuzione. Avvia l’app e riprova."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Scarica il link con Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Scarica video/audio dal link con Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Scarica questo contenuto con Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Scarica il video di questa pagina con Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Scarica tutto da questa pagina con Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Scarica il link selezionato con Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "La selezione non è un link."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Approva questo browser nella finestra di Multron Download Manager. Il download attende fino ad allora."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Inviato a Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager non ha accettato il download"
+  },
+  "Save_videos_as_1": {
+    "message": "Salva i video come $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Usa il formato video impostato in Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 con H.264 e AAC: si riproduce ovunque, anche su WhatsApp e su telefoni e TV meno recenti (fino a 1080p su YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Controllo delle dimensioni…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Le dimensioni non sono disponibili per questo video"
+  },
+  "Hide_on_this_page": {
+    "message": "Nascondi in questa pagina"
+  },
+  "Download_1": {
+    "message": "Scarica: $1"
+  },
+  "Download_video": {
+    "message": "Scarica video"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Trascina per spostare · doppio clic per rimetterlo a posto"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Scarica con Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Nascondi a schermo intero in questa pagina (disattivalo ovunque in Multron Download Manager: Impostazioni → Integrazione browser)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Nascondi a schermo intero in questa pagina"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager non è in esecuzione: download nel browser"
+  },
+  "Best_quality": {
+    "message": "Qualità migliore"
+  },
+  "Audio_1": {
+    "message": "Audio ($1)"
+  },
+  "Default": {
+    "message": "Predefinito"
+  },
+  "Reddit_post": {
+    "message": "Post di Reddit"
+  },
+  "Facebook_video": {
+    "message": "Video di Facebook"
+  },
+  "App_not_running": {
+    "message": "App non in esecuzione"
+  },
+  "Not_approved_v_1": {
+    "message": "Non approvato · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Connesso · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Le dimensioni non sono disponibili per questa pagina"
+  },
+  "Sending": {
+    "message": "Invio…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager non l’ha accettato: controlla l’app."
+  },
+  "This_page": {
+    "message": "Questa pagina"
+  },
+  "File_on_this_page": {
+    "message": "File in questa pagina"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Scorrimento e raccolta…"
+  },
+  "Collecting": {
+    "message": "Raccolta…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "Trovati $1 elementi. Sceglili in Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Qualcosa è andato storto."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Inserisci un link http(s) o magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Accesso concesso. Ricarica la pagina per vedere il pulsante."
+  },
+  "Access_was_not_granted": {
+    "message": "L’accesso non è stato concesso."
+  },
+  "Connected": {
+    "message": "Connesso ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Approva la richiesta nella finestra di Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Controllo…"
+  },
+  "Connect": {
+    "message": "Connetti"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager ha bisogno di accedere ai siti web per mostrare il pulsante «Scarica video» e gestire i download."
+  },
+  "Allow_on_all_sites": {
+    "message": "Consenti su tutti i siti"
+  },
+  "Download": {
+    "message": "Scarica"
+  },
+  "Video_format": {
+    "message": "Formato video"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, si riproduce ovunque)"
+  },
+  "Everything_on_this_page": {
+    "message": "Tutto in questa pagina"
+  },
+  "Visible_part": {
+    "message": "Parte visibile"
+  },
+  "Scroll_5_screens": {
+    "message": "Scorri 5 schermate"
+  },
+  "Scroll_20_screens": {
+    "message": "Scorri 20 schermate"
+  },
+  "Scroll_60_screens": {
+    "message": "Scorri 60 schermate"
+  },
+  "Download_all": {
+    "message": "Scarica tutto…"
+  },
+  "Link_or_magnet": {
+    "message": "Link o magnet"
+  },
+  "Send": {
+    "message": "Invia"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Gestisci i download del browser"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Apri i link magnet in Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Mostra il pulsante di download nelle pagine video"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Invia i cookie del sito (file privati / solo con accesso)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Ignora i file più piccoli di (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Non gestire mai da"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Non gestire mai questi tipi di file"
+  },
+  "App_port": {
+    "message": "Porta dell’app"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "I feed infiniti (Reddit, Instagram, X…) caricano altro scorrendo"
+  },
+  "https_or_magnet": {
+    "message": "https://… o magnet:?…"
+  },
+  "extDescription": {
+    "message": "Invia download, video (YouTube, Reddit, Instagram, X, TikTok…), file di Google Drive / MEGA e torrent a Multron Download Manager."
+  }
+}

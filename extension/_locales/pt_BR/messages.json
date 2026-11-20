@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "O Multron Download Manager não está em execução e não pôde ser iniciado. Inicie o aplicativo e tente novamente."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Aprove este navegador na janela do Multron Download Manager e tente novamente."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: pedido de conexão"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "O aplicativo recusou o download (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Nada para baixar foi encontrado nesta página."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "O Multron Download Manager não está em execução. Inicie o aplicativo e tente novamente."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Baixar link com o Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Baixar vídeo/áudio do link com o Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Baixar esta mídia com o Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Baixar o vídeo desta página com o Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Baixar tudo desta página com o Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Baixar o link selecionado com o Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "A seleção não é um link."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Aprove este navegador na janela do Multron Download Manager. O download aguarda até lá."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Enviado ao Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "O Multron Download Manager não aceitou o download"
+  },
+  "Save_videos_as_1": {
+    "message": "Salvar vídeos como $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Usar o formato de vídeo definido no Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 com H.264 e AAC: reproduz em qualquer lugar, também no WhatsApp e em celulares e TVs antigos (até 1080p no YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Verificando tamanhos…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Os tamanhos não estão disponíveis para este vídeo"
+  },
+  "Hide_on_this_page": {
+    "message": "Ocultar nesta página"
+  },
+  "Download_1": {
+    "message": "Baixar: $1"
+  },
+  "Download_video": {
+    "message": "Baixar vídeo"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Arraste para mover · clique duas vezes para voltar ao lugar"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Baixar com o Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Ocultar em tela cheia nesta página (desative em todos os lugares no Multron Download Manager: Configurações → Integração com o navegador)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Ocultar em tela cheia nesta página"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "O Multron Download Manager não está em execução: baixando no navegador"
+  },
+  "Best_quality": {
+    "message": "Melhor qualidade"
+  },
+  "Audio_1": {
+    "message": "Áudio ($1)"
+  },
+  "Default": {
+    "message": "Padrão"
+  },
+  "Reddit_post": {
+    "message": "Publicação do Reddit"
+  },
+  "Facebook_video": {
+    "message": "Vídeo do Facebook"
+  },
+  "App_not_running": {
+    "message": "Aplicativo não está em execução"
+  },
+  "Not_approved_v_1": {
+    "message": "Não aprovado · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Conectado · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Os tamanhos não estão disponíveis para esta página"
+  },
+  "Sending": {
+    "message": "Enviando…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "O Multron Download Manager não aceitou — verifique o aplicativo."
+  },
+  "This_page": {
+    "message": "Esta página"
+  },
+  "File_on_this_page": {
+    "message": "Arquivo nesta página"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Rolando e coletando…"
+  },
+  "Collecting": {
+    "message": "Coletando…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "$1 itens encontrados. Escolha-os no Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Algo deu errado."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Digite um link http(s) ou magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Acesso concedido. Recarregue a página para ver o botão."
+  },
+  "Access_was_not_granted": {
+    "message": "O acesso não foi concedido."
+  },
+  "Connected": {
+    "message": "Conectado ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Aprove o pedido na janela do Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Verificando…"
+  },
+  "Connect": {
+    "message": "Conectar"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "O Multron Download Manager precisa de acesso aos sites para mostrar o botão “Baixar vídeo” e assumir os downloads."
+  },
+  "Allow_on_all_sites": {
+    "message": "Permitir em todos os sites"
+  },
+  "Download": {
+    "message": "Baixar"
+  },
+  "Video_format": {
+    "message": "Formato do vídeo"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, reproduz em qualquer lugar)"
+  },
+  "Everything_on_this_page": {
+    "message": "Tudo nesta página"
+  },
+  "Visible_part": {
+    "message": "Parte visível"
+  },
+  "Scroll_5_screens": {
+    "message": "Rolar 5 telas"
+  },
+  "Scroll_20_screens": {
+    "message": "Rolar 20 telas"
+  },
+  "Scroll_60_screens": {
+    "message": "Rolar 60 telas"
+  },
+  "Download_all": {
+    "message": "Baixar tudo…"
+  },
+  "Link_or_magnet": {
+    "message": "Link ou magnet"
+  },
+  "Send": {
+    "message": "Enviar"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Assumir os downloads do navegador"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Abrir links magnet no Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Mostrar o botão de download nas páginas de vídeo"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Enviar os cookies do site (arquivos privados / só com login)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Ignorar arquivos menores que (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Nunca assumir de"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Nunca assumir estes tipos de arquivo"
+  },
+  "App_port": {
+    "message": "Porta do aplicativo"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Feeds infinitos (Reddit, Instagram, X…) carregam mais ao rolar"
+  },
+  "https_or_magnet": {
+    "message": "https://… ou magnet:?…"
+  },
+  "extDescription": {
+    "message": "Envie downloads, vídeos (YouTube, Reddit, Instagram, X, TikTok…), arquivos do Google Drive / MEGA e torrents para o Multron Download Manager."
+  }
+}

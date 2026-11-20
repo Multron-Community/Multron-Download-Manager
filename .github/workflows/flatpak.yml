@@ -1,0 +1,90 @@
+name: Flatpak
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        description: Version to package
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to package (empty for the latest release)
+        type: string
+        required: false
+
+permissions:
+  contents: read
+
+jobs:
+  fetch:
+    name: Get the .deb packages
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.get.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - name: Download the .deb packages of the release
+        id: get
+        env:
+          GH_TOKEN: ${{ github.token }}
+          VERSION: ${{ inputs.version }}
+        run: |
+          if [ -z "$VERSION" ]; then
+            VERSION=$(gh release view --json tagName -q .tagName)
+            VERSION="${VERSION#v}"
+          fi
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          mkdir -p debs
+          for arch in amd64 arm64; do
+            gh release download "v$VERSION" --pattern "Multron.Download.Manager_${VERSION}_${arch}.deb" --output "debs/${arch}.deb"
+          done
+
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: flatpak-debs
+          path: debs/*.deb
+          if-no-files-found: error
+          retention-days: 1
+
+  flatpak:
+    name: Flatpak (${{ matrix.arch }})
+    needs: fetch
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            deb: amd64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            deb: arm64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    container:
+      image: ghcr.io/flathub-infra/flatpak-github-actions:gnome-48
+      options: --privileged
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          repository: flathub/shared-modules
+          path: flatpak/shared-modules
+
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        with:
+          name: flatpak-debs
+          path: debs
+
+      - name: Use the .deb for this architecture
+        run: cp "debs/${{ matrix.deb }}.deb" flatpak/app.deb
+
+      - uses: flatpak/flatpak-github-actions/flatpak-builder@v6
+        with:
+          bundle: multron-download-manager-${{ needs.fetch.outputs.version }}-${{ matrix.arch }}.flatpak
+          manifest-path: flatpak/io.github.Multron_Community.MultronDownloadManager.yml
+          arch: ${{ matrix.arch }}
+          cache-key: flatpak-builder-${{ matrix.arch }}-${{ needs.fetch.outputs.version }}

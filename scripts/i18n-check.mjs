@@ -5,12 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const src = path.join(root, 'frontend', 'src');
-const langDir = path.join(src, 'lang');
+const langDir = path.join(root, 'lang');
 
 function files(dir) {
   return fs.readdirSync(dir, { withFileTypes: true }).flatMap((e) => {
     const p = path.join(dir, e.name);
-    if (e.isDirectory()) return e.name === 'lang' ? [] : files(p);
+    if (e.isDirectory()) return files(p);
     return /\.(svelte|ts)$/.test(e.name) ? [p] : [];
   });
 }
@@ -28,7 +28,7 @@ const HEURISTIC = [
   new RegExp(String.raw`app\.run\([^\n]*?,\s*` + LIT + String.raw`\s*\)`, 'g'),
   new RegExp(String.raw`\b(?:label|name|title|desc)\s*:\s*` + LIT, 'g'),
   new RegExp(String.raw`\[\s*'[\w-]+'\s*,\s*` + LIT + String.raw`\s*\]`, 'g'),
-  new RegExp(String.raw`\b[\w'-]+\s*:\s*'([A-Z][^'\n]*[a-z][^'\n]*)'`, 'g')
+  new RegExp(String.raw`\b[\w'-]+\s*:\s*'([A-Z][^'\n]*[a-z][^'\n]*)(?<!\\)'`, 'g')
 ];
 
 const IGNORE =
@@ -61,6 +61,26 @@ export function collectKeys() {
   return [...keys].sort((a, b) => a.localeCompare(b));
 }
 
+const unini = (s) => s.replace(/\\(.)/g, (_, c) => (c === 'n' ? '\n' : c === 't' ? '\t' : c === 's' ? ' ' : c));
+
+export function readIni(file) {
+  const strings = {};
+  let section = '';
+  for (const raw of fs.readFileSync(file, 'utf8').replace(/^\uFEFF/, '').split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line || line.startsWith(';') || line.startsWith('#')) continue;
+    if (line.startsWith('[') && line.endsWith(']')) {
+      section = line.slice(1, -1).trim().toLowerCase();
+      continue;
+    }
+    const m = /^((?:[^\\=]|\\.)*)=(.*)$/.exec(line);
+    if (!m || section !== 'strings') continue;
+    const value = unini(m[2].trim());
+    if (value) strings[unini(m[1].trim())] = value;
+  }
+  return strings;
+}
+
 function main() {
   const args = new Set(process.argv.slice(2));
   const keys = collectKeys();
@@ -68,10 +88,10 @@ function main() {
     console.log(JSON.stringify(keys, null, 2));
     return;
   }
-  const langs = fs.readdirSync(langDir).filter((f) => f.endsWith('.json'));
+  const langs = fs.readdirSync(langDir).filter((f) => f.endsWith('.ini'));
   let failed = false;
   for (const f of langs) {
-    const dict = JSON.parse(fs.readFileSync(path.join(langDir, f), 'utf8'));
+    const dict = readIni(path.join(langDir, f));
     const missing = keys.filter((k) => !(k in dict) || !String(dict[k]).trim());
     const unused = Object.keys(dict).filter((k) => !keys.includes(k));
     if (missing.length) {

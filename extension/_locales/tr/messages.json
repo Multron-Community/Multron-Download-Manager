@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager çalışmıyor ve başlatılamadı. Uygulamayı başlatıp tekrar deneyin."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Bu tarayıcıyı Multron Download Manager penceresinde onaylayın, sonra tekrar deneyin."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: bağlantı isteği"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "Uygulama indirmeyi reddetti (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Bu sayfada indirilecek bir şey bulunamadı."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager çalışmıyor. Uygulamayı başlatıp tekrar deneyin."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Bağlantıyı Multron Download Manager ile indir"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Bağlantıdaki videoyu/sesi Multron Download Manager ile indir"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Bu medyayı Multron Download Manager ile indir"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Bu sayfadaki videoyu Multron Download Manager ile indir"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Bu sayfadakilerin hepsini Multron Download Manager ile indir…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Seçili bağlantıyı Multron Download Manager ile indir"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "Seçim bir bağlantı değil."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Bu tarayıcıyı Multron Download Manager penceresinde onaylayın. İndirme o zamana kadar bekler."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Multron Download Manager'a gönderildi"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager indirmeyi kabul etmedi"
+  },
+  "Save_videos_as_1": {
+    "message": "Videoları $1 olarak kaydet"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Multron Download Manager'da ayarlı video biçimini kullan"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "H.264 ve AAC ile MP4: her yerde açılır, WhatsApp'ta ve eski telefon ve televizyonlarda da (YouTube'da en fazla 1080p)"
+  },
+  "Checking_sizes": {
+    "message": "Boyutlar kontrol ediliyor…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Bu videonun boyutları alınamadı"
+  },
+  "Hide_on_this_page": {
+    "message": "Bu sayfada gizle"
+  },
+  "Download_1": {
+    "message": "İndir: $1"
+  },
+  "Download_video": {
+    "message": "Videoyu indir"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Taşımak için sürükleyin · yerine koymak için çift tıklayın"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Multron Download Manager ile indir"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Bu sayfada tam ekranda gizle (her yerde kapatmak için Multron Download Manager: Ayarlar → Tarayıcı Entegrasyonu)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Bu sayfada tam ekranda gizle"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager çalışmıyor: tarayıcıda indiriliyor"
+  },
+  "Best_quality": {
+    "message": "En iyi kalite"
+  },
+  "Audio_1": {
+    "message": "Ses ($1)"
+  },
+  "Default": {
+    "message": "Varsayılan"
+  },
+  "Reddit_post": {
+    "message": "Reddit gönderisi"
+  },
+  "Facebook_video": {
+    "message": "Facebook videosu"
+  },
+  "App_not_running": {
+    "message": "Uygulama çalışmıyor"
+  },
+  "Not_approved_v_1": {
+    "message": "Onaylanmadı · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Bağlı · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Bu sayfanın boyutları alınamadı"
+  },
+  "Sending": {
+    "message": "Gönderiliyor…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager kabul etmedi — uygulamayı kontrol edin."
+  },
+  "This_page": {
+    "message": "Bu sayfa"
+  },
+  "File_on_this_page": {
+    "message": "Bu sayfadaki dosya"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Kaydırılıyor ve toplanıyor…"
+  },
+  "Collecting": {
+    "message": "Toplanıyor…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "$1 öğe bulundu. Multron'da seçin."
+  },
+  "Something_went_wrong": {
+    "message": "Bir şeyler ters gitti."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Bir http(s) veya magnet bağlantısı girin."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Erişim verildi. Butonu görmek için sayfayı yenileyin."
+  },
+  "Access_was_not_granted": {
+    "message": "Erişim verilmedi."
+  },
+  "Connected": {
+    "message": "Bağlandı ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "İsteği Multron Download Manager penceresinde onaylayın."
+  },
+  "Checking": {
+    "message": "Kontrol ediliyor…"
+  },
+  "Connect": {
+    "message": "Bağlan"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager, Videoyu indir butonunu göstermek ve indirmeleri devralmak için web sitelerine erişime ihtiyaç duyar."
+  },
+  "Allow_on_all_sites": {
+    "message": "Tüm sitelerde izin ver"
+  },
+  "Download": {
+    "message": "İndir"
+  },
+  "Video_format": {
+    "message": "Video biçimi"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, her yerde açılır)"
+  },
+  "Everything_on_this_page": {
+    "message": "Bu sayfadaki her şey"
+  },
+  "Visible_part": {
+    "message": "Görünen kısım"
+  },
+  "Scroll_5_screens": {
+    "message": "5 ekran kaydır"
+  },
+  "Scroll_20_screens": {
+    "message": "20 ekran kaydır"
+  },
+  "Scroll_60_screens": {
+    "message": "60 ekran kaydır"
+  },
+  "Download_all": {
+    "message": "Hepsini indir…"
+  },
+  "Link_or_magnet": {
+    "message": "Bağlantı veya magnet"
+  },
+  "Send": {
+    "message": "Gönder"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Tarayıcı indirmelerini devral"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Magnet bağlantılarını Multron Download Manager'da aç"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Video sayfalarında indirme butonunu göster"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Site çerezlerini gönder (özel / giriş gerektiren dosyalar)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Şundan küçük dosyaları yok say (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Şu sitelerden devralma"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Şu dosya türlerini devralma"
+  },
+  "App_port": {
+    "message": "Uygulama portu"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Sonsuz akışlar (Reddit, Instagram, X…) kaydırdıkça daha fazlasını yükler"
+  },
+  "https_or_magnet": {
+    "message": "https://… veya magnet:?…"
+  },
+  "extDescription": {
+    "message": "İndirmeleri, videoları (YouTube, Reddit, Instagram, X, TikTok…), Google Drive / MEGA dosyalarını ve torrentleri Multron Download Manager'a gönderin."
+  }
+}

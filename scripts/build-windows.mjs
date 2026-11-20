@@ -16,7 +16,17 @@ const exe = path.join(root, 'src-tauri', 'target', 'release', 'multron-download-
 execFileSync(process.execPath, [path.join(root, 'scripts', 'extension-builds.mjs')], { stdio: 'inherit' });
 if (!args.includes('--skip-build')) {
   const tauriCli = path.join(root, 'node_modules', '@tauri-apps', 'cli', 'tauri.js');
-  execFileSync(process.execPath, [tauriCli, 'build', '--no-bundle'], { cwd: root, stdio: 'inherit' });
+  const full = args.includes('--full') || !!process.env.CI;
+  const env = full
+    ? process.env
+    : {
+        ...process.env,
+        CARGO_PROFILE_RELEASE_LTO: 'false',
+        CARGO_PROFILE_RELEASE_CODEGEN_UNITS: '256',
+        CARGO_PROFILE_RELEASE_INCREMENTAL: 'true'
+      };
+  console.log(full ? 'Full optimized build.' : 'Fast local build (use --full for a release-quality build).');
+  execFileSync(process.execPath, [tauriCli, 'build', '--no-bundle'], { cwd: root, stdio: 'inherit', env });
 }
 if (!fs.existsSync(exe)) {
   console.error(`Missing ${exe}. Run without --skip-build.`);
@@ -55,6 +65,7 @@ fs.rmSync(staging, { recursive: true, force: true });
 fs.mkdirSync(folder, { recursive: true });
 fs.copyFileSync(exe, path.join(folder, 'multron-download-manager.exe'));
 for (const file of ['LICENSE', 'THIRD-PARTY-NOTICES.md']) fs.copyFileSync(path.join(root, file), path.join(folder, file));
+fs.cpSync(path.join(root, 'lang'), path.join(folder, 'lang'), { recursive: true });
 fs.cpSync(path.join(root, 'extension'), path.join(folder, 'browser-extension'), { recursive: true });
 fs.cpSync(path.join(root, 'extension-build', 'firefox'), path.join(folder, 'browser-extension-firefox'), { recursive: true });
 fs.writeFileSync(

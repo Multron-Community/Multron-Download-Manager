@@ -4,6 +4,68 @@ const FILES = /(^|\.)(drive\.google\.com|docs\.google\.com|mega\.nz|mega\.io|med
 
 let tab = null;
 
+let uiMessages = null;
+
+function fill(text, subs) {
+  return subs.reduce((s, v, i) => s.split('$' + (i + 1)).join(String(v)), text);
+}
+
+function tr(text, ...subs) {
+  const id = text.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 120);
+  if (uiMessages) return fill(uiMessages[id] || text, subs);
+  let out = '';
+  try {
+    out = chrome.i18n.getMessage(id, subs.map(String));
+  } catch {
+    out = '';
+  }
+  return out || fill(text, subs);
+}
+
+function localize() {
+  for (const el of document.querySelectorAll('[data-i18n]')) {
+    const sub = el.dataset.i18nSub;
+    if (!el.dataset.i18n) el.dataset.i18n = el.textContent.trim();
+    el.textContent = tr(el.dataset.i18n, ...(sub ? [sub] : []));
+  }
+  for (const el of document.querySelectorAll('[data-i18n-title]')) {
+    if (!el.dataset.i18nTitle) el.dataset.i18nTitle = el.title;
+    el.title = tr(el.dataset.i18nTitle);
+  }
+  for (const el of document.querySelectorAll('[data-i18n-placeholder]')) {
+    if (!el.dataset.i18nPlaceholder) el.dataset.i18nPlaceholder = el.placeholder;
+    el.placeholder = tr(el.dataset.i18nPlaceholder);
+  }
+}
+
+localize();
+
+const THEME_ATTR = 'data-theme';
+function applyTheme(setting) {
+  const dark = setting === 'dark' || (setting !== 'light' && !window.matchMedia?.('(prefers-color-scheme: light)').matches);
+  document.documentElement.setAttribute(THEME_ATTR, dark ? 'dark' : 'light');
+}
+chrome.storage.local.get({ uiTheme: 'system' }).then(({ uiTheme }) => applyTheme(uiTheme)).catch(() => applyTheme('system'));
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.uiTheme) applyTheme(changes.uiTheme.newValue);
+});
+
+chrome.storage.local.get({ uiMessages: null }).then(({ uiMessages: m }) => {
+  if (m && typeof m === 'object') {
+    uiMessages = m;
+    localize();
+    refreshStatus();
+  }
+}).catch(() => {});
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.uiMessages?.newValue) {
+    uiMessages = changes.uiMessages.newValue;
+    localize();
+    refreshStatus();
+  }
+});
+
 function msg(text) {
   $('msg').textContent = text;
 }
@@ -14,15 +76,15 @@ async function refreshStatus(force = false) {
   dot.className = 'dot';
   if (!info) {
     dot.classList.add('bad');
-    $('status-text').textContent = 'App not running';
+    $('status-text').textContent = tr('App not running');
     $('connect').hidden = true;
   } else if (!info.paired) {
     dot.classList.add('warn');
-    $('status-text').textContent = `Not approved · v${info.version}`;
+    $('status-text').textContent = tr('Not approved · v$1', info.version);
     $('connect').hidden = false;
   } else {
     dot.classList.add('ok');
-    $('status-text').textContent = `Connected · v${info.version}`;
+    $('status-text').textContent = tr('Connected · v$1', info.version);
     $('connect').hidden = true;
   }
   return info;
@@ -41,14 +103,14 @@ async function showSizes(url) {
   const status = $('size-status');
   status.hidden = false;
   status.classList.add('busy');
-  status.textContent = 'Checking sizes…';
+  status.textContent = tr('Checking sizes…');
   const sizes = await chrome.runtime.sendMessage({ type: 'sizes', url }).catch(() => null);
   options.forEach((o, i) => {
     const size = sizeText(sizes?.[o.value]);
     o.textContent = size ? `${names[i]} · ${size}` : names[i];
   });
   status.classList.remove('busy');
-  status.textContent = sizes ? '' : 'Sizes are not available for this page';
+  status.textContent = sizes ? '' : tr('Sizes are not available for this page');
   status.hidden = !!sizes;
 }
 
@@ -67,12 +129,14 @@ async function loadOptions() {
   }
   $('skipDomains').value = s.skipDomains;
   $('skipDomains').addEventListener('change', () => chrome.storage.local.set({ skipDomains: $('skipDomains').value }));
+  $('skipExtensions').value = s.skipExtensions || '';
+  $('skipExtensions').addEventListener('change', () => chrome.storage.local.set({ skipExtensions: $('skipExtensions').value }));
 }
 
 async function sendDownload(payload) {
-  msg('Sending…');
+  msg(tr('Sending…'));
   const ok = await chrome.runtime.sendMessage({ type: 'download', payload });
-  msg(ok ? 'Sent to Multron Download Manager ✓' : 'Multron Download Manager did not accept it — check the app.');
+  msg(ok ? `${tr('Sent to Multron Download Manager')} ✓` : tr('Multron Download Manager did not accept it — check the app.'));
 }
 
 document.addEventListener('DOMContentLoaded', async () => {
@@ -88,12 +152,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   }
   if (MEDIA.test(host)) {
     $('page-box').hidden = false;
-    $('page-label').textContent = tab.title || 'This page';
+    $('page-label').textContent = tab.title || tr('This page');
     showSizes(tab.url);
   } else if (FILES.test(host)) {
     $('page-box').hidden = false;
     $('quality').hidden = true;
-    $('page-label').textContent = 'File on this page';
+    $('page-label').textContent = tr('File on this page');
   }
 
   $('container').closest('.format-row').hidden = !MEDIA.test(host);
@@ -118,15 +182,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (!tab?.id) return;
     const pages = Number($('grab-pages').value) || 0;
     $('grab').disabled = true;
-    msg(pages ? 'Scrolling and collecting…' : 'Collecting…');
+    msg(pages ? tr('Scrolling and collecting…') : tr('Collecting…'));
     const r = await chrome.runtime.sendMessage({ type: 'grab-page', tabId: tab.id, pages });
     $('grab').disabled = false;
-    msg(r?.ok ? `Found ${r.count} items. Pick them in Multron.` : r?.error ?? 'Something went wrong.');
+    msg(r?.ok ? tr('Found $1 items. Pick them in Multron.', r.count) : r?.error ?? tr('Something went wrong.'));
   });
 
   $('send-link').addEventListener('click', () => {
     const url = $('link').value.trim();
-    if (!/^(https?:\/\/|magnet:)/i.test(url)) return msg('Enter an http(s) or magnet link.');
+    if (!/^(https?:\/\/|magnet:)/i.test(url)) return msg(tr('Enter an http(s) or magnet link.'));
     sendDownload({ url, kind: 'auto', referrer: tab?.url ?? null });
   });
   $('link').addEventListener('keydown', (e) => e.key === 'Enter' && $('send-link').click());
@@ -137,12 +201,12 @@ document.addEventListener('DOMContentLoaded', async () => {
   $('grant').addEventListener('click', async () => {
     const ok = await chrome.permissions.request(ALL_SITES).catch(() => false);
     $('perm-box').hidden = ok;
-    msg(ok ? 'Access granted. Reload the page to see the button.' : 'Access was not granted.');
+    msg(ok ? tr('Access granted. Reload the page to see the button.') : tr('Access was not granted.'));
   });
 
   $('connect').addEventListener('click', async () => {
     const r = await chrome.runtime.sendMessage({ type: 'pair' });
-    msg(r?.paired ? 'Connected ✓' : 'Approve the request in the Multron Download Manager window.');
+    msg(r?.paired ? tr('Connected ✓') : tr('Approve the request in the Multron Download Manager window.'));
     setTimeout(() => refreshStatus(true), 1500);
   });
 });

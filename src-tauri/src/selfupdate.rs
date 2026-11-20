@@ -57,7 +57,9 @@ fn kind_of(name: &str) -> Option<PackageKind> {
 }
 
 fn wanted_kind() -> Option<PackageKind> {
-    if cfg!(windows) && crate::portable::dir().is_some() {
+    if crate::sandbox::store_managed() {
+        None
+    } else if cfg!(windows) && crate::portable::dir().is_some() {
         Some(PackageKind::WindowsPortable)
     } else if cfg!(windows) {
         Some(PackageKind::WindowsSetup)

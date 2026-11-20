@@ -99,15 +99,25 @@ fn parse_ip(s: &str) -> Option<IpAddr> {
 }
 
 pub fn parse_line(line: &str) -> Option<(IpAddr, IpAddr)> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') || line.starts_with("//") {
+    let mut line = line.trim();
+    if line.is_empty() || line.starts_with('#') || line.starts_with(';') || line.starts_with("//") {
         return None;
     }
-    let core = if line.contains(',') {
-        line.split(',').next()?
-    } else {
-        line
-    };
+    for mark in [" ;", "	;", " #", "	#"] {
+        if let Some(i) = line.find(mark) {
+            line = line[..i].trim_end();
+        }
+    }
+    if line.contains(',') {
+        if let Some(found) = line.split(',').next().and_then(parse_core) {
+            return Some(found);
+        }
+    }
+    parse_core(line)
+}
+
+fn parse_core(core: &str) -> Option<(IpAddr, IpAddr)> {
+    let core = core.trim();
     if let Some(dash) = core.rfind('-') {
         let (left, right) = (&core[..dash], &core[dash + 1..]);
         let end = parse_ip(right)?;
@@ -154,6 +164,23 @@ mod tests {
 
     fn r(s: &str) -> Option<(String, String)> {
         parse_line(s).map(|(a, b)| (a.to_string(), b.to_string()))
+    }
+
+    #[test]
+    fn skips_comments_after_a_range() {
+        assert_eq!(
+            r("1.10.16.0/20 ; SBL256894"),
+            Some(("1.10.16.0".into(), "1.10.31.255".into()))
+        );
+        assert_eq!(
+            r("5.6.7.8 # bad peer"),
+            Some(("5.6.7.8".into(), "5.6.7.8".into()))
+        );
+        assert_eq!(r("; Spamhaus DROP List"), None);
+        assert_eq!(
+            r("MEGAEGG (Energia Communications, Inc.):1.0.64.0-1.0.127.255"),
+            Some(("1.0.64.0".into(), "1.0.127.255".into()))
+        );
     }
 
     #[test]

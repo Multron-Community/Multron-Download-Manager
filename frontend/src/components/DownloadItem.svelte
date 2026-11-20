@@ -6,6 +6,7 @@
   import { bytes, duration, extension, percent, speed } from '../lib/format';
   import Icon from './Icon.svelte';
   import { cloudView } from '../lib/cloud';
+  import { tagStyle, signatureView } from '../lib/tags';
 
   interface Props {
     item: Download;
@@ -16,6 +17,19 @@
   let pct = $derived(tool ? percent(item.toolDownloaded, item.toolTotal) : percent(item.downloaded, item.total));
   let barTotal = $derived(tool ? item.toolTotal : item.total);
   let checked = $derived(app.checked.includes(item.id));
+  let flash = $state<'' | 'done' | 'fail'>('');
+  let lastStatus: string | null = null;
+  let flashTimer: ReturnType<typeof setTimeout> | undefined;
+
+  $effect(() => {
+    const now = item.status;
+    if (lastStatus && lastStatus !== now && (now === 'completed' || now === 'failed')) {
+      flash = now === 'completed' ? 'done' : 'fail';
+      clearTimeout(flashTimer);
+      flashTimer = setTimeout(() => (flash = ''), 1400);
+    }
+    lastStatus = now;
+  });
   let selected = $derived(app.selectedId === item.id || checked);
   let ext = $derived(
     item.kind === 'torrent'
@@ -44,7 +58,9 @@
     'installing Deno': 'Installing Deno',
     'extracting Deno': 'Extracting Deno',
     'waiting for network': 'Waiting for the network',
-    retrying: 'Reconnecting'
+    retrying: 'Reconnecting',
+    'waiting for host': 'Waiting (the site asks to wait)',
+    'refreshing link': 'Refreshing the link'
   };
 
   let statusText = $derived.by(() => {
@@ -95,6 +111,7 @@
   }
 
   const cloud = $derived(cloudView(item.cloudState, item.cloudDetail));
+  const sigView = $derived(signatureView(item.signature));
 
   async function explainCloud(e: MouseEvent, kind: 'info' | 'success' | 'warning' | 'error', text: string) {
     e.stopPropagation();
@@ -135,19 +152,23 @@
   onmousedown={(e) => e.shiftKey && e.preventDefault()}
   onkeydown={(e) => e.key === 'Enter' && (app.selectedId = item.id)}
   ondblclick={openOnDoubleClick}
-  class="w-full p-[12px_14px] border rounded-[12px] transition-all group flex flex-col gap-[10px] cursor-default outline-none
+  data-state={item.cloudState === 'threat' || item.quarantined ? 'threat' : item.status}
+  class="download-card card-enter {flash === 'done' ? 'flash-done' : flash === 'fail' ? 'flash-fail' : ''} w-full p-[12px_14px] border rounded-[12px] transition-all group flex flex-col gap-[10px] cursor-default outline-none
     {selected ? 'border-accent/50 bg-raised' : item.status === 'active' ? 'border-line bg-panel' : 'border-card-line bg-bg hover:bg-subtle'}"
 >
+  {#if item.status === 'active' && barTotal}
+    <div class="card-fill" style="width: {Math.min(100, pct)}%" aria-hidden="true"></div>
+  {/if}
   <div class="flex items-center justify-between gap-3">
     <div class="flex items-center gap-[12px] min-w-0 flex-1">
-      <div lang="en" class="relative w-[38px] h-[38px] rounded-[9px] bg-line flex items-center justify-center flex-shrink-0 font-bold text-[9.5px] uppercase tracking-wider overflow-hidden">
+      <div lang="en" data-cat={item.category} class="file-badge {item.status === 'active' ? 'is-active' : ''} relative w-[38px] h-[38px] rounded-[10px] flex items-center justify-center flex-shrink-0 font-bold text-[9.5px] uppercase tracking-wider overflow-hidden">
         {#if item.media?.thumbnail}
           <img src={item.media.thumbnail} alt="" class="absolute inset-0 w-full h-full object-cover opacity-80" />
         {:else}
           {ext}
         {/if}
         {#if checked}
-          <span class="absolute inset-0 bg-accent-strong/85 flex items-center justify-center text-white"><Icon name="check" size={18} stroke={3} /></span>
+          <span class="status-pop absolute inset-0 bg-accent-strong/85 flex items-center justify-center text-white"><Icon name="check" size={18} stroke={3} /></span>
         {/if}
         <span class="absolute -bottom-[1px] -right-[1px] w-[15px] h-[15px] rounded-[5px] bg-bg flex items-center justify-center text-muted">
           <Icon name={kindIcon[item.kind]} size={10} />
@@ -155,7 +176,7 @@
       </div>
 
       <div class="flex flex-col gap-[4px] min-w-0 flex-1">
-        <h3 class="text-[13.5px] font-medium truncate leading-tight" title={item.name}>{item.name}</h3>
+        <h3 class="text-[13.5px] font-medium truncate leading-tight" title={item.name}>{#if app.disguised(item)}<span class="pill bg-bad/15 text-bad mr-1.5 align-middle" title={t('The name of this file hides that it is a program, for example “invoice.pdf.exe”. This is a common trick of malware.')}>{t('Disguised program')}</span>{/if}{item.name}</h3>
         <div class="flex flex-wrap items-center gap-x-[7px] gap-y-1 text-[11px] leading-tight text-muted whitespace-nowrap">
           {#if tool}
             <span class="text-accent">{tool}: {bytes(item.toolDownloaded)}{item.toolTotal ? ` / ${bytes(item.toolTotal)}` : ''}</span>
@@ -206,9 +227,43 @@
           {:else if item.hashState === 'pending'}
             <span class="flex items-center gap-1 text-dim" title={item.sha256Expected ?? ''}><Icon name="hash" size={11} />SHA-256</span>
           {/if}
+          {#each item.tags ?? [] as tag (tag)}
+            <button type="button" class="h-[17px] px-1.5 rounded-full border text-[10.5px] leading-none cursor-pointer" style={tagStyle(tag)} onclick={(e) => { e.stopPropagation(); app.tagFilter = app.tagFilter === tag ? null : tag; }} ondblclick={(e) => e.stopPropagation()}>{tag}</button>
+          {/each}
+          {#if item.note}<span class="text-dim flex items-center" title={item.note}><Icon name="doc" size={11} /></span>{/if}
+          {#if sigView && !sigView.valid}
+            <span class="flex items-center gap-1 {sigView.tone === 'bad' ? 'text-bad' : 'text-warn'}" title={t('Programs from known publishers are digitally signed. This one is not, or its signature is broken.')}><Icon name="alert" size={11} />{t(sigView.text)}</span>
+          {:else if sigView}
+            <span class="flex items-center gap-1 text-ok" title={t('Signed by {name}', { name: sigView.text })}><Icon name="shield" size={11} />{sigView.text}</span>
+          {/if}
+          {#if item.later && item.status === 'paused'}
+            <span class="flex items-center gap-1 text-accent" title={t('Starts when the scheduler runs (Settings → Scheduler).')}><Icon name="clock" size={11} />{t('Waiting for the scheduler')}</span>
+          {/if}
+          {#if item.quarantined}
+            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('This file is in quarantine. You can restore it in Settings → Multron Cloud.')} onclick={(e) => { e.stopPropagation(); app.settingsSection = 'cloud'; app.view = 'settings'; }} ondblclick={(e) => e.stopPropagation()}><Icon name="lock" size={11} />{t('In quarantine')}</button>
+          {/if}
+          {#if item.extractState === 'extracting'}
+            <span class="flex items-center gap-1 text-accent"><Icon name="archive" size={11} />{t('Extracting…')}</span>
+          {:else if item.extractState === 'waiting'}
+            <span class="flex items-center gap-1 text-dim" title={t('The archive is extracted when all of its parts have finished.')}><Icon name="archive" size={11} />{t('Waiting for the other parts')}</span>
+          {:else if item.extractState === 'done'}
+            {@const lines = (item.extractDetail ?? '').split('\n')}
+            <button type="button" class="flex items-center gap-1 text-ok hover:underline cursor-pointer" title={lines.slice(1).join('\n')} onclick={(e) => { e.stopPropagation(); if (lines[1]) api.openPath(lines[1]).catch(() => {}); }} ondblclick={(e) => e.stopPropagation()}><Icon name="archive" size={11} />{t('Extracted · {count} files', { count: Number(lines[0]) || 0 })}</button>
+          {:else if item.extractState === 'choose'}
+            <button type="button" class="flex items-center gap-1 text-warn hover:underline cursor-pointer" title={t('Several archive passwords are saved. Choose which one to use.')} onclick={(e) => { e.stopPropagation(); app.passwordFor = item; }} ondblclick={(e) => e.stopPropagation()}><Icon name="lock" size={11} />{t('Choose a password')}</button>
+          {:else if item.extractState === 'password' || item.extractState === 'failed'}
+            <button type="button" class="flex items-center gap-1 {item.extractState === 'password' ? 'text-warn' : 'text-bad'} hover:underline cursor-pointer" title={item.extractDetail ?? ''} onclick={(e) => { e.stopPropagation(); if (item.extractState === 'password') { app.settingsSection = 'files'; app.view = 'settings'; } else explain(e, 'error', item.extractDetail || t('No details')); }} ondblclick={(e) => e.stopPropagation()}><Icon name={item.extractState === 'password' ? 'lock' : 'alert'} size={11} />{item.extractState === 'password' ? t('Archive needs a password') : t('Could not extract')}</button>
+            <button type="button" class="text-accent hover:underline cursor-pointer" onclick={(e) => { e.stopPropagation(); api.extractDownload(item.id).catch((err) => app.toast('error', String(err))); }} ondblclick={(e) => e.stopPropagation()}>{t('Try again')}</button>
+          {/if}
           {#if item.error && item.status === 'failed'}
             <span class="w-[3px] h-[3px] rounded-full bg-dim"></span>
             <span class="text-bad truncate" title={item.error}>{item.error}</span>
+            {#if /\b401\b/.test(item.error)}
+              <button type="button" class="text-accent hover:underline cursor-pointer whitespace-nowrap flex-shrink-0" onclick={(e) => { e.stopPropagation(); app.loginFor = item; }} ondblclick={(e) => e.stopPropagation()}>{t('Log in…')}</button>
+            {/if}
+            {#if item.error.includes('CAPTCHA')}
+              <button type="button" class="text-accent hover:underline cursor-pointer whitespace-nowrap flex-shrink-0" onclick={(e) => { e.stopPropagation(); api.openUrl(item.url).catch(() => {}); }} ondblclick={(e) => e.stopPropagation()}>{t('Open in browser')}</button>
+            {/if}
           {/if}
         </div>
       </div>
@@ -275,16 +330,28 @@
           type="button"
           onclick={scanInCloud}
           ondblclick={(e) => e.stopPropagation()}
-          class="h-[28px] px-3 rounded-full border border-accent/50 bg-accent/15 hover:bg-accent/25 text-accent text-[11.5px] font-semibold flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-sm whitespace-nowrap"
+          class="chip-btn chip-accent"
           title={t('Scan for malware with Multron Cloud')}
         >
           <Icon name="shield" size={13} />{item.cloudState ? t('Scan again') : t('Scan for malware')}
         </button>
       {/if}
+      {#if item.status === 'completed' && !item.quarantined && app.settings?.virustotalButton !== false}
+        <button
+          type="button"
+          onclick={(e) => { e.stopPropagation(); app.virusTotal(item); }}
+          ondblclick={(e) => e.stopPropagation()}
+          disabled={app.vtBusy !== null}
+          class="chip-btn"
+          title={t('Check this file on VirusTotal')}
+        >
+          {#if app.vtBusy === item.id}<Icon name="refresh" size={12} class="animate-spin" />{:else}<Icon name="globe" size={12} />{/if}VirusTotal
+        </button>
+      {/if}
       <button
         type="button"
         onclick={primary}
-        class="w-[30px] h-[30px] rounded-full bg-line hover:bg-btn-hover flex items-center justify-center cursor-pointer active:scale-95"
+        class="round-btn"
         title={item.status === 'active' || item.status === 'queued' ? t('Pause') : item.status === 'completed' ? (item.seeding ? t('Pause') : t('Open')) : item.status === 'failed' ? t('Retry') : t('Resume')}
       >
         {#if item.status === 'active' || item.status === 'queued' || (item.status === 'completed' && item.seeding)}
@@ -301,9 +368,9 @@
   </div>
 
   {#if item.status !== 'completed'}
-    <div class="relative w-full h-[5px] bg-line rounded-[3px] overflow-hidden">
+    <div class="progress-track relative w-full h-[5px] rounded-[3px] overflow-hidden">
       <div
-        class="h-full rounded-[3px] transition-[width] duration-300 {item.status === 'active' ? 'bg-accent' : item.status === 'failed' ? 'bg-bad/60' : 'bg-dim'} {item.status === 'active' && !barTotal ? 'progress-live w-full' : ''}"
+        class="h-full rounded-[3px] transition-[width] duration-500 ease-out {item.status === 'active' ? 'bg-accent progress-active' : item.status === 'failed' ? 'bg-bad/60' : 'bg-dim'} {item.status === 'active' && !barTotal ? 'progress-live w-full' : ''}"
         style={barTotal ? `width: ${pct}%` : ''}
       ></div>
     </div>

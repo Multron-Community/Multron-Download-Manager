@@ -91,10 +91,12 @@
 |---|---|
 | <img src="docs/screenshots/downloads-dark.png" alt="Parça görünümü ile indirmeler" /> | <img src="docs/screenshots/torrent-dark.png" alt="Tracker, DHT ve LSD kaynaklarıyla torrent gönderme" /> |
 | **İndirmeler** — her bağlantı kendi aralığına yazar; ilerleme çubuğu baştan sona dolar ve *Parçalar* sekmesi her bağlantının aralığını canlı olarak gösterir. | **Torrentler** — izleyici (tracker), DHT ve LSD kaynakları, eşler (peers), parçalar (pieces) ve daha fazlasıyla besleme (seeding). |
-| <img src="docs/screenshots/settings-light.png" alt="Açık temada görünüm ayarları" /> | <img src="docs/screenshots/security-dark.png" alt="SmartScreen, Multron Cloud taraması ve TLS seçenekleriyle güvenlik ayarları" /> |
-| **Görünüm** — açık, koyu veya sistem teması, vurgu renkleri ve saydamlık. | **Güvenlik** — SmartScreen işareti, Multron Cloud taraması (test aşamasında), programların güvenli açılması, eklenti onayı, TLS ve yönlendirme kuralları. |
+| <img src="docs/screenshots/settings-light.png" alt="Açık temada görünüm ayarları" /> | <img src="docs/screenshots/security-dark.png" alt="Güvenlik düzeyi, SmartScreen ve daha güvenli indirme seçenekleriyle güvenlik ayarları" /> |
+| **Görünüm** — açık, koyu veya sistem teması, her tema için parlaklık, vurgu renkleri ve saydamlık. | **Güvenlik** — Temel'den Katı'ya güvenlik düzeyi, SmartScreen işareti, daha güvenli indirmeler, programların güvenli açılması, eklenti onayı, TLS ve yönlendirme kuralları. |
+| <img src="docs/screenshots/background-dark.png" alt="Karem Adem'in yerleşik arka planı üzerinde indirme listesi" /> | <img src="docs/screenshots/cloud-dark.png" alt="Bulut tabanlı kötü amaçlı yazılım korumasıyla Multron Cloud ayarları" /> |
+| **Arka plan resmi** — kendi resminiz veya beş yerleşik arka plandan biri (Karem Adem'in Unsplash fotoğrafları) panellerin arkasından görünür. | **Multron Cloud** — antivirüsünüzden ayrı olarak tamamlanan her indirmeyi denetleyen bulut tabanlı kötü amaçlı yazılım koruması; durum çubuğu *Korunuyor* gösterir. |
 | <img src="docs/screenshots/downloads-light-tr.png" alt="Açık tema ile Türkçe dilinde uygulama" /> | |
-| **12 dil seçeneği** — sistem dilini otomatik takip eder (burada Türkçe gösterilmektedir). | |
+| **24 dil seçeneği** — sistem dilini otomatik takip eder (burada Türkçe gösterilmektedir). | |
 
 
 ---
@@ -112,6 +114,13 @@
 - Duraklatma, çökme veya yeniden başlatma sonrasında devam edebilme; kademeli bekleme süresiyle otomatik yeniden denemeler; indirme bazlı ve genel hız sınırları (varsayılan olarak sınırsız).
 - **Ağ değişikliklerine dayanıklı** — bağlantı koptuğunda (VPN veya GoodbyeDPI açılıp kapatıldığında, Wi-Fi değiştirildiğinde), indirme *Ağ bekleniyor* durumuna geçer, siteye tekrar erişilene kadar bekler ve taze bağlantılarla devam eder (*Yeniden bağlanılıyor*). Parçaları bozuk gelen video akışları FFmpeg hatasıyla başarısız olmak yerine atılır ve tekrar çekilir.
 
+**İndirme ekleme (JDownloader tarzı)**
+- **Bağlantı yakalayıcı** — *Ayarlar → Dosyalar → Bağlantı yakalayıcı* açıldığında kopyaladığınız her bağlantı (http, https ve magnet, aynı anda birden çok da olabilir) toplanır; pencerenin altındaki çubuk bunları, indireceklerinizi seçtiğiniz bir listede açar. Listede zaten olan bağlantılar atlanır. Varsayılan olarak kapalıdır.
+- **Birden çok bağlantıyı aynı anda ekleme** — yeni indirme penceresindeki *Birden çok bağlantıyı aynı anda ekle…* her satıra bir bağlantı alır; `dosya[01-20].zip` gibi bir sayı aralığı her numarayı ekler (baştaki sıfırlar korunur, en fazla 1.000 bağlantı).
+- **Beklemenizi isteyen siteler** — HTTP 429 veya 503 yanıtında indirme, sitenin istediği kadar (`Retry-After`, en fazla 15 dakika) geri sayımla bekler ve sonra kendiliğinden devam eder.
+- **Süresi dolan bağlantılar yenilenir** — bir bağlantı HTTP 403 veya 410 ile sona erdiğinde indirme siteden yeni bir bağlantı ister (*Bağlantı yenileniyor*) ve kaldığı yerden devam eder.
+- **Her indirmeden önce sorma** — *Ayarlar → Tarayıcı Entegrasyonu → Her indirmeden önce sor*, tarayıcıdan gelen her indirme için ana pencereden ayrı küçük bir pencere açar. Klasörü, dosya adını, kaliteyi ya da SHA-256 değerini orada değiştirirsiniz; indirme sonra o pencerede ilerleme çubuğu ve ayrıntılarıyla sürer ve ana listede de görünür.
+
 **Kuyruk ve hız kontrolü**
 - **Sıralı mod** — araç çubuğundaki **Paralel / Teker teker** butonuna tek bir tıklama, dosyaların yan yana yerine sırayla indirilmesini sağlar.
 - **Kuyruğu yeniden sıralama** — kuyruktaki her indirme kendi sırasını gösterir (`#1`, `#2`…); ↑ / ↓ butonları indirmeyi taşır (çift tıklama: en üste / en alta).
@@ -120,6 +129,8 @@
 **Listeyi yönetme**
 - **Yanlışlıkla yinelenen indirme yok** — listede zaten bulunan bir bağlantıyı veya torrenti eklemek, öncelikle tekrar indirilip indirilmeyeceğini soran bir sistem uyarısı açar ve ona gitmek için *Mevcut olanı göster* seçeneği sunar.
 - **Birden fazla indirme seçme** — Ctrl+tıklama (macOS'ta ⌘+tıklama) tekil indirmeleri seçer, Shift+tıklama bir aralığı seçer ve Ctrl+A geçerli görünümdeki her şeyi seçer. Listenin üzerindeki çubuk hepsi için *Duraklat*, *Devam Et* ve *Kaldır* seçenekleri sunar; **Delete** seçimi kaldırır ve **Esc** seçimi temizler.
+- **Kendi dilinizde kategori klasörleri ve kendi kategorileriniz** — *Kategori klasörlerine ayır* klasörleri uygulama dilinde adlandırır (örneğin Rusçada *Видео*) ve dili değiştirdiğinizde klasörlerin yeniden adlandırılıp adlandırılmayacağını sorar; içlerindeki indirmeler de taşınır. Her kategorinin kendi klasörü olabilir; kendi kategorileriniz (örneğin `epub mobi` için *E-kitaplar*) de kendi klasörlerini alır.
+- **Dosyaları varsayılan olarak silme** — bir seçenek, kaldırma penceresindeki *İndirilen dosyaları da sil* kutusunu varsayılan olarak işaretler.
 - **Listeyi temizleme** — araç çubuğundaki ✓ butonu *Bitenleri temizle*, *Başarısız olanları temizle* ve *Tümünü temizle…* seçeneklerini açar. Birden fazla indirmeyi kaldırmak bir kez onay ister ve indirilen dosyaları da silebilir.
 - **Diskten silme kapsamlıdır** — tamamlanmamış medya indirmeleri yt-dlp'nin geçici parçalarını da (`.part`, fragmentler, ayrı video ve ses akışları) kaybeder ve başka bir programda hala açık olan veya taranan bir dosya birkaç saniye boyunca silinmek üzere yeniden denenir. Hala silinemiyorsa Multron Download Manager hangi dosyanın kaldığını bildirir.
 
@@ -130,17 +141,22 @@
   - Sayfada yalnızca "YouTube" yazsa bile gerçek video başlığı hemen gösterilir.
   - **MP4 her yerde çalışır** — MP4 kapsayıcısı ile *En iyi kalite*, her oynatıcının ve Windows Film ve TV'nin gösterebildiği H.264 video ve AAC sesi (YouTube'da genellikle 1080p'ye kadar) seçer. YouTube, 1440p ve 4K'yı yalnızca VP9/AV1 olarak sunar; bunları elde etmek için bu çözünürlükleri açıkça seçin (VP9/AV1 destekli bir oynatıcıya veya MKV'ye ihtiyaç duyarlar).
 - **Google Drive** (büyük dosya onayı ve Docs/Sheets/Slides dışa aktarma dahil), **MEGA** (AES-128-CTR ile anında şifresi çözülür), **Dropbox**, **MediaFire**, **Pixeldrain** ve **GitHub** için paylaşım bağlantısı çözücüler.
+- **Torrent arama** — Torrents-CSV, Internet Archive ve eklediğiniz sitelerde (`{query}` içeren herhangi bir RSS, Atom veya Torznab arama adresi, örneğin Jackett veya Prowlarr) aynı anda arar; seeder, leecher, boyut ve tarihi gösterir.
 - Yerleşik **BitTorrent istemcisi** (librqbit): magnet bağlantıları, .torrent dosyaları, dosya seçimi, DHT, uTP, UPnP, LSD, izleyiciler, besleme (seeding) kuralları, IP filtreleri, SOCKS5 vekil sunucusu ve BiglyBT tarzı ayrıntı görünümü (Hız, Dosyalar, Seçenekler, Kaynaklar, Eşler, Parçalar, Bilgi, Gizlilik, Günlük).
 - **SHA-256 doğrulaması** — isteğe bağlı olarak her dosyanın beklenen karmasını (hash) sorar ve indirme bittiğinde otomatik olarak doğrular.
 
 **Görünüm**
 - **Açık ve koyu temalar** veya **Sistem temasına uy** (Windows, macOS ve Linux'u takip eder ve onlarla birlikte geçiş yapar). Araç çubuğundaki güneş/ay butonu manuel olarak geçiş sağlar.
-- **Dokuz vurgu rengi** — Mavi (varsayılan), Camgöbeği, Yeşil, Turuncu, Mor, Kırmızı, Pembe, Camgöbeği Yeşili ve Gri — butonlar, ilerleme çubukları ve saydam arka planların tonu için kullanılır.
+- **Dokuz vurgu rengi ve kendi renginiz** — Mavi (varsayılan), Camgöbeği, Yeşil, Turuncu, Mor, Kırmızı, Pembe, Camgöbeği Yeşili ve Gri ya da *Özel renk* ile istediğiniz herhangi bir renk — butonlar, ilerleme çubukları ve saydam arka planların tonu için kullanılır.
+- **Cam efekti** (varsayılan olarak açık) — kartlar, butonlar ve alanlar Multron Win Cleaner'daki gibi yumuşak bir parlaklık ve açık renkli bir üst kenar kazanır.
 - Üç yoğunlukta (Hafif, Orta, Güçlü) **Saydamlık efektleri**: Windows 11'de **Acrylic** veya **Mica**, Windows 10'da Bulanıklık, macOS'ta canlanma (vibrancy). Linux düz arka planları korur; tema ve renkler yine de geçerlidir.
+- **Parlaklık** — açık tema ve koyu tema için ayrı birer kaydırıcı arka planları koyulaştırır veya açar, örneğin açık tema ekranınız için fazla parlaksa; yazıların okunurluğu korunur.
+- **Arka plan resmi** — pencerenin arkasında kendi resminiz veya beş yerleşik arka plandan biri (Karem Adem'in [Unsplash](https://unsplash.com/license) fotoğrafları); panel saydamlığı ve bulanıklık ayarlanabilir.
 
 **Güvenlik**
+- **Güvenlik düzeyi** — *Ayarlar → Güvenlik*'in başında Windows'taki Kullanıcı Hesabı Denetimi gibi bir kaydırıcı: Temel, Standart (varsayılan), Yüksek veya Katı; bunlar tüm güvenlik seçeneklerini tek seferde ayarlar, birini kendiniz değiştirirseniz *Özel* görünür. Yüksek ayrıca `http://` bağlantılarından gelen programları ve tarayıcının gönderdiği yerel ağ bağlantılarını reddeder, Katı ise ek olarak her `http://` bağlantısını reddeder ve indirilen her dosya açılmadan önce sorar.
 - **SmartScreen / Gatekeeper** — tamamlanan dosyalar "internet üzerinden indirildi" işaretini alır, böylece sistem açıldıklarında bunları kontrol eder ve indirme bir **SmartScreen** (veya **Gatekeeper**) rozeti gösterir; antivirüsünüz bir indirmeyi engellediğinde veya kaldırdığında bir uyarı ile işaretlenir. Bkz. [Güvenlik ve gizlilik](#güvenlik-ve-gizlilik).
-- **Multron Cloud ile kötü amaçlı yazılım taraması (test aşamasında)** — tamamlanan her indirme, antivirüsünüzden ayrı olarak bulutta kontrol eden ve kendine ait bir **Multron Cloud** rozeti bulunan bir **Kötü amaçlı yazılım tara** butonuna sahiptir. Tamamlanan programların ve betiklerin otomatik taranması varsayılan olarak açıktır; sözleşme Multron Download Manager başladığında bir kez sorulur ve reddetmek otomatik taramayı kapatır. Hangi dosya türlerini kontrol edeceğini siz seçersiniz (varsayılan olarak programlar ve betikler veya tüm dosyalar).
+- **Multron Cloud ile bulut tabanlı kötü amaçlı yazılım koruması (test aşamasında)** — tamamlanan her indirme, antivirüsünüzden ayrı olarak bulutta kontrol eden ve kendine ait bir **Multron Cloud** rozeti bulunan bir **Kötü amaçlı yazılım tara** butonuna sahiptir. Tamamlanan programların ve betiklerin otomatik taranması varsayılan olarak açıktır; sözleşme Multron Download Manager başladığında bir kez sorulur ve reddetmek otomatik taramayı kapatır. Hangi dosya türlerini kontrol edeceğini siz seçersiniz (varsayılan olarak programlar ve betikler veya tüm dosyalar).
 - **Parola korumalı arşivler** — bir ZIP veya 7z arşivi kilitli olduğunda, Multron Download Manager parolasını sorar, özel bir klasörde açar ve içindeki dosyaları tarar.
 - **Tarama sonuçlarını temizleme** — her indirme kendi Multron Cloud sonucunu (örneğin *Multron Cloud: taranmadı*) ve antivirüsünüz durdurduğunda *Antivirüsünüz tarafından engellendi* bilgisini gösterir; bir dosyanın neden taranmadığını veya ne bulunduğunu görmek için bir rozete tıklayın.
 - **İndirme ve tarama bildirimleri** — bir indirme başladığında, bittiğinde (*Aç* ve *Klasörde göster* ile) veya başarısız olduğunda, bir indirmenin Multron Cloud taraması bittiğinde ve antivirüsünüz bir indirmeyi engellediğinde, Multron Download Manager'ın kendi kartları ekranın köşesinde, diğer pencerelerin üzerinde ve uygulama arka plandayken veya simge durumundayken açılır. Windows, macOS veya Linux bildirim ayarlarına bağlı değildirler. Her iki tür de *Ayarlar → Başlangıç ve Kapatma* bölümünden kapatılabilir; *Bildirimleri pencere içinde de göster* seçeneği, ön plandayken bunları pencere içinde gösterir.
@@ -155,7 +171,7 @@
 - **Zorunlu güncellemeler** — Multron Download Manager başladığında GitHub Releases'i kontrol eder; yeni bir sürüm varsa indirme ilerlemesiyle birlikte *Multron Download Manager x.y.z sürümüne güncelleniyor* gösterir, sürümün imzalı `update.json` dosyasını ve dosyanın SHA-256 karmasını kontrol eder (bkz. [Güncellemeler nasıl doğrulanır](#güncellemeler-nasıl-doğrulanır)), uygulama kullanılmadan önce kurar ve yeniden başlatır. İnternet bağlantısı olmadığında Multron Download Manager normal şekilde başlar ve bir sonraki sefer tekrar dener; indirme üç kez başarısız olursa devam etmenize izin verir ve bir sonraki başlangıçta tekrar dener. Multron Download Manager çalışırken bulunan sürümler arka planda indirilir ve kapatıldığında kurulur. Geliştirme sürümleri asla kendilerini güncellemez.
 - Uygulama içinden uygulama ve yt-dlp için **Sürüm kontrolü** (Ayarlar → Güncellemeler ve Hakkında).
 - **Topluluk bağlantıları** — araç çubuğundaki (ayrıca *Ayarlar → Güncellemeler ve Hakkında* içindeki) Discord ve Patreon butonları [Multron Download Manager Discord sunucusunu](https://discord.gg/xXmQw3MUAR) ve [Patreon üzerindeki Multron Download Manager sayfasını](https://www.patreon.com/cw/multron) açar.
-- **Dil dosyalarından diller** — varsayılan olarak Windows / macOS / Linux dilini takip eder (çeviri olmadığında İngilizce) — İngilizce, Türkçe, Almanca, Fransızca, İspanyolca, İtalyanca, Portekizce (Brezilya), Rusça, Japonca, Çince (Basitleştirilmiş), Çince (Geleneksel) ve Korece; bir dil elle de seçilebilir. Çeviriler `frontend/src/lang/<code>.json` içinde yer alır (bkz. [Çeviri yapma](#çeviri-yapma)).
+- **Dil dosyalarından diller** — varsayılan olarak Windows / macOS / Linux dilini takip eder (çeviri olmadığında İngilizce) — 24 dil: İngilizce, Türkçe, Almanca, Fransızca, İspanyolca, İtalyanca, Portekizce (Brezilya), Rusça, Japonca, Çince (Basitleştirilmiş), Çince (Geleneksel), Korece, Lehçe, Felemenkçe, Ukraynaca, Çekçe, İsveççe, Rumence, Macarca, Yunanca, Endonezce, Vietnamca, Tayca ve Hintçe; bir dil elle de seçilebilir. Çeviriler programın yanındaki düz `lang/<code>.ini` dosyalarıdır, bu yüzden yeniden derlemeden dil eklenebilir (bkz. [Çeviri yapma](#çeviri-yapma)).
 
 ---
 
@@ -173,12 +189,12 @@ Sisteminiz için uygun dosyayı [en son sürümden](https://github.com/Multron-C
 | Debian 12 bookworm / LMDE 6 (apt) | `*_debian12_amd64.deb` (veya `*_debian12_arm64.deb`) | `sudo apt install ./<dosya>.deb` |
 | Fedora 43+ (dnf) | `*_fedora_x86_64.rpm` (veya `*_fedora_aarch64.rpm`) | `sudo dnf install ./<dosya>.rpm` |
 | openSUSE Leap 16 / Tumbleweed (zypper) | `*_opensuse_x86_64.rpm` (veya `*_opensuse_aarch64.rpm`) | `sudo zypper install --allow-unsigned-rpm ./<dosya>.rpm` |
-| Herhangi bir Linux | `*_amd64.AppImage` (veya `*_aarch64.AppImage`) | `chmod +x <dosya>.AppImage && ./<dosya>.AppImage` |
+| Ubuntu 22.04+ / Linux Mint 21+ / glibc 2.35+ olan her Linux | `*_amd64.AppImage` (veya `*_aarch64.AppImage`) | `chmod +x <dosya>.AppImage && ./<dosya>.AppImage` |
 | Tarayıcı eklentisi | `multron-browser-extension-chromium-v<sürüm>.zip` (Chrome, Edge, Brave, Opera, Vivaldi) veya `multron-browser-extension-firefox-v<sürüm>.zip` | Bkz. [Tarayıcı eklentisi](#tarayıcı-eklentisi). |
 
 Her sürüm, her dosyanın SHA-256 karmasını listeleyen imzalı bir `update.json` dosyasına sahiptir. Bu depodan `node scripts/verify-update.mjs update.json update.json.sig <dosya>` komutuyla bir indirmeyi kontrol edin veya `gh attestation verify <dosya> --repo Multron-Community/Multron-Download-Manager` komutuyla nerede derlendiğini doğrulayın (bkz. [Güncellemeler nasıl doğrulanır](#güncellemeler-nasıl-doğrulanır)).
 
-> **Linux:** her paket amaçlandığı dağıtım üzerinde derlenir. Düz `.deb` ve AppImage, Ubuntu 24.04 üzerinde derlenir ve glibc 2.39 veya daha yenisine ihtiyaç duyar (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). Debian 12 (bookworm) ve LMDE 6, Debian 12 üzerinde derlenen kendi `.deb` paketine sahiptir; Fedora, Fedora 43 üzerinde derlenen kendi `.rpm` paketine sahiptir ve openSUSE, Leap 16 üzerinde derlenen kendi `.rpm` paketine sahiptir (Tumbleweed üzerinde de çalışır). Otomatik güncellemeler her kurulumu kendi dağıtımı için derlenen pakette tutar. Ubuntu 22.04 veya Linux Mint 21 gibi eski sürümler desteklenmez.
+> **Linux:** her paket amaçlandığı dağıtım üzerinde derlenir. Düz `.deb`, Ubuntu 24.04 üzerinde derlenir ve glibc 2.39 veya daha yenisine ihtiyaç duyar (Ubuntu 24.04+, Linux Mint 22+, Debian 13+). AppImage ise Ubuntu 22.04 üzerinde derlenir, bu yüzden glibc 2.35 veya daha yenisinde çalışır: Ubuntu 22.04+, Linux Mint 21+ ve 2022 sonrası çoğu dağıtım. Debian 12 (bookworm) ve LMDE 6, Debian 12 üzerinde derlenen kendi `.deb` paketine sahiptir; Fedora, Fedora 43 üzerinde derlenen kendi `.rpm` paketine sahiptir ve openSUSE, Leap 16 üzerinde derlenen kendi `.rpm` paketine sahiptir (Tumbleweed üzerinde de çalışır). Otomatik güncellemeler her kurulumu kendi dağıtımı için derlenen pakette tutar. Ubuntu 22.04 veya Linux Mint 21 kullanıyorsanız AppImage'ı kullanın; bunlardan eski sürümler desteklenmez.
 
 > **macOS:** derlemeler henüz noter onayından (notarization) geçmemiştir. İlk seferinde uygulamaya sağ tıklayın → **Aç** seçeneğini kullanın veya `xattr -cr "/Applications/Multron Download Manager.app"` komutunu çalıştırın.
 
@@ -200,6 +216,7 @@ Her sürüm, her dosyanın SHA-256 karmasını listeleyen imzalı bir `update.js
 [![Scoop](https://img.shields.io/badge/Scoop-Windows-4B8BBE?style=flat-square&logo=scoop&logoColor=white)](https://github.com/Multron-Community/scoop-bucket)
 [![Chocolatey](https://img.shields.io/badge/Chocolatey-Windows-80B5E3?style=flat-square&logo=chocolatey&logoColor=white)](https://community.chocolatey.org/packages/multron-download-manager)
 [![Snap Store](https://img.shields.io/badge/Snap_Store-Linux-82BEA0?style=flat-square&logo=snapcraft&logoColor=white)](https://snapcraft.io/multron-download-manager)
+[![Flathub](https://img.shields.io/badge/Flathub-Linux-4A86CF?style=flat-square&logo=flathub&logoColor=white)](https://flathub.org/apps/io.github.Multron_Community.MultronDownloadManager)
 
 **macOS (Homebrew):**
 
@@ -228,13 +245,23 @@ scoop install multron/multron-download-manager
 choco install multron-download-manager
 ```
 
-**Linux (Snap):**
+**Linux (Snap)** — yakında:
 
 ```bash
 sudo snap install multron-download-manager
 ```
 
 [![Get it from the Snap Store](https://snapcraft.io/en/dark/install.svg)](https://snapcraft.io/multron-download-manager)
+
+**Linux (Flathub)** — yakında:
+
+```bash
+flatpak install flathub io.github.Multron_Community.MultronDownloadManager
+```
+
+[![Get it on Flathub](https://flathub.org/api/badge?locale=tr)](https://flathub.org/apps/io.github.Multron_Community.MultronDownloadManager)
+
+Snap ve Flatpak sürümlerinde güncellemeler uygulamanın kendisinden değil, Snap Store ve Flathub'dan gelir.
 
 ---
 
@@ -255,6 +282,8 @@ Eklenti (Chromium tabanlı tüm tarayıcılar — Chrome, Edge, Brave, Opera, Vi
 - **Dosya barındırma sayfalarında "Multron Download Manager" butonu** (Google Drive, MEGA, MediaFire, Dropbox, Pixeldrain).
 - **Uygulamadan yönetin** — *Ayarlar → Tarayıcı Entegrasyonu* kurulu tarayıcılarınızı (her biri bir *Eklenti kur* butonu ile) ve bağlı her eklentiyi gösterir. *Yeniden Kur* kurulum asistanını açar; *Tarayıcıdan kaldır* eklentinin kendini kaldırmasını sağlar (tarayıcı açıkken yarım dakika içinde); *Tamamen kaldır* her tarayıcıdan kaldırır, tüm bağlantıları unutur ve tekrar bir eklenti bağlayana kadar kapalı kalan Multron Download Manager'ın yerel mesajlaşma kaydını siler.
 - **Uygulama ile birlikte güncellenir** — tarayıcılar paketlenmemiş veya geçici bir eklentiyi dosyaları değiştiğinde yeniden yüklemez, bu nedenle eklenti her bağlandığında uygulamanın sürümünü kontrol eder ve uygulama daha yeniyse (sürüm başına bir kez) güncellenen klasörden kendini yeniden yükler. AppImage ve Flatpak tarayıcıları, Multron Download Manager her başladığında yenilenen eklentinin bir kopyasını kullanır.
+- **Listelediğiniz dosya türlerini devralmaz** — açılır penceredeki *Şu dosya türlerini devralma* (örneğin `pdf torrent`) bu indirmeleri tarayıcıya bırakır.
+- **24 dil** — açılır pencere, menüler, butonlar ve bildirimler uygulamanın dilini kullanır (uygulamadaki 24 dilin aynısı).
 - Multron'da **magnet bağlantılarını** açar.
 - Bağlam menüsü: *Bağlantıyı indir*, *Bağlantıdan video/ses indir*, *Bu medyayı indir*, *Bu sayfadaki videoyu indir*, *Bu sayfadaki tümünü indir*, *Seçilen bağlantıyı indir*.
 - Açılır pencere (Popup): bağlantı durumu, mevcut sayfa için hızlı kalite seçici, kaydırma derinliği ile *Tümünü indir…*, bağlantı yapıştırma kutusu ve seçenekler (minimum dosya boyutu, atlanacak alan adları, port).
@@ -267,7 +296,7 @@ Yan çubukta **Tarayıcı eklentisi** seçeneğine tıklayın (ilk başlangıçt
 2. **Hazırla ve aç** butonuna basın. Multron Download Manager kendisiyle birlikte kurulan eklenti klasörünü kullanır (güncellemeler boyunca aynı yol, her güncellemede yenilenir), tarayıcının eklentiler sayfasını açar ve klasör yolunu panoya kopyalar.
 3. Tarayıcıda:
    - **Chromium tarayıcılar:** **Geliştirici modunu** açın, **Paketlenmemiş öge yükle** butonuna tıklayın, yolu yapıştırın (`Ctrl+V` veya macOS'ta `⌘+Shift+G` ardından `⌘+V`) ve onaylayın — veya klasörü sayfanın üzerine sürükleyin.
-   - **Firefox:** **Geçici Eklenti Yükle…** butonuna tıklayın ve `manifest.json` dosyasının yolunu yapıştırın. Firefox kapandığında geçici eklentileri kaldırır; yeniden başlatmanın ardından asistanı tekrar çalıştırın.
+   - **Firefox:** **Geçici Eklenti Yükle…** butonuna tıklayın ve `manifest.json` dosyasının yolunu yapıştırın. Firefox kapandığında geçici eklentileri kaldırır. Eklentinin kalıcı olması için bunun yerine [son sürümdeki](https://github.com/Multron-Community/Multron-Download-Manager/releases/latest) imzalı `multron-browser-extension-firefox-v<sürüm>.xpi` dosyasını kurun: Firefox'ta açın (veya pencereye sürükleyin) ve **Ekle**'ye tıklayın. Mozilla tarafından imzalandığı için normal Firefox'ta da çalışır ve yeniden başlatmadan sonra da kalır.
 4. Eklenti kendiliğinden bağlanır — Multron'da **İzin ver** butonuna basın. Asistan bağlandığında gösterir.
 
 **Linux üzerinde Flatpak tarayıcıları** (Flathub: Chrome, Chromium, Ungoogled Chromium, Edge, Brave, Opera, Vivaldi, Yandex, Firefox, LibreWolf, Waterfox, Floorp ve Zen) da bulunur ve *(Flatpak)* olarak listelenir. Asistan bunları `flatpak run` ile açar ve eklentiyi korumalı alandaki (sandbox) tarayıcının her zaman okuyabileceği kendi klasörüne (`~/.var/app/<uygulama kimliği>/`) kopyalar. İndirmeler hemen çalışır, çünkü eklenti uygulamaya `127.0.0.1` üzerinden ulaşır. Eklentinin kapalıyken Multron Download Manager'ı da başlatmasına izin vermek için tarayıcının korumalı alanının dışındaki programları başlatma iznine ihtiyacı vardır; asistan komutu gösterir, örneğin `flatpak override --user --talk-name=org.freedesktop.Flatpak org.mozilla.firefox` ve tarayıcının korumalı alanını esnettiği için bunu bir kez kendiniz çalıştırırsınız.
@@ -333,6 +362,7 @@ cargo test --release --manifest-path src-tauri/Cargo.toml engine_network -- --ig
 - Besleme (Seeding): tamamlandıktan sonra beslemeye devam etme, bir paylaşım oranında ve/veya belirli bir dakika sonra durma, ardından duraklatma, kaldırma veya dosyalarla birlikte kaldırma; genel indirme/yükleme sınırları.
 - **Kuyruklama:** maksimum aktif indirme ve besleme torrenti; geri kalanlar bekler ve sırayla başlar (oklarla yeniden sıralayın).
 - **İndirirken oynat:** bir torrentteki video ve ses dosyaları doğrudan oynatıcınızda açılır, sarma desteğiyle sırayla akış yapılır (yerel, belirteç korumalı adres).
+- **Torrent arama:** kenar çubuğundaki *Ara* butonu açtığınız her sitede aynı anda arar ve sonuçları seeder, boyut, tarih veya ada göre sıralanabilen tek bir listede gösterir. Torrents-CSV ve Internet Archive yerleşiktir; *Site ekle*, RSS, Atom veya Torznab akışıyla yanıt veren ve arama sözcüklerinin yerinde `{query}` bulunan her adresi kabul eder (Jackett için örneğin `http://127.0.0.1:9117/api/v2.0/indexers/all/results/torznab/api?apikey=…&t=search&q={query}`). *İndir* yeni indirme penceresini açar, böylece klasörü ve dosyaları yine siz seçersiniz. Yalnızca indirme hakkınız olan dosyaları indirin.
 - Bir dosyadan veya klasörden **torrent oluşturma** (izleyiciler, parça boyutu), `.torrent` dosyasını kaydetme ve hemen beslemeye başlama.
 - **Yeniden kontrolü zorla** indirilen verileri tekrar doğrular; **.torrent dışa aktar** herhangi bir indirmenin torrent dosyasını kaydeder.
 - **İzleme klasörü:** bir klasöre kaydedilen `.torrent` dosyaları otomatik olarak eklenir.
@@ -362,8 +392,9 @@ Seçenekler penceresi, sol tarafta aranabilir bir ağaç yapısıyla klasik bir 
 
 | Bölüm | Ayarlayabileceğleriniz |
 | --- | --- |
-| Görünüm | Tema (sistem / koyu / açık), vurgu rengi, saydamlık efektleri, malzeme ve yoğunluk — canlı önizlemeli |
-| Başlangıç ve Kapatma | Dil, sistemle birlikte başlat (ifadeler Windows / macOS / Linux'u takip eder), simge durumunda başlat, tepside çalışmaya devam et, başlangıçta devam et, güncelleme kontrolü, bildirimler |
+| Görünüm | Tema (sistem / koyu / açık), vurgu rengi, saydamlık efektleri, malzeme ve yoğunluk, her tema için parlaklık — canlı önizlemeli |
+| Başlangıç ve Kapatma | Sistemle birlikte başlat (ifadeler Windows / macOS / Linux'u takip eder), simge durumunda başlat, tepside çalışmaya devam et, başlangıçta devam et, güncelleme kontrolü, bildirimler |
+| Dil | Uygulama dili (24 dil veya sistem dili), dil dosyaları, yeniden yükleme |
 | Dosyalar | Varsayılan klasör, kategori klasörlerine ayır |
 | Bağlantı | İndirme başına bağlantı (varsayılan 8, 64'e kadar), sıralı indirme, eşzamanlı indirmeler, yeniden denemeler, User-Agent |
 | Aktarım | Genel hız sınırı |
@@ -373,7 +404,7 @@ Seçenekler penceresi, sol tarafta aranabilir bir ağaç yapısıyla klasik bir 
 | Torrent | Dinleme portu, UPnP, uTP, DHT, LSD, eş sınırı (varsayılan 500) |
 | İzleyiciler · Besleme ve Sınırlar · Gizlilik · IP Filtreleri | Bkz. [Torrentler](#torrentler) |
 | Bileşenler | Torrent motorunu, medya motorunu, köprüyü, tarayıcıyı (scraper), UPnP, uTP, DHT, LSD ve IP filtresini açın veya kapatın |
-| Güvenlik | SmartScreen / Gatekeeper işareti, Multron Cloud taraması (test aşamasında): Kötü amaçlı yazılım tara butonu ve yükleme sınırı, dosya türleri ve yükleme sınırı ile otomatik tarama, sıkıştırılmış yüklemeler, hatırlanan parmak izleri ve bağlantı sayısı; indirilen programları çalıştırmadan önce sorma, eklenti onayı ve güvenilir eklentiler, TLS sertifika ilkesi, HTTPS → HTTP yönlendirme engelleme, saklanan çerezleri temizleme |
+| Güvenlik | Güvenlik düzeyi (Temel, Standart, Yüksek, Katı), SmartScreen / Gatekeeper işareti, Multron Cloud taraması (test aşamasında): Kötü amaçlı yazılım tara butonu ve yükleme sınırı, dosya türleri ve yükleme sınırı ile otomatik tarama, sıkıştırılmış yüklemeler, hatırlanan parmak izleri ve bağlantı sayısı; indirilen programları çalıştırmadan önce sorma, eklenti onayı ve güvenilir eklentiler, TLS sertifika ilkesi, HTTPS → HTTP yönlendirme engelleme, saklanan çerezleri temizleme |
 | Güncellemeler ve Hakkında | Zorunlu güncellemelerin nasıl çalıştığı, *İndir ve kur*, uygulama ve yt-dlp sürüm kontrolü |
 
 ---
@@ -433,7 +464,9 @@ Sürüm numaraları her bir parçayı 10'a kadar sayar ve bundan sonraki sürüm
 1. Değişikliklerinizi commit edin. Sürüm notlarını `release-notes/v<sürüm>.md` içinde yazın (isteğe bağlı) — iş akışı bunları GitHub sürümünün en üstüne, indirme tablosunun üzerine koyar. Bu dosya olmadan notları önceki sürümden bu yana yapılan commit'lerden ve pull request'lerden üretir. İş akışını yeniden çalıştırmak, hala taslak olan bir sürümün notlarını yeniler. `npm run release -- --dry-run` sıradaki sürümü yazdırır.
 2. `npm run release` — yukarıdaki kurala göre bir sonraki sürümü seçer (ilk sürüm `0.0.1`dir), `package.json`, `frontend/package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` ve `extension/manifest.json` içinde ayarlar, commit eder ve **yerel olarak** `v<sürüm>` etiketini oluşturur (hiçbir şey push edilmez). `npm run release -- 0.2.0` bunun yerine belirli bir sürümü yayınlar.
 3. Hazır olduğunuzda push edin: `git push origin HEAD --follow-tags`.
-4. **Release** iş akışı `main` dalına yapılan her push işleminde (ve `v*` etiketlerinde) çalışır. `src-tauri/tauri.conf.json` içindeki sürüm henüz yayınlanmamışsa derler ve yayınlar, aksi takdirde sürümü yükseltmek için bir bildirimle hemen durur. Dolayısıyla sürümü yükselten bir commit push etmek yeterlidir, etiket isteğe bağlıdır. **Actions → Release → Run workflow** mevcut sürümü elle derler: *draft* sürümü taslak olarak tutar, *pre-release* En Son (Latest) olarak işaretlemeden yayınlar. İş akışı her şeyi paralel olarak derler ve **tek bir** GitHub sürümüne ekler: Windows Inno Setup kurulum dosyası ve taşınabilir zip, macOS DMG'leri (Apple Silicon + Intel), Ubuntu 24.04 üzerinde derlenen Linux `.deb` ve `.AppImage` artı Debian 12 (`.deb`), Fedora 43 ve openSUSE Leap 16 (`.rpm`) üzerinde derlenen yerel paketler, tümü x86_64 + arm64 için, tarayıcı eklentisi zip dosyası, `SHA256SUMS.txt` ve imzalı `update.json`, ardından sürümü yayınlar. Yazılım indirme siteleri için PAD dosyası sürüme eklenmez: depodaki `multron-download-manager.xml` dosyasıdır (`[https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml](https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml)`). `npm run build:windows` mevcut sürüm için bunu yeniden yazar (`node scripts/pad.mjs` `dist/` içindeki bir kurulum dosyasından aynısını yapar); sürüm değişikliği ile birlikte commit edin.
+4. **Release** iş akışı `main` dalına yapılan her push işleminde (ve `v*` etiketlerinde) çalışır. `src-tauri/tauri.conf.json` içindeki sürüm henüz yayınlanmamışsa derler ve yayınlar, aksi takdirde sürümü yükseltmek için bir bildirimle hemen durur. Dolayısıyla sürümü yükselten bir commit push etmek yeterlidir, etiket isteğe bağlıdır. **Actions → Release → Run workflow** mevcut sürümü elle derler: *draft* sürümü taslak olarak tutar, *pre-release* En Son (Latest) olarak işaretlemeden yayınlar. İş akışı her şeyi paralel olarak derler ve **tek bir** GitHub sürümüne ekler: Windows Inno Setup kurulum dosyası ve taşınabilir zip, macOS DMG'leri (Apple Silicon + Intel), Ubuntu 24.04 üzerinde derlenen Linux `.deb` ve Ubuntu 22.04 üzerinde derlenen `.AppImage` artı Debian 12 (`.deb`), Fedora 43 ve openSUSE Leap 16 (`.rpm`) üzerinde derlenen yerel paketler, tümü x86_64 + arm64 için, tarayıcı eklentisi zip dosyası, `SHA256SUMS.txt` ve imzalı `update.json`, ardından sürümü yayınlar. Yazılım indirme siteleri için PAD dosyası sürüme eklenmez: depodaki `multron-download-manager.xml` dosyasıdır (`[https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml](https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml)`). `npm run build:windows` mevcut sürüm için bunu yeniden yazar (`node scripts/pad.mjs` `dist/` içindeki bir kurulum dosyasından aynısını yapar); sürüm değişikliği ile birlikte commit edin.
+
+5. **Snap ve Flatpak**, sürüm yayınlandıktan sonra onun `.deb` paketlerinden x86_64 ve arm64 için derlenir (`.github/workflows/snap.yml` ve `.github/workflows/flatpak.yml`; ikisi de **Actions** altından herhangi bir sürüm için elle de çalıştırılabilir). Snap (`snap/snapcraft.yaml`), **`SNAPCRAFT_STORE_CREDENTIALS`** gizli anahtarı tanımlıysa Snap Store'un stable kanalında yayınlanır; tanımlı değilse yalnızca iş akışı çıktısı olarak saklanır. Flatpak (`flatpak/io.github.Multron_Community.MultronDownloadManager.yml` ve yanındaki AppStream dosyası), iş akışı çıktısı olarak saklanan bir `.flatpak` paketi olarak derlenir ve `flatpak install --user <dosya>.flatpak` ile kurulabilir. Flathub uygulamaları kendisi derlediği için orada yayınlamak, bu manifesti bir kez [flathub/flathub](https://github.com/flathub/flathub) deposuna göndermek demektir; yerel `app.deb` kaynağı her mimari için sürümün `.deb` adresi ve SHA-256 değeriyle değiştirilir. Snap veya Flatpak içinde Multron Download Manager kendini güncellemez (bunu mağaza yapar), tarayıcı eklentisini tarayıcının görebileceği bir klasörden yükler ve kendisini `flatpak run` ya da `/snap/bin` üzerinden başlatan bir native messaging yardımcısı kaydeder.
 
 Kurulu kopyalar otomatik güncellemeler aracılığıyla yeni sürümü alır: her biri kendi platformu ve paket biçimi için dosyayı indirir ve yalnızca imzalı `update.json` ve dosyanın SHA-256 karması doğrulandığında kurar. Yayınlandıktan sonra iş akışı, her dosya için SHA-256 karmasıyla bulunan bir VirusTotal bağlantısı içeren bir tabloyu sürüm notlarına ekler.
 
@@ -475,8 +508,8 @@ Multron-Download-Manager/
 │   └── src/
 │       ├── components/         # Yan çubuk, Üst bilgi, DownloadItem, DetailsPane, TorrentTabs,
 │       │                       # NewTaskModal, SettingsView, StatusBar, İletişim Kutuları…
-│       ├── lang/               # Dil dosyaları: tr.json, de.json, ja.json … (İngilizce metinle anahtarlanmış)
 │       └── lib/                # API bağlamaları, store, i18n, tema motoru, biçimlendirme
+├── lang/                       # Dil dosyaları: en.ini, tr.ini, de.ini … (programın yanına kurulur)
 ├── extension/                  # Tarayıcı eklentisi (Manifest V3, Chrome + Firefox)
 ├── installer/windows/          # Inno Setup betiği
 ├── release-notes/              # Her GitHub sürümünde gösterilen notlar (v<sürüm>.md)
@@ -533,20 +566,27 @@ Multron-Download-Manager/
 
 ## Çeviri yapma
 
-Her dil, `frontend/src/lang/` içinde İngilizce metinle anahtarlanmış bir JSON dosyasıdır — Multron WinCleaner'ın `Lang/*.json` yapısıyla aynı düzen:
+Her dil, `lang` klasöründe bir `.ini` dosyasıdır — depoda `lang/`, kurulumdan sonra ise programın yanındaki `lang` klasörü (Windows'ta `C:\Program Files\Multron Download Manager\lang`, macOS ve Linux'ta programın kaynak klasörü). Satırlar İngilizce metinle anahtarlanır:
 
-```json
-{
-  "Pause all": "Tümünü duraklat",
-  "{count} peers": "{count} eş",
-  "status|Completed": "Tamamlandı"
-}
+```ini
+[language]
+code=tr
+name=Türkçe
+english=Turkish
+
+[strings]
+Pause all=Tümünü duraklat
+{count} peers={count} eş
+status|Completed=Tamamlandı
+0 \= no limit.=0 = sınır yok.
 ```
 
+- Dil eklemek için `en.ini` dosyasını kopyalayın, kopyaya dil kodunu ad olarak verin (örneğin `pl.ini`), `code` ve `name` değerlerini ayarlayın ve her `=` işaretinden sonraki metni çevirin. Ayarlar → Dil sayfasında **Yeniden yükle**'ye basın (veya uygulamayı yeniden başlatın), dil listede görünür — yeniden derlemek gerekmez.
 - `{name}` yer tutucuları uygulama tarafından doldurulur; bunları oldukları gibi tutun.
 - `context|Text` anahtarları, İngilizce'de aynı olan ancak diğer dillerde farklı olan kelimeleri ayırır (bir indirmenin *Completed* durumu ile *Completed* listesi).
-- Aynı dosyalar sistem tepsisi menüsünü ve bildirimleri de çevirir.
-- `npm run check:i18n` bir dil dosyasında eksik olan her dizeyi listeler (CI eksik dizelerde başarısız olur). `nl.json` gibi yeni bir dosya dil listesinde otomatik olarak görünür; sistem tepsisi menüsü için `src-tauri/src/i18n.rs` içindeki `FILES` dizisine ekleyin.
+- İngilizce metnin içindeki `=` işareti `\=` olarak yazılır; `\n` satır sonudur. `;` ile başlayan satırlar yorumdur. Boş bir çeviri İngilizceye döner.
+- Aynı dosyalar sistem tepsisi menüsünü, bildirimleri ve kategori klasör adlarını da çevirir.
+- `npm run check:i18n` bir dil dosyasında eksik olan her dizeyi listeler (CI eksik dizelerde başarısız olur).
 
 ---
 

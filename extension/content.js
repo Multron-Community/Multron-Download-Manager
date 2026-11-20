@@ -64,8 +64,59 @@
     return FILE_EXT.test(pathOf(u)) && !/\.pdf$/i.test(pathOf(u));
   }
 
+  let uiMessages = null;
+
+  function fill(text, subs) {
+    return subs.reduce((s, v, i) => s.split('$' + (i + 1)).join(String(v)), text);
+  }
+
+  function tr(text, ...subs) {
+    const id = text.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 120);
+    if (uiMessages) return fill(uiMessages[id] || text, subs);
+    let out = '';
+    try {
+      out = chrome.i18n.getMessage(id, subs.map(String));
+    } catch {
+      out = '';
+    }
+    return out || fill(text, subs);
+  }
+
+  const THEME_ATTR = 'data-multron-theme';
+  function applyTheme(setting) {
+    const dark = setting === 'dark' || (setting !== 'light' && !window.matchMedia?.('(prefers-color-scheme: light)').matches);
+    document.documentElement.setAttribute(THEME_ATTR, dark ? 'dark' : 'light');
+  }
+  chrome.storage.local.get({ uiTheme: 'system' }).then(({ uiTheme }) => applyTheme(uiTheme)).catch(() => applyTheme('system'));
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.uiTheme) applyTheme(changes.uiTheme.newValue);
+  });
+
+  chrome.storage.local.get({ uiMessages: null }).then(({ uiMessages: m }) => {
+    if (m && typeof m === 'object') {
+      uiMessages = m;
+      relabelQualities();
+    }
+  }).catch(() => {});
+  chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'local' && changes.uiMessages?.newValue) {
+      uiMessages = changes.uiMessages.newValue;
+      relabelQualities();
+    }
+  });
+
+  function relabelQualities() {
+    QUALITIES[0][1] = tr('Best quality');
+    for (const q of QUALITIES) {
+      const m = q[0].match(/^audio-(.+)$/);
+      if (m) q[1] = tr('Audio ($1)', AUDIO_NAMES[m[1]] || m[1].toUpperCase());
+    }
+  }
+
+  const AUDIO_NAMES = { mp3: 'MP3', m4a: 'M4A', aac: 'AAC', opus: 'Opus', vorbis: 'OGG Vorbis', flac: 'FLAC', wav: 'WAV', alac: 'ALAC' };
+
   const QUALITIES = [
-    ['best', 'Best quality'],
+    ['best', tr('Best quality')],
     ['6480', '12K'],
     ['4320', '8K'],
     ['2880', '5K'],
@@ -77,14 +128,14 @@
     ['360', '360p'],
     ['240', '240p'],
     ['144', '144p'],
-    ['audio-mp3', 'Audio (MP3)'],
-    ['audio-m4a', 'Audio (M4A)'],
-    ['audio-aac', 'Audio (AAC)'],
-    ['audio-opus', 'Audio (Opus)'],
-    ['audio-vorbis', 'Audio (OGG Vorbis)'],
-    ['audio-flac', 'Audio (FLAC)'],
-    ['audio-wav', 'Audio (WAV)'],
-    ['audio-alac', 'Audio (ALAC)']
+    ['audio-mp3', tr('Audio ($1)', 'MP3')],
+    ['audio-m4a', tr('Audio ($1)', 'M4A')],
+    ['audio-aac', tr('Audio ($1)', 'AAC')],
+    ['audio-opus', tr('Audio ($1)', 'Opus')],
+    ['audio-vorbis', tr('Audio ($1)', 'OGG Vorbis')],
+    ['audio-flac', tr('Audio ($1)', 'FLAC')],
+    ['audio-wav', tr('Audio ($1)', 'WAV')],
+    ['audio-alac', tr('Audio ($1)', 'ALAC')]
   ];
 
   function meta(name) {
@@ -104,7 +155,7 @@
 
   async function send(payload) {
     const ok = await chrome.runtime.sendMessage({ type: 'download', payload });
-    toast(ok ? 'Sent to Multron Download Manager' : 'Multron Download Manager did not accept the download', !!ok);
+    toast(ok ? tr('Sent to Multron Download Manager') : tr('Multron Download Manager did not accept the download'), !!ok);
   }
 
   const REDDIT_PLAYER = 'shreddit-player, shreddit-player-2';
@@ -444,7 +495,7 @@
     '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12m0 0l-5-5m5 5l5-5M5 20h14"/></svg>';
 
   const FORMATS = [
-    ['default', 'Default'],
+    ['default', tr('Default')],
     ['mp4', 'MP4'],
     ['mp4-h264', 'MP4 H.264'],
     ['mkv', 'MKV'],
@@ -455,6 +506,7 @@
   ];
   let videoFormat = 'default';
   const formatPickers = new Set();
+  const qualityShapers = new Set();
   chrome.storage.local
     .get('videoFormat')
     .then((v) => {
@@ -472,10 +524,10 @@
       chip.textContent = label;
       chip.title =
         id === 'default'
-          ? 'Use the video format set in Multron Download Manager'
+          ? tr('Use the video format set in Multron Download Manager')
           : id === 'mp4-h264'
-            ? 'MP4 with H.264 and AAC: plays everywhere, also in WhatsApp and on older phones and TVs (up to 1080p on YouTube)'
-            : `Save videos as ${label}`;
+            ? tr('MP4 with H.264 and AAC: plays everywhere, also in WhatsApp and on older phones and TVs (up to 1080p on YouTube)')
+            : tr('Save videos as $1', label);
       chip.addEventListener('click', (e) => {
         e.preventDefault();
         e.stopPropagation();
@@ -514,6 +566,11 @@
     return (s.exact ? '' : '~') + text;
   }
 
+  let onlyAvailable = true;
+  let siteOptions = true;
+  const AUDIO_SITES = ['soundcloud.com', 'bandcamp.com', 'mixcloud.com', 'audiomack.com'];
+  const audioSite = () => AUDIO_SITES.some((d) => location.hostname === d || location.hostname.endsWith('.' + d));
+
   function qualityButton(label, onPick, itemOf) {
     const wrap = document.createElement('div');
     const main = document.createElement('button');
@@ -525,9 +582,26 @@
     status.className = 'multron-menu-status';
     status.hidden = true;
     menu.appendChild(status);
-    menu.appendChild(formatRow());
+    const formats = formatRow();
+    menu.appendChild(formats);
     const sizeCells = new Map();
+    const rows = new Map();
     let sizesFor = null;
+    let lastInfo = null;
+    const shape = (info) => {
+      lastInfo = info;
+      const audio = siteOptions && (info?.audioOnly === true || audioSite());
+      const heights = onlyAvailable && Array.isArray(info?.heights) ? info.heights.filter((h) => h > 0) : [];
+      const top = heights.length ? Math.max(...heights) : 0;
+      formats.hidden = audio;
+      for (const [id, row] of rows) {
+        const height = /^\d+$/.test(id) ? Number(id) : 0;
+        const video = id === 'best' || height > 0;
+        row.hidden = (audio && video) || (top > 0 && height > top);
+        if (id === 'best') row.firstChild.textContent = top && !audio ? `${tr('Best quality')} (${top}p)` : tr('Best quality');
+      }
+    };
+    qualityShapers.add(() => shape(lastInfo));
     const showStatus = (text, busy) => {
       status.hidden = !text;
       status.classList.toggle('busy', !!busy);
@@ -544,22 +618,24 @@
       const url = item?.kind === 'media' ? item.url : null;
       if (!url || sizesFor === url) return;
       sizesFor = url;
-      showStatus('Checking sizes…', true);
+      showStatus(tr('Checking sizes…'), true);
       for (const cell of sizeCells.values()) {
         cell.textContent = '';
         cell.classList.add('loading');
       }
       chrome.runtime
         .sendMessage({ type: 'sizes', url })
-        .then((sizes) => {
+        .then((info) => {
           if (sizesFor !== url) return;
+          const sizes = info && info.sizes ? info.sizes : info;
+          shape(info && info.sizes ? info : null);
           fill(sizes);
-          showStatus(sizes ? '' : 'Sizes are not available for this video', false);
+          showStatus(sizes ? '' : tr('Sizes are not available for this video'), false);
           if (!sizes) sizesFor = null;
         })
         .catch(() => {
           fill(null);
-          showStatus('Sizes are not available for this video', false);
+          showStatus(tr('Sizes are not available for this video'), false);
           sizesFor = null;
         });
     };
@@ -570,6 +646,7 @@
       const size = document.createElement('span');
       size.className = 'multron-size';
       sizeCells.set(id, size);
+      rows.set(id, item);
       item.append(name, size);
       item.addEventListener('click', (e) => {
         e.preventDefault();
@@ -579,6 +656,7 @@
       });
       menu.appendChild(item);
     }
+    shape(null);
     main.addEventListener('click', (e) => {
       e.preventDefault();
       e.stopPropagation();
@@ -595,8 +673,8 @@
     const close = document.createElement('button');
     close.className = 'multron-close';
     close.type = 'button';
-    close.title = 'Hide on this page';
-    close.setAttribute('aria-label', 'Hide on this page');
+    close.title = tr('Hide on this page');
+    close.setAttribute('aria-label', tr('Hide on this page'));
     close.textContent = '×';
     close.addEventListener('click', (e) => {
       e.preventDefault();
@@ -634,7 +712,7 @@
     if (!fab) return;
     const name = fabKind === 'media' ? resolveName(videoItem(document.body)) : resolveName({ url: location.href }, 'file');
     const label = fab.querySelector('.multron-btn span');
-    const wanted = `Download: ${name}`;
+    const wanted = tr('Download: $1', name);
     if (label && label.textContent !== wanted) {
       label.textContent = wanted;
       label.parentElement.title = name;
@@ -772,20 +850,20 @@
     if (!overlay) {
       overlay = document.createElement('div');
       overlay.className = 'multron-video';
-      overlay.appendChild(qualityButton('Download video', (q) => overlayTarget && sendItem(videoItem(overlayTarget), q), () => overlayTarget && videoItem(overlayTarget)));
+      overlay.appendChild(qualityButton(tr('Download video'), (q) => overlayTarget && sendItem(videoItem(overlayTarget), q), () => overlayTarget && videoItem(overlayTarget)));
       overlay.appendChild(closeButton());
       document.documentElement.appendChild(overlay);
       const handle = overlay.querySelector('.multron-btn');
-      handle.title = 'Drag to move · double-click to put it back';
+      handle.title = tr('Drag to move · double-click to put it back');
       makeDraggable(handle);
     }
     overlayTarget = target;
     const label = overlay.querySelector('.multron-btn span');
     const name = resolveName(videoItem(target));
-    const wanted = `Download: ${name}`;
+    const wanted = tr('Download: $1', name);
     if (label && label.textContent !== wanted) {
       label.textContent = wanted;
-      label.parentElement.title = `${name}\nDrag to move · double-click to put it back`;
+      label.parentElement.title = `${name}\n${tr('Drag to move · double-click to put it back')}`;
     }
     placeOverlay();
   }
@@ -829,13 +907,13 @@
       mini.className = 'multron-mini';
       mini.appendChild(qualityButton('', (q) => miniTarget && sendItem(videoItem(miniTarget), q), () => miniTarget && videoItem(miniTarget)));
       const button = mini.querySelector('.multron-btn');
-      button.title = 'Download with Multron Download Manager';
-      button.setAttribute('aria-label', 'Download with Multron Download Manager');
+      button.title = tr('Download with Multron Download Manager');
+      button.setAttribute('aria-label', tr('Download with Multron Download Manager'));
       const close = document.createElement('button');
       close.className = 'multron-mini-close';
       close.type = 'button';
-      close.title = 'Hide in fullscreen on this page (turn it off everywhere in Multron Download Manager: Settings → Browser Integration)';
-      close.setAttribute('aria-label', 'Hide in fullscreen on this page');
+      close.title = tr('Hide in fullscreen on this page (turn it off everywhere in Multron Download Manager: Settings → Browser Integration)');
+      close.setAttribute('aria-label', tr('Hide in fullscreen on this page'));
       close.textContent = '×';
       close.addEventListener('click', (e) => {
         e.preventDefault();
@@ -917,7 +995,7 @@
     if (on('reddit.com')) {
       for (const post of document.querySelectorAll('shreddit-post')) {
         if (post.hasAttribute('promoted') || post.closest('shreddit-ad-post')) continue;
-        const title = post.getAttribute('post-title') || 'Reddit post';
+        const title = post.getAttribute('post-title') || tr('Reddit post');
         const type = post.getAttribute('post-type');
         const player = redditPlayerItem(post.querySelector(REDDIT_PLAYER));
         if (player) add(player);
@@ -1000,7 +1078,7 @@
     if (on('facebook.com')) {
       for (const a of document.querySelectorAll('a[href*="/videos/"], a[href*="/reel/"], a[href*="/watch/?v="]')) {
         const u = absolute(a.getAttribute('href'));
-        if (u) add({ url: u.href.split('&')[0], kind: 'media', mediaType: 'video', name: text(a) || 'Facebook video' });
+        if (u) add({ url: u.href.split('&')[0], kind: 'media', mediaType: 'video', name: text(a) || tr('Facebook video') });
       }
     }
   }
@@ -1080,11 +1158,17 @@
   chrome.runtime.sendMessage({ type: 'settings' }).then((s) => {
     enabled = s?.mediaButton !== false;
     fullscreenEnabled = s?.fullscreenButton !== false;
+    onlyAvailable = s?.availableQualities !== false;
+    siteOptions = s?.siteOptions !== false;
+    qualityShapers.forEach((f) => f());
     refresh();
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area !== 'local') return;
       if (changes.mediaButton) enabled = changes.mediaButton.newValue !== false;
       if (changes.fullscreenButton) fullscreenEnabled = changes.fullscreenButton.newValue !== false;
+      if (changes.availableQualities) onlyAvailable = changes.availableQualities.newValue !== false;
+      if (changes.siteOptions) siteOptions = changes.siteOptions.newValue !== false;
+      if (changes.availableQualities || changes.siteOptions) qualityShapers.forEach((f) => f());
       if (changes.mediaButton || changes.fullscreenButton) refresh();
     });
     setInterval(refresh, 1000);
@@ -1100,6 +1184,14 @@
           if (e.button !== 0 || e.defaultPrevented || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
           const a = e.target instanceof Element ? e.target.closest('a[href]') : null;
           if (!a || !isFileLink(a)) return;
+          const name = a.getAttribute('download') || pathOf(absolute(a.href) || a.href);
+          const dot = String(name).lastIndexOf('.');
+          const type = dot > 0 ? String(name).slice(dot + 1).toLowerCase() : '';
+          const skipTypes = String(s?.skipExtensions || '')
+            .split(/[\s,]+/)
+            .map((x) => x.trim().replace(/^\./, '').toLowerCase())
+            .filter(Boolean);
+          if (type && skipTypes.includes(type)) return;
           e.preventDefault();
           e.stopPropagation();
           chrome.runtime
@@ -1107,7 +1199,7 @@
               type: 'link-download',
               payload: { url: a.href, kind: 'auto', filename: a.getAttribute('download') || null, pageTitle: document.title }
             })
-            .then((r) => toast(r === 'browser' ? 'Multron Download Manager is not running: downloading in the browser' : r ? 'Sent to Multron Download Manager' : 'Multron Download Manager did not accept the download', !!r));
+            .then((r) => toast(r === 'browser' ? tr('Multron Download Manager is not running: downloading in the browser') : r ? tr('Sent to Multron Download Manager') : tr('Multron Download Manager did not accept the download'), !!r));
         },
         true
       );

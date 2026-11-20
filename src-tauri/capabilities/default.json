@@ -2,7 +2,11 @@
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
   "description": "Permissions for the main window",
-  "windows": ["main", "notice"],
+  "windows": [
+    "main",
+    "notice",
+    "ask-*"
+  ],
   "permissions": [
     "core:default",
     "core:window:allow-show",
@@ -12,6 +16,10 @@
     "dialog:allow-open",
     "opener:default",
     "notification:default",
-    "autostart:default"
+    "autostart:default",
+    "core:window:allow-close",
+    "core:window:allow-destroy",
+    "core:window:allow-set-size",
+    "core:window:allow-set-always-on-top"
   ]
 }

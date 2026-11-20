@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager не запущено, і його не вдалося запустити. Запустіть програму й спробуйте ще раз."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Схваліть цей браузер у вікні Multron Download Manager, а потім спробуйте ще раз."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: запит на під'єднання"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "Програма відхилила завантаження (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "На цій сторінці не знайдено нічого для завантаження."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager не запущено. Запустіть програму й спробуйте ще раз."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Завантажити посилання через Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Завантажити відео/аудіо з посилання через Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Завантажити це медіа через Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Завантажити відео з цієї сторінки через Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Завантажити все з цієї сторінки через Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Завантажити виділене посилання через Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "Виділене не є посиланням."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Схваліть цей браузер у вікні Multron Download Manager. Завантаження зачекає до того часу."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Надіслано в Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager не прийняв завантаження"
+  },
+  "Save_videos_as_1": {
+    "message": "Зберігати відео як $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Використовувати формат відео, заданий у Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 з H.264 і AAC: відтворюється всюди, також у WhatsApp і на старих телефонах і телевізорах (до 1080p на YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Перевірка розмірів…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Розміри недоступні для цього відео"
+  },
+  "Hide_on_this_page": {
+    "message": "Сховати на цій сторінці"
+  },
+  "Download_1": {
+    "message": "Завантажити: $1"
+  },
+  "Download_video": {
+    "message": "Завантажити відео"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Перетягніть, щоб перемістити · двічі клацніть, щоб повернути"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Завантажити через Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Сховати на весь екран на цій сторінці (вимкнути всюди можна в Multron Download Manager: Налаштування → Інтеграція з браузером)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Сховати на весь екран на цій сторінці"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager не запущено: завантаження в браузері"
+  },
+  "Best_quality": {
+    "message": "Найкраща якість"
+  },
+  "Audio_1": {
+    "message": "Аудіо ($1)"
+  },
+  "Default": {
+    "message": "Типово"
+  },
+  "Reddit_post": {
+    "message": "Допис Reddit"
+  },
+  "Facebook_video": {
+    "message": "Відео Facebook"
+  },
+  "App_not_running": {
+    "message": "Програму не запущено"
+  },
+  "Not_approved_v_1": {
+    "message": "Не схвалено · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Під'єднано · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Розміри недоступні для цієї сторінки"
+  },
+  "Sending": {
+    "message": "Надсилання…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager не прийняв — перевірте програму."
+  },
+  "This_page": {
+    "message": "Ця сторінка"
+  },
+  "File_on_this_page": {
+    "message": "Файл на цій сторінці"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Прокручування й збирання…"
+  },
+  "Collecting": {
+    "message": "Збирання…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "Знайдено елементів: $1. Виберіть їх у Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Щось пішло не так."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Введіть посилання http(s) або magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Доступ надано. Перезавантажте сторінку, щоб побачити кнопку."
+  },
+  "Access_was_not_granted": {
+    "message": "Доступ не надано."
+  },
+  "Connected": {
+    "message": "Під'єднано ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Схваліть запит у вікні Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Перевірка…"
+  },
+  "Connect": {
+    "message": "Під'єднати"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager потребує доступу до сайтів, щоб показувати кнопку Завантажити відео й перехоплювати завантаження."
+  },
+  "Allow_on_all_sites": {
+    "message": "Дозволити на всіх сайтах"
+  },
+  "Download": {
+    "message": "Завантажити"
+  },
+  "Video_format": {
+    "message": "Формат відео"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, відтворюється всюди)"
+  },
+  "Everything_on_this_page": {
+    "message": "Усе на цій сторінці"
+  },
+  "Visible_part": {
+    "message": "Видима частина"
+  },
+  "Scroll_5_screens": {
+    "message": "Прокрутити 5 екранів"
+  },
+  "Scroll_20_screens": {
+    "message": "Прокрутити 20 екранів"
+  },
+  "Scroll_60_screens": {
+    "message": "Прокрутити 60 екранів"
+  },
+  "Download_all": {
+    "message": "Завантажити все…"
+  },
+  "Link_or_magnet": {
+    "message": "Посилання або magnet"
+  },
+  "Send": {
+    "message": "Надіслати"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Перехоплювати завантаження браузера"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Відкривати magnet-посилання в Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Показувати кнопку завантаження на сторінках з відео"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Надсилати куки сайту (приватні файли / лише після входу)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Ігнорувати файли, менші за (КБ)"
+  },
+  "Never_take_over_from": {
+    "message": "Ніколи не перехоплювати з"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Ніколи не перехоплювати ці типи файлів"
+  },
+  "App_port": {
+    "message": "Порт програми"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Нескінченні стрічки (Reddit, Instagram, X…) довантажуються під час прокручування"
+  },
+  "https_or_magnet": {
+    "message": "https://… або magnet:?…"
+  },
+  "extDescription": {
+    "message": "Надсилайте завантаження, відео (YouTube, Reddit, Instagram, X, TikTok…), файли Google Drive / MEGA і торенти в Multron Download Manager."
+  }
+}

@@ -25,7 +25,7 @@
   let torrent = $derived(app.stats.torrent);
 </script>
 
-<footer class="h-[26px] px-3 border-t border-line bg-panel flex items-center justify-between text-[11px] text-muted flex-shrink-0 gap-4">
+<footer class="status-bar h-[26px] px-3 border-t border-line flex items-center justify-between text-[11px] text-muted flex-shrink-0 gap-4">
   <div class="flex items-center gap-4 min-w-0">
     <span class="flex items-center gap-1" title={t('Browser extension bridge')}>
       <span class="w-[7px] h-[7px] rounded-full {bridge?.running ? 'bg-ok' : 'bg-bad'}"></span>
@@ -73,6 +73,39 @@
     >
       <Icon name="turtle" size={13} />
     </button>
+    {#if app.settings?.torEnabled}
+      <button
+        type="button"
+        class="flex items-center gap-1 cursor-pointer rounded-full px-1.5 py-[1px] text-[#b18cff] bg-[#7d4cdb]/15 hover:bg-[#7d4cdb]/25 transition-colors"
+        title={t('Downloads go through Tor')}
+        onclick={() => { app.view = 'settings'; app.settingsSection = 'anonymity'; }}
+      >
+        <Icon name="eye" size={12} stroke={2.4} />
+        <span class="text-[11px] font-medium">Tor</span>
+      </button>
+    {/if}
+    {#if app.captchas.length}
+      <button
+        type="button"
+        class="flex items-center gap-1 cursor-pointer rounded-full px-1.5 py-[1px] text-warn bg-warn/10 hover:bg-warn/20 transition-colors"
+        title={t('Sites that wait for you to solve a CAPTCHA')}
+        onclick={() => (app.captchaPanel = !app.captchaPanel)}
+      >
+        <Icon name="lock" size={12} stroke={2.4} />
+        <span class="text-[11px] font-medium">{app.captchas.length === 1 ? t('1 CAPTCHA waiting') : t('{count} CAPTCHAs waiting', { count: app.captchas.length })}</span>
+      </button>
+    {/if}
+    {#if app.settings?.cloudScan && app.settings?.cloudScanAccepted}
+      <button
+        type="button"
+        class="flex items-center gap-1 cursor-pointer rounded-full px-1.5 py-[1px] text-ok bg-ok/10 hover:bg-ok/20 transition-colors"
+        title={t('Protected: Multron Cloud scans new downloads automatically')}
+        onclick={() => { app.view = 'settings'; app.settingsSection = 'cloud'; }}
+      >
+        <Icon name="shield" size={13} stroke={2.4} />
+        <span class="text-[11px] font-medium">{t('Protected')}</span>
+      </button>
+    {/if}
     <span class="flex items-center gap-1 text-accent"><Icon name="down" size={11} />{speed(app.stats.downloadSpeed)}</span>
     <span class="flex items-center gap-1 text-seed"><Icon name="up" size={11} />{speed(app.stats.uploadSpeed)}</span>
     <span class="text-dim">v{app.version}</span>

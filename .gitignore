@@ -8,9 +8,14 @@ desktop.ini
 /dist/
 /extension-build/
 /extension/build.json
+/flatpak/app.deb
+/flatpak/shared-modules/
+/flatpak/.flatpak-builder/
+/flatpak/build-dir/
 src-tauri/target/
 src-tauri/gen/schemas/
 frontend/dist/
+frontend/.build-out/
 *.exe
 *.exe~
 *.dll

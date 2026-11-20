@@ -93,6 +93,11 @@ pub enum Pending {
     OpenTorrent {
         path: String,
     },
+    CategoryLanguage {
+        from: String,
+        to: String,
+        folders: Vec<(String, String)>,
+    },
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -161,6 +166,8 @@ pub struct Manager {
     torrent_ready: RwLock<Option<Arc<TorrentEngine>>>,
     torrent_error: Mutex<Option<String>>,
     pending: Mutex<Vec<Pending>>,
+    pub protection: crate::protection::Protection,
+    pub history: crate::extras::History,
     pub uninstall_requests: Mutex<std::collections::HashSet<String>>,
     pub pair_asked: Mutex<std::collections::HashSet<String>>,
     pub cloud_reports: Mutex<std::collections::HashMap<String, automation::CloudReport>>,
@@ -194,8 +201,38 @@ fn redirect_policy(block_insecure: bool) -> reqwest::redirect::Policy {
     })
 }
 
-fn build_engine_client(accept_invalid: bool, block_insecure: bool) -> reqwest::Client {
-    reqwest::Client::builder()
+fn system_download_dir(app: &AppHandle) -> String {
+    app.path()
+        .download_dir()
+        .or_else(|_| app.path().home_dir().map(|h| h.join("Downloads")))
+        .map(|p| p.to_string_lossy().into_owned())
+        .unwrap_or_default()
+}
+
+fn fill_download_dir(app: &AppHandle, s: &mut Settings) {
+    let dir = s.download_dir.trim();
+    if dir.is_empty() || !Path::new(dir).is_absolute() {
+        s.download_dir = system_download_dir(app);
+    }
+    let torrent = s.torrent_dir.trim();
+    if !torrent.is_empty() && !Path::new(torrent).is_absolute() {
+        s.torrent_dir.clear();
+    }
+}
+
+fn build_engine_client(s: &Settings) -> reqwest::Client {
+    let accept_invalid = s.tls_accept_invalid_certs;
+    let block_insecure = s.block_insecure_redirects;
+    let mut builder = reqwest::Client::builder();
+    if s.tor_enabled {
+        match reqwest::Proxy::all(s.tor_proxy.trim()) {
+            Ok(p) => builder = builder.proxy(p),
+            Err(e) => tracing::warn!("the Tor proxy address is not valid: {e}"),
+        }
+    } else {
+        builder = builder.no_proxy();
+    }
+    builder
         .http1_only()
         .user_agent(crate::settings::DEFAULT_USER_AGENT)
         .tcp_nodelay(true)
@@ -223,6 +260,50 @@ fn build_api_client() -> reqwest::Client {
         .min_tls_version(reqwest::tls::Version::TLS_1_2)
         .build()
         .expect("api client")
+}
+
+const CATEGORIES: [Category; 7] = [
+    Category::Video,
+    Category::Music,
+    Category::Documents,
+    Category::Archives,
+    Category::Programs,
+    Category::Images,
+    Category::Other,
+];
+
+fn category_key(c: Category) -> &'static str {
+    match c {
+        Category::Video => "video",
+        Category::Music => "music",
+        Category::Documents => "documents",
+        Category::Archives => "archives",
+        Category::Programs => "programs",
+        Category::Images => "images",
+        Category::Other => "other",
+    }
+}
+
+fn safe_folder(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| match c {
+            '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|' => '_',
+            c if c.is_control() => '_',
+            c => c,
+        })
+        .collect();
+    let cleaned = cleaned.trim().trim_end_matches('.').to_string();
+    if cleaned.is_empty() {
+        "Other".into()
+    } else {
+        cleaned
+    }
+}
+
+pub fn category_folder_name(c: Category, lang: &str) -> String {
+    let lang = if lang.is_empty() { "en" } else { lang };
+    safe_folder(&crate::i18n::text(lang, category_dir(c)))
 }
 
 fn category_dir(c: Category) -> &'static str {
@@ -288,14 +369,7 @@ impl Manager {
             data,
         };
         let mut settings = Settings::load(&paths.settings);
-        if settings.download_dir.trim().is_empty() {
-            settings.download_dir = app
-                .path()
-                .download_dir()
-                .or_else(|_| app.path().home_dir().map(|h| h.join("Downloads")))
-                .map(|p| p.to_string_lossy().into_owned())
-                .unwrap_or_default();
-        }
+        fill_download_dir(&app, &mut settings);
         let _ = settings.save(&paths.settings);
         {
             let data = paths.data.clone();
@@ -303,46 +377,46 @@ impl Manager {
             std::thread::spawn(move || crate::nativehost::sync(&data, &trusted));
         }
 
-        let mut entries: Vec<Entry> = std::fs::read(&paths.db)
-            .ok()
-            .and_then(|b| serde_json::from_slice::<Vec<DownloadRecord>>(&b).ok())
-            .unwrap_or_default()
-            .into_iter()
-            .map(|mut rec| {
-                if rec.status == Status::Active && rec.kind != Kind::Torrent {
-                    rec.status = if settings.resume_on_startup {
-                        Status::Queued
-                    } else {
-                        Status::Paused
-                    };
-                }
-                if rec.hash_state == HashState::Verifying {
-                    rec.hash_state = HashState::Pending;
-                }
-                if rec.cloud_state == "scanning" {
-                    crate::manager::automation::end_cloud(&mut rec, None);
-                }
-                if rec.queue_order == 0 {
-                    rec.queue_order = rec.created_at;
-                }
-                Entry {
-                    rec,
-                    live: Live::default(),
-                    run: None,
-                }
-            })
-            .collect();
+        let mut entries: Vec<Entry> =
+            crate::util::read_json_or_keep::<Vec<DownloadRecord>>(&paths.db)
+                .unwrap_or_default()
+                .into_iter()
+                .map(|mut rec| {
+                    if rec.status == Status::Active && rec.kind != Kind::Torrent {
+                        rec.status = if settings.resume_on_startup {
+                            Status::Queued
+                        } else {
+                            Status::Paused
+                        };
+                    }
+                    if rec.hash_state == HashState::Verifying {
+                        rec.hash_state = HashState::Pending;
+                    }
+                    if rec.cloud_state == "scanning" {
+                        crate::manager::automation::end_cloud(&mut rec, None);
+                    }
+                    if rec.queue_order == 0 {
+                        rec.queue_order = rec.created_at;
+                    }
+                    Entry {
+                        rec,
+                        live: Live::default(),
+                        run: None,
+                    }
+                })
+                .collect();
         entries.sort_by_key(|e| std::cmp::Reverse(e.rec.created_at));
 
         let api_client = build_api_client();
         let tools = Tools::new(paths.tools.clone(), api_client.clone());
+        let protection = crate::protection::Protection::open(&paths.data);
+        let history = crate::extras::History::open(&paths.data);
+        crate::media::set_proxy(settings.tor_enabled.then(|| settings.tor_proxy.clone()));
+        protection.prune(settings.cloud_history_days);
         Ok(Arc::new(Self {
             app,
             global_limit: Arc::new(Limiter::new(settings.speed_limit * 1024)),
-            http: RwLock::new(build_engine_client(
-                settings.tls_accept_invalid_certs,
-                settings.block_insecure_redirects,
-            )),
+            http: RwLock::new(build_engine_client(&settings)),
             api_client,
             tools,
             paths,
@@ -352,6 +426,8 @@ impl Manager {
             torrent_ready: RwLock::new(None),
             torrent_error: Mutex::new(None),
             pending: Mutex::new(Vec::new()),
+            protection,
+            history,
             uninstall_requests: Mutex::new(std::collections::HashSet::new()),
             pair_asked: Mutex::new(std::collections::HashSet::new()),
             cloud_reports: Mutex::new(std::collections::HashMap::new()),
@@ -371,7 +447,9 @@ impl Manager {
     }
 
     pub async fn save_settings(self: &Arc<Self>, new: Settings) -> Result<Settings> {
-        let new = new.normalized();
+        crate::wallpaper::cleanup(&self.paths.data, &new.background_image);
+        let mut new = new.normalized();
+        fill_download_dir(&self.app, &mut new);
         let old = self.settings();
         new.save(&self.paths.settings)?;
         *self.settings.write() = new.clone();
@@ -382,10 +460,12 @@ impl Manager {
         }
         if old.tls_accept_invalid_certs != new.tls_accept_invalid_certs
             || old.block_insecure_redirects != new.block_insecure_redirects
+            || old.tor_enabled != new.tor_enabled
+            || old.tor_proxy != new.tor_proxy
         {
-            *self.http.write() =
-                build_engine_client(new.tls_accept_invalid_certs, new.block_insecure_redirects);
+            *self.http.write() = build_engine_client(&new);
         }
+        crate::media::set_proxy(new.tor_enabled.then(|| new.tor_proxy.clone()));
         if old.launch_at_startup != new.launch_at_startup {
             use tauri_plugin_autostart::ManagerExt;
             let auto = self.app.autolaunch();
@@ -402,6 +482,9 @@ impl Manager {
         }
         if old.language != new.language {
             crate::tray::refresh(&self.app, &new.language);
+        }
+        if old.language != new.language || (new.organize_by_category && !old.organize_by_category) {
+            self.check_category_language();
         }
         if old.bridge_enabled != new.bridge_enabled || old.bridge_port != new.bridge_port {
             crate::bridge::restart(self.clone());
@@ -531,6 +614,11 @@ impl Manager {
 
     fn notify(&self, download: Option<&str>, title_key: &str, body: &str) {
         let s = self.settings();
+        let body = if s.privacy_hide_names && matches!(title_key, "started" | "done" | "failed") {
+            ""
+        } else {
+            body
+        };
         let finished = matches!(title_key, "done" | "failed");
         if (title_key == "started" || finished)
             && !s.download_notices
@@ -553,7 +641,7 @@ impl Manager {
                 }
             }
         }
-        if !s.notifications {
+        if !s.notifications && title_key != "threat" {
             return;
         }
         let card_in_window = matches!(title_key, "started" | "done" | "failed" | "scan_cloud");
@@ -611,6 +699,16 @@ impl Manager {
         let _ = self.app.emit(EVT_PENDING, ());
     }
 
+    pub fn remember_extract_passwords(&self, passwords: &[String]) {
+        let _ = self.update_settings(|s| {
+            for p in passwords {
+                if !s.extract_passwords.contains(p) {
+                    s.extract_passwords.push(p.clone());
+                }
+            }
+        });
+    }
+
     pub fn take_pending(&self) -> Vec<Pending> {
         std::mem::take(&mut *self.pending.lock())
     }
@@ -624,9 +722,17 @@ impl Manager {
         if let Ok(v) = HeaderValue::from_str(&ua) {
             h.insert(USER_AGENT, v);
         }
+        if let Some(auth) = self.auth_header(rec) {
+            h.insert(reqwest::header::AUTHORIZATION, auth);
+        }
+        if self.settings.read().privacy_gpc {
+            h.insert("sec-gpc", HeaderValue::from_static("1"));
+            h.insert("dnt", HeaderValue::from_static("1"));
+        }
         if let Some(r) = rec
             .referrer
             .as_deref()
+            .filter(|_| !self.settings.read().privacy_no_referrer)
             .and_then(|r| HeaderValue::from_str(r).ok())
         {
             h.insert(REFERER, r);
@@ -646,6 +752,108 @@ impl Manager {
         url: &str,
         referrer: Option<String>,
         cookies: &[BrowserCookie],
+    ) -> ProbeInfo {
+        self.probe(url, referrer, cookies, true).await
+    }
+
+    pub async fn scan_page(
+        &self,
+        url: &str,
+        referrer: Option<String>,
+        cookies: &[BrowserCookie],
+        secs: u64,
+    ) -> Result<crate::crawl::PageScan> {
+        let url = url.trim();
+        if !crate::util::web_link(url) {
+            bail!("only http(s) pages can be scanned for links");
+        }
+        if self.settings().https_only && util::insecure_link(url) {
+            bail!("this link is not encrypted (http://). Settings → Security → Only allow encrypted (HTTPS) links blocks it");
+        }
+        let rec = DownloadRecord {
+            referrer,
+            cookie_header: cookie_header(cookies, url),
+            ..blank_record(url)
+        };
+        let headers = self.request_headers(&rec);
+        let client = self.http.read().clone();
+        let settings = self.settings();
+        crate::crawl::scan_with_rule(&client, url, headers, settings.site_rule(url), secs).await
+    }
+
+    pub async fn test_site_rule(
+        &self,
+        rule: crate::settings::SiteRule,
+        url: &str,
+    ) -> Result<crate::crawl::PageScan> {
+        let url = url.trim();
+        if !crate::util::web_link(url) {
+            bail!("enter a full page address that starts with https://");
+        }
+        let rec = blank_record(url);
+        let headers = self.request_headers(&rec);
+        let client = self.http.read().clone();
+        let rule = crate::settings::SiteRule {
+            enabled: true,
+            host: crate::settings::clean_host(url),
+            ..rule
+        };
+        crate::crawl::scan_with_rule(&client, url, headers, Some(&rule), 25).await
+    }
+
+    async fn apply_site_rule(&self, req: &mut AddRequest) {
+        let settings = self.settings();
+        let Some(rule) = settings.site_rule(&req.url).filter(|r| r.on_add).cloned() else {
+            return;
+        };
+        if req
+            .kind
+            .as_deref()
+            .is_some_and(|k| k != "http" && k != "auto")
+            || !crate::util::web_link(&req.url)
+        {
+            return;
+        }
+        let rec = DownloadRecord {
+            referrer: req.referrer.clone(),
+            cookie_header: cookie_header(&req.cookies, &req.url),
+            ..blank_record(&req.url)
+        };
+        let headers = self.request_headers(&rec);
+        let client = self.http.read().clone();
+        match crate::crawl::scan_with_rule(&client, &req.url, headers, Some(&rule), 25).await {
+            Ok(scan) if !scan.is_file => {
+                if let Some(first) = scan.links.first() {
+                    tracing::info!(
+                        "site rule {:?} turned {} into {}",
+                        rule.name,
+                        req.url,
+                        first.url
+                    );
+                    req.referrer = Some(scan.url.clone());
+                    req.url = first.url.clone();
+                }
+            }
+            Ok(_) => {}
+            Err(e) => tracing::warn!("site rule {:?} failed on {}: {e:#}", rule.name, req.url),
+        }
+    }
+
+    pub async fn check_link(
+        &self,
+        url: &str,
+        referrer: Option<String>,
+        cookies: &[BrowserCookie],
+    ) -> ProbeInfo {
+        self.probe(url, referrer, cookies, false).await
+    }
+
+    async fn probe(
+        &self,
+        url: &str,
+        referrer: Option<String>,
+        cookies: &[BrowserCookie],
+        sha: bool,
     ) -> ProbeInfo {
         let url = util::reddit_video_url(url.trim());
         let kind = detect_kind(&url);
@@ -688,7 +896,7 @@ impl Manager {
             info.error = Some(format!("{e:#}"));
             info.filename = util::filename_from_url(&url);
         }
-        if info.kind == "http" && self.settings.read().auto_detect_sha256 {
+        if sha && info.kind == "http" && self.settings.read().auto_detect_sha256 {
             if let Some((hash, source)) =
                 find_sha256(&self.api_client, &url, info.filename.as_deref()).await
             {
@@ -726,10 +934,370 @@ impl Manager {
                 id: e.rec.id.clone(),
                 name: e.rec.name.clone(),
                 status: e.rec.status,
+                previous: false,
+                at: None,
+            })
+            .or_else(|| {
+                let s = self.settings.read();
+                if !s.history_enabled || !s.history_warn {
+                    return None;
+                }
+                let h = self.history.find(&url)?;
+                Some(crate::model::Duplicate {
+                    id: h.id,
+                    name: h.name,
+                    status: Status::Completed,
+                    previous: true,
+                    at: Some(h.at),
+                })
             })
     }
 
-    pub async fn add(self: &Arc<Self>, req: AddRequest) -> Result<String> {
+    pub async fn add(self: &Arc<Self>, mut req: AddRequest) -> Result<String> {
+        let later = req.later;
+        if later {
+            req.start_paused = true;
+        }
+        let login = req
+            .login_user
+            .take()
+            .map(|u| u.trim().to_string())
+            .filter(|u| !u.is_empty())
+            .zip(req.login_password.take());
+        if let (Some((user, pass)), true) = (&login, req.remember_login) {
+            self.remember_login(&req.url, user, pass);
+        }
+        let mirrors: Vec<String> = req
+            .mirrors
+            .iter()
+            .map(|m| m.trim().to_string())
+            .filter(|m| crate::util::web_link(m) && m != req.url.trim())
+            .take(20)
+            .collect();
+        let tags: Vec<String> = req
+            .tags
+            .iter()
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .take(20)
+            .collect();
+        let note: String = req.note.trim().chars().take(4000).collect();
+        let auto_extract = req.auto_extract;
+        if let Some(p) = req
+            .extract_password
+            .as_deref()
+            .map(str::trim)
+            .filter(|p| !p.is_empty())
+        {
+            self.remember_extract_passwords(&[p.to_string()]);
+        }
+        self.apply_site_rule(&mut req).await;
+        let id = self.add_inner(req).await?;
+        if !id.is_empty()
+            && (later
+                || login.is_some()
+                || !mirrors.is_empty()
+                || !tags.is_empty()
+                || !note.is_empty()
+                || auto_extract.is_some())
+        {
+            self.with_entry(&id, |e| {
+                e.rec.later = later;
+                e.rec.mirrors = mirrors.clone();
+                e.rec.tags = tags.clone();
+                if !note.is_empty() {
+                    e.rec.note = note.clone();
+                }
+                e.rec.auto_extract = auto_extract;
+                if let Some((user, pass)) = &login {
+                    e.rec.login_user = user.clone();
+                    e.rec.login_secret =
+                        crate::secret::protect(pass).unwrap_or_else(|| pass.clone());
+                }
+            });
+            self.mark_dirty();
+            self.save_needed.store(true, Ordering::Relaxed);
+        }
+        Ok(id)
+    }
+
+    fn apply_file_rules(&self, id: &str) {
+        let s = self.settings();
+        let Some(rec) = self.with_entry(id, |e| e.rec.clone()) else {
+            return;
+        };
+        if rec.kind == Kind::Torrent || s.file_rules.is_empty() {
+            return;
+        }
+        let file = PathBuf::from(&rec.dir).join(&rec.name);
+        if !file.is_file() {
+            return;
+        }
+        let Some(rule) = s
+            .file_rules
+            .iter()
+            .find(|r| crate::extras::rule_matches(r, &rec.url, &rec.name))
+        else {
+            return;
+        };
+        match crate::extras::apply_rule(rule, &file, &rec.url, category_key(rec.category)) {
+            Ok(target) => {
+                let dir = target
+                    .parent()
+                    .map(|p| p.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| rec.dir.clone());
+                let name = target
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .unwrap_or_else(|| rec.name.clone());
+                self.with_entry(id, |e| {
+                    e.rec.dir = dir;
+                    e.rec.name = name;
+                });
+            }
+            Err(e) => self.toast(
+                "error",
+                format!("{}: rule could not be applied: {e:#}", rec.name),
+            ),
+        }
+    }
+
+    pub fn set_download_meta(&self, id: &str, tags: Vec<String>, note: String) -> Result<()> {
+        self.record(id)?;
+        let tags: Vec<String> = tags
+            .into_iter()
+            .map(|t| t.trim().to_string())
+            .filter(|t| !t.is_empty())
+            .take(20)
+            .collect();
+        self.with_entry(id, |e| {
+            e.rec.tags = tags;
+            e.rec.note = note.chars().take(2000).collect();
+        });
+        self.mark_dirty();
+        self.save_needed.store(true, Ordering::Relaxed);
+        self.emit_now();
+        Ok(())
+    }
+
+    pub fn set_download_mirrors(&self, id: &str, mirrors: Vec<String>) -> Result<()> {
+        let rec = self.record(id)?;
+        let mirrors: Vec<String> = mirrors
+            .into_iter()
+            .map(|m| m.trim().to_string())
+            .filter(|m| crate::util::web_link(m) && *m != rec.url)
+            .take(20)
+            .collect();
+        self.with_entry(id, |e| {
+            e.rec.mirrors = mirrors;
+            e.rec.mirror_tries = 0;
+        });
+        self.mark_dirty();
+        self.save_needed.store(true, Ordering::Relaxed);
+        self.emit_now();
+        Ok(())
+    }
+
+    pub fn export_backup(&self, path: &std::path::Path, secrets: bool) -> Result<()> {
+        let mut s = self.settings();
+        if !secrets {
+            crate::extras::strip_secrets(&mut s);
+        }
+        s.virustotal_key_protected.clear();
+        let backup = crate::extras::Backup {
+            app: "multron-download-manager".into(),
+            version: env!("CARGO_PKG_VERSION").into(),
+            created: now_ms(),
+            settings: Some(serde_json::to_value(&s)?),
+            downloads: self.entries.lock().iter().map(|e| e.rec.clone()).collect(),
+            history: self.history.list(),
+        };
+        let bytes = serde_json::to_vec_pretty(&backup)?;
+        std::fs::write(path, bytes)?;
+        crate::secret::restrict_file(path);
+        Ok(())
+    }
+
+    pub fn auto_backup_dir(&self) -> PathBuf {
+        let s = self.settings();
+        if s.auto_backup_dir.trim().is_empty() {
+            self.paths.data.join("backups")
+        } else {
+            PathBuf::from(s.auto_backup_dir.trim())
+        }
+    }
+
+    pub fn auto_backup_now(&self) -> Result<crate::extras::BackupFile> {
+        let dir = self.auto_backup_dir();
+        std::fs::create_dir_all(&dir)?;
+        let path = dir.join(crate::extras::auto_backup_name(chrono::Local::now()));
+        self.export_backup(&path, false)?;
+        crate::extras::prune_backups(&dir, self.settings().auto_backup_keep);
+        crate::extras::auto_backups(&dir)
+            .into_iter()
+            .next()
+            .ok_or_else(|| anyhow!("the backup could not be saved"))
+    }
+
+    pub fn import_backup(self: &Arc<Self>, path: &std::path::Path) -> Result<(usize, Settings)> {
+        let bytes = std::fs::read(path)?;
+        let backup: crate::extras::Backup = serde_json::from_slice(&bytes)
+            .map_err(|_| anyhow!("this is not a Multron Download Manager backup"))?;
+        if backup.app != "multron-download-manager" {
+            bail!("this is not a Multron Download Manager backup");
+        }
+        let current = self.settings();
+        let mut settings = match backup.settings {
+            Some(v) => serde_json::from_value::<Settings>(v).unwrap_or_else(|_| current.clone()),
+            None => current.clone(),
+        };
+        crate::extras::keep_secrets(&mut settings, &current);
+        settings.virustotal_key_protected.clear();
+        let mut settings = settings.normalized();
+        fill_download_dir(&self.app, &mut settings);
+        settings.save(&self.paths.settings)?;
+        *self.settings.write() = settings.clone();
+        let mut added = 0;
+        {
+            let mut entries = self.entries.lock();
+            for mut rec in backup.downloads {
+                if entries.iter().any(|e| e.rec.id == rec.id) {
+                    continue;
+                }
+                if matches!(rec.status, Status::Active | Status::Queued) {
+                    rec.status = Status::Paused;
+                }
+                entries.push(Entry {
+                    rec,
+                    live: Live::default(),
+                    run: None,
+                });
+                added += 1;
+            }
+        }
+        for h in backup.history.into_iter().rev() {
+            if self.history.find(&h.url).is_none() {
+                let rec = DownloadRecord {
+                    id: h.id.clone(),
+                    name: h.name.clone(),
+                    url: h.url.clone(),
+                    dir: h.dir.clone(),
+                    total: h.size,
+                    ..blank_record(&h.url)
+                };
+                self.history.record(&rec, h.at);
+            }
+        }
+        self.mark_dirty();
+        self.persist();
+        self.emit_now();
+        Ok((added, settings))
+    }
+
+    pub fn remember_login(&self, url: &str, user: &str, pass: &str) {
+        let host = url::Url::parse(url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_string))
+            .unwrap_or_default();
+        if host.is_empty() {
+            return;
+        }
+        let _ = self.update_settings(|s| {
+            let host = crate::settings::clean_host(&host);
+            s.site_logins.retain(|l| l.host != host);
+            s.site_logins.push(crate::settings::SiteLogin {
+                host,
+                user: user.to_string(),
+                password: pass.to_string(),
+                ..Default::default()
+            });
+        });
+    }
+
+    pub async fn set_download_login(
+        self: &Arc<Self>,
+        id: &str,
+        user: &str,
+        pass: &str,
+        remember: bool,
+    ) -> Result<()> {
+        let rec = self.record(id)?;
+        if remember {
+            self.remember_login(&rec.url, user, pass);
+        }
+        self.with_entry(id, |e| {
+            e.rec.login_user = user.trim().to_string();
+            e.rec.login_secret = crate::secret::protect(pass).unwrap_or_else(|| pass.to_string());
+        });
+        self.mark_dirty();
+        self.save_needed.store(true, Ordering::Relaxed);
+        if matches!(rec.status, Status::Failed | Status::Paused) {
+            self.resume(id).await?;
+        }
+        Ok(())
+    }
+
+    fn auth_header(&self, rec: &DownloadRecord) -> Option<HeaderValue> {
+        use base64::Engine;
+        let u = url::Url::parse(&rec.url).ok()?;
+        if u.scheme() != "https" {
+            return None;
+        }
+        let (kind, user, pass) = if !rec.login_user.is_empty() {
+            let pass = if rec.login_secret.starts_with(crate::secret::PREFIX) {
+                crate::secret::unprotect(&rec.login_secret).unwrap_or_default()
+            } else {
+                rec.login_secret.clone()
+            };
+            ("basic".to_string(), rec.login_user.clone(), pass)
+        } else {
+            let s = self.settings.read();
+            if !s.logins_auto {
+                return None;
+            }
+            let host = u.host_str()?;
+            let l = s.site_logins.iter().find(|l| l.matches(host))?;
+            (l.kind.clone(), l.user.clone(), l.password.clone())
+        };
+        let value = if kind == "bearer" {
+            format!("Bearer {pass}")
+        } else {
+            format!(
+                "Basic {}",
+                base64::engine::general_purpose::STANDARD.encode(format!("{user}:{pass}"))
+            )
+        };
+        let mut v = HeaderValue::from_str(&value).ok()?;
+        v.set_sensitive(true);
+        Some(v)
+    }
+
+    pub async fn stop_all(self: &Arc<Self>) {
+        let ids: Vec<String> = self
+            .entries
+            .lock()
+            .iter()
+            .filter(|e| {
+                matches!(e.rec.status, Status::Active | Status::Queued)
+                    || (e.rec.kind == Kind::Torrent
+                        && e.live.seeding
+                        && !e.rec.torrent.as_ref().is_some_and(|t| t.user_paused))
+            })
+            .map(|e| e.rec.id.clone())
+            .collect();
+        for id in ids {
+            let _ = self.pause(&id).await;
+        }
+    }
+
+    async fn add_inner(self: &Arc<Self>, mut req: AddRequest) -> Result<String> {
+        if self.settings.read().torrent_start_paused
+            && (req.kind.as_deref() == Some("torrent")
+                || req.torrent_file.is_some()
+                || req.url.trim().to_ascii_lowercase().starts_with("magnet:"))
+        {
+            req.start_paused = true;
+        }
         let settings = self.settings();
         let url = util::reddit_video_url(req.url.trim());
         if url.is_empty() && req.torrent_file.is_none() {
@@ -742,6 +1310,49 @@ impl Manager {
             _ if req.torrent_file.is_some() => Kind::Torrent,
             _ => detect_kind(&url),
         };
+        if settings.click_n_load
+            && kind != Kind::Torrent
+            && req.torrent_file.is_none()
+            && crate::clicknload::is_crypter(&url)
+        {
+            let client = self.http.read().clone();
+            match crate::clicknload::open_crypter(&client, &url).await {
+                Ok(crate::clicknload::Opened::Links(links)) => {
+                    self.push_pending(Pending::Batch {
+                        batch: Box::new(crate::clicknload::batch_for(&url, links)),
+                    });
+                    return Ok(String::new());
+                }
+                Ok(crate::clicknload::Opened::Captcha(kind)) => {
+                    self.captcha_needed(&url, kind, None);
+                    bail!("this link-protection page asks you to solve a CAPTCHA ({kind}). Solve it in your browser and press its Click'n'Load button, and the links come here");
+                }
+                Ok(crate::clicknload::Opened::Nothing) => {
+                    use tauri_plugin_opener::OpenerExt;
+                    let _ = self.app.opener().open_url(&url, None::<&str>);
+                    bail!("no download links were found on this link-protection page. It was opened in your browser: press its Click'n'Load button there, and the links come here");
+                }
+                Err(e) => tracing::warn!("could not read the link-protection page {url}: {e:#}"),
+            }
+        }
+        if settings.https_only && kind != Kind::Torrent && util::insecure_link(&url) {
+            bail!("this link is not encrypted (http://). Settings → Security → Only allow encrypted (HTTPS) links blocks it");
+        }
+        if settings.block_insecure_programs
+            && kind == Kind::Http
+            && util::insecure_link(&url)
+            && req
+                .filename
+                .clone()
+                .filter(|f| !f.trim().is_empty())
+                .or_else(|| util::filename_from_url(&url))
+                .is_some_and(|f| crate::security::is_program(std::path::Path::new(&f)))
+        {
+            bail!("this program comes from an unencrypted link (http://), where it could be swapped on the way. Settings → Security → Do not download programs from unencrypted links blocks it");
+        }
+        if kind == Kind::Torrent && settings.tor_enabled && settings.tor_block_torrents {
+            bail!("torrents are blocked while downloads go through Tor, because BitTorrent would reveal your real IP address. Settings → Privacy");
+        }
         if kind == Kind::Media && !settings.media_enabled {
             bail!("media downloads are disabled in Settings → Components");
         }
@@ -753,11 +1364,20 @@ impl Manager {
             .threads
             .unwrap_or(settings.threads)
             .clamp(1, MAX_THREADS);
-        let base_dir = req
+        let mut base_dir = req
             .dir
             .clone()
             .filter(|d| !d.trim().is_empty())
             .unwrap_or_else(|| settings.download_dir.clone());
+        if base_dir.trim().is_empty() || !Path::new(base_dir.trim()).is_absolute() {
+            base_dir = system_download_dir(&self.app);
+        }
+        if kind == Kind::Torrent
+            && !settings.torrent_dir.is_empty()
+            && util::same_dir(&base_dir, &settings.download_dir)
+        {
+            base_dir = settings.torrent_dir.clone();
+        }
         let id = uuid::Uuid::new_v4().to_string();
 
         let mut rec = DownloadRecord {
@@ -840,7 +1460,12 @@ impl Manager {
                     }
                 }
                 rec.category = util::category_for(&name);
-                let dir = self.target_dir(&base_dir, rec.category, settings.organize_by_category);
+                let dir = self.target_dir(
+                    &base_dir,
+                    rec.category,
+                    settings.organize_by_category,
+                    &name,
+                );
                 std::fs::create_dir_all(&dir).ok();
                 let path = util::unique_path(&dir, &name);
                 rec.name = path
@@ -861,11 +1486,14 @@ impl Manager {
             } else {
                 Category::Video
             };
-            let dir = self.target_dir(&base_dir, rec.category, settings.organize_by_category);
+            let dir = self.target_dir(&base_dir, rec.category, settings.organize_by_category, "");
             std::fs::create_dir_all(&dir).ok();
             rec.dir = dir.to_string_lossy().into_owned();
             rec.name =
                 util::media_title(req.page_title.as_deref(), &url).unwrap_or_else(|| url.clone());
+            if req.audio_url.is_some() {
+                rec.name = merged_name(&rec.name, req.filename.as_deref());
+            }
             rec.sha256_expected = None;
             rec.hash_state = HashState::None;
             let cookies_file = if req.cookies.is_empty() {
@@ -949,13 +1577,130 @@ impl Manager {
         Ok(id)
     }
 
-    fn target_dir(&self, base: &str, cat: Category, organize: bool) -> PathBuf {
+    fn target_dir(&self, base: &str, cat: Category, organize: bool, name: &str) -> PathBuf {
         let base = PathBuf::from(base);
-        if organize {
-            base.join(category_dir(cat))
-        } else {
-            base
+        if !organize {
+            return base;
         }
+        let s = self.settings();
+        let ext = util::extension(name);
+        if !ext.is_empty() {
+            if let Some(c) = s
+                .custom_categories
+                .iter()
+                .find(|c| c.extensions.contains(&ext))
+            {
+                return if c.folder.is_empty() {
+                    base.join(safe_folder(&c.name))
+                } else {
+                    PathBuf::from(&c.folder)
+                };
+            }
+        }
+        if let Some(folder) = s.category_folders.get(category_key(cat)) {
+            return PathBuf::from(folder);
+        }
+        base.join(category_folder_name(cat, &s.category_folder_language))
+    }
+
+    fn update_settings(&self, change: impl FnOnce(&mut Settings)) -> Result<Settings> {
+        let mut s = self.settings();
+        change(&mut s);
+        let mut s = s.normalized();
+        fill_download_dir(&self.app, &mut s);
+        s.save(&self.paths.settings)?;
+        *self.settings.write() = s.clone();
+        Ok(s)
+    }
+
+    pub fn check_category_language(&self) {
+        let s = self.settings();
+        let lang = crate::i18n::resolve(&s.language);
+        if s.category_folder_language.is_empty() {
+            let _ = self.update_settings(|s| s.category_folder_language = lang);
+            return;
+        }
+        if !s.organize_by_category
+            || s.category_folder_language == lang
+            || s.category_language_asked == lang
+        {
+            return;
+        }
+        let folders: Vec<(String, String)> = CATEGORIES
+            .iter()
+            .filter(|c| !s.category_folders.contains_key(category_key(**c)))
+            .map(|c| {
+                (
+                    category_folder_name(*c, &s.category_folder_language),
+                    category_folder_name(*c, &lang),
+                )
+            })
+            .filter(|(a, b)| a != b)
+            .collect();
+        if folders.is_empty() {
+            let _ = self.update_settings(|s| s.category_folder_language = lang);
+            return;
+        }
+        self.push_pending(Pending::CategoryLanguage {
+            from: s.category_folder_language.clone(),
+            to: lang,
+            folders,
+        });
+    }
+
+    pub fn apply_category_language(&self, rename: bool) -> Result<usize> {
+        let s = self.settings();
+        let to = crate::i18n::resolve(&s.language);
+        let from = s.category_folder_language.clone();
+        let mut moved = 0;
+        if rename {
+            let base = PathBuf::from(&s.download_dir);
+            for cat in CATEGORIES {
+                if s.category_folders.contains_key(category_key(cat)) {
+                    continue;
+                }
+                let old = base.join(category_folder_name(cat, &from));
+                let new = base.join(category_folder_name(cat, &to));
+                if old == new || !old.is_dir() || new.exists() {
+                    continue;
+                }
+                let busy = self
+                    .entries
+                    .lock()
+                    .iter()
+                    .any(|e| e.run.is_some() && Path::new(&e.rec.dir).starts_with(&old));
+                if busy || std::fs::rename(&old, &new).is_err() {
+                    continue;
+                }
+                moved += 1;
+                let swap = |p: &str| -> Option<String> {
+                    Path::new(p)
+                        .strip_prefix(&old)
+                        .ok()
+                        .map(|rest| new.join(rest).to_string_lossy().into_owned())
+                };
+                for e in self.entries.lock().iter_mut() {
+                    if let Some(d) = swap(&e.rec.dir) {
+                        e.rec.dir = d;
+                    }
+                    if let Some(m) = e.rec.media.as_mut() {
+                        for f in m.files.iter_mut().chain(m.partials.iter_mut()) {
+                            if let Some(n) = swap(f) {
+                                *f = n;
+                            }
+                        }
+                    }
+                }
+            }
+            self.mark_dirty();
+        }
+        self.update_settings(|s| {
+            if rename {
+                s.category_folder_language = to.clone();
+            }
+            s.category_language_asked = to;
+        })?;
+        Ok(moved)
     }
 
     pub fn schedule(self: &Arc<Self>) {
@@ -995,7 +1740,16 @@ impl Manager {
             e.rec.status = Status::Active;
             e.rec.error = None;
             e.live = Live::default();
-            let limiter = Arc::new(Limiter::new(e.rec.speed_limit * 1024));
+            let site_kb = if e.rec.speed_limit == 0 {
+                self.settings
+                    .read()
+                    .site_limit(&e.rec.url)
+                    .map(|l| l.speed_kb)
+                    .unwrap_or(0)
+            } else {
+                e.rec.speed_limit
+            };
+            let limiter = Arc::new(Limiter::new(site_kb * 1024));
             e.run = Some(Running {
                 cancel: cancel.clone(),
                 progress: None,
@@ -1030,6 +1784,22 @@ impl Manager {
         self.mark_dirty();
     }
 
+    async fn wait_for_host(&self, id: &str, secs: u64, cancel: &CancellationToken) -> bool {
+        for left in (1..=secs.min(crate::engine::MAX_HOST_WAIT)).rev() {
+            self.with_entry(id, |e| {
+                e.live.phase = Some("waiting for host".into());
+                e.live.speed = 0;
+                e.live.eta = Some(left);
+            });
+            self.mark_dirty();
+            tokio::select! {
+                _ = cancel.cancelled() => return false,
+                _ = tokio::time::sleep(Duration::from_secs(1)) => {}
+            }
+        }
+        true
+    }
+
     async fn run_resilient(
         self: Arc<Self>,
         id: &str,
@@ -1037,7 +1807,10 @@ impl Manager {
         limit: Arc<Limiter>,
     ) -> Result<bool> {
         const MAX_RECOVERIES: u32 = 8;
+        const MAX_HOST_WAITS: u32 = 20;
         let mut recoveries = 0u32;
+        let mut waits = 0u32;
+        let mut refreshes = 0u32;
         loop {
             let rec = self.record(id)?;
             let result = match rec.kind {
@@ -1056,6 +1829,26 @@ impl Manager {
                 return Err(err);
             }
             let failure = media::classify_failure(&format!("{err:#}"));
+            if let media::Failure::Wait(secs) = failure {
+                waits += 1;
+                if waits > MAX_HOST_WAITS {
+                    return Err(err);
+                }
+                tracing::info!(
+                    "{} asks to wait {secs} s ({waits}/{MAX_HOST_WAITS})",
+                    rec.url
+                );
+                if !self.wait_for_host(id, secs, &cancel).await {
+                    return Ok(false);
+                }
+                continue;
+            }
+            if failure == media::Failure::Expired {
+                refreshes += 1;
+                if refreshes > 2 {
+                    return Err(err);
+                }
+            }
             if failure == media::Failure::Other
                 || (failure == media::Failure::Corrupt && rec.kind != Kind::Media)
             {
@@ -1072,8 +1865,13 @@ impl Manager {
             if !self.wait_for_network(id, &rec.url, &cancel).await {
                 return Ok(false);
             }
+            let phase = if failure == media::Failure::Expired {
+                "refreshing link"
+            } else {
+                "retrying"
+            };
             self.with_entry(id, |e| {
-                e.live.phase = Some("retrying".into());
+                e.live.phase = Some(phase.into());
                 e.live.speed = 0;
                 e.live.eta = None;
             });
@@ -1167,7 +1965,21 @@ impl Manager {
                     }
                 }
                 Err(err) => {
-                    if e.rec.status == Status::Active {
+                    if e.rec.status == Status::Active
+                        && e.rec.kind == Kind::Http
+                        && !e.rec.mirrors.is_empty()
+                        && (e.rec.mirror_tries as usize) < e.rec.mirrors.len()
+                        && crate::security::antivirus_error(err).is_none()
+                    {
+                        let old = std::mem::take(&mut e.rec.url);
+                        e.rec.url = e.rec.mirrors.remove(0);
+                        e.rec.mirrors.push(old);
+                        e.rec.mirror_tries += 1;
+                        e.rec.segments.clear();
+                        e.rec.downloaded = 0;
+                        e.rec.status = Status::Queued;
+                        e.rec.error = Some(format!("{err:#} — trying the next mirror"));
+                    } else if e.rec.status == Status::Active {
                         e.rec.status = Status::Failed;
                         if let Some(why) = crate::security::antivirus_error(err) {
                             e.rec.error = Some(why.to_string());
@@ -1186,6 +1998,10 @@ impl Manager {
                 }
             }
         });
+        if notify.as_ref().is_some_and(|(k, _)| *k == "done") {
+            self.with_entry(id, |e| e.rec.mirror_tries = 0);
+            self.apply_file_rules(id);
+        }
         if let Some(rec) = self.with_entry(id, |e| e.rec.clone()) {
             if rec.status == Status::Completed {
                 if let Some(c) = rec.media.as_ref().and_then(|m| m.cookies_file.clone()) {
@@ -1246,6 +2062,19 @@ impl Manager {
             && resolved.service.is_none()
             && !matches!(util::extension(&rec.name).as_str(), "html" | "htm")
         {
+            if let Ok(resp) = client
+                .get(resolved.url.as_str())
+                .headers(headers.clone())
+                .send()
+                .await
+            {
+                if let Ok(html) = resp.text().await {
+                    if let Some(kind) = crate::clicknload::captcha_in(&html) {
+                        self.captcha_needed(&rec.url, kind, Some(id));
+                        bail!("the site asks you to solve a CAPTCHA ({kind}) before it gives the file. Open the link in your browser, solve it there, and the browser extension sends the download here");
+                    }
+                }
+            }
             bail!("the link opens a web page instead of a file (it may have expired or need a login). Try adding it from the browser extension");
         }
         let final_path = PathBuf::from(&rec.dir).join(&rec.name);
@@ -1268,7 +2097,11 @@ impl Manager {
         } else {
             Vec::new()
         };
-        let progress = Progress::new(probe.total, &segments, rec.threads);
+        let threads = match settings.site_limit(&rec.url) {
+            Some(l) if l.max_connections > 0 => rec.threads.min(l.max_connections).max(1),
+            _ => rec.threads,
+        };
+        let progress = Progress::new(probe.total, &segments, threads);
         self.with_entry(id, |e| {
             e.rec.total = probe.total;
             e.rec.resumable = probe.resumable;
@@ -1520,18 +2353,26 @@ impl Manager {
             let Some(ffmpeg) = ffmpeg else {
                 bail!("joining the picture and sound of this video needs FFmpeg. Install it in Settings → Media")
             };
-            let dest = util::unique_path(&PathBuf::from(&rec.dir), &rec.name);
+            let dest = util::unique_path(
+                &PathBuf::from(&rec.dir),
+                &merged_name(&rec.name, media.filename.as_deref()),
+            );
             let this = self.clone();
             let id2 = id.to_string();
             let mut meter = media::SpeedMeter::default();
-            return media::merge(
+            let wants_h264 = media
+                .container
+                .clone()
+                .unwrap_or_else(|| settings.media_container.clone())
+                == "mp4-h264";
+            let merged = media::merge(
                 &ffmpeg,
                 &rec.url,
                 &audio,
                 rec.referrer.as_deref(),
                 rec.user_agent.as_deref(),
                 &dest,
-                cancel,
+                cancel.clone(),
                 move |ev| {
                     this.with_entry(&id2, |e| match ev {
                         MediaEvent::Progress { downloaded, .. } => {
@@ -1558,6 +2399,10 @@ impl Manager {
                 },
             )
             .await;
+            if matches!(merged, Ok(true)) && wants_h264 {
+                self.ensure_h264(id, &ffmpeg, &cancel).await?;
+            }
+            return merged;
         }
 
         let base = MediaJob {
@@ -1705,6 +2550,11 @@ impl Manager {
                                 totals.set_exact(size);
                             }
                         }
+                        MediaEvent::Plan(parts) => {
+                            if !media.playlist {
+                                totals.set_plan(parts);
+                            }
+                        }
                         MediaEvent::Phase(p) => {
                             e.live.phase = Some(p);
                             e.live.speed = 0;
@@ -1792,10 +2642,107 @@ impl Manager {
             });
         }
         remove_scratch(&scratch).await;
+        if matches!(result, Ok(true)) && !media.playlist && !media.quality.starts_with("audio") {
+            if let Some(ff) = base.ffmpeg.clone() {
+                let file = self
+                    .record(id)
+                    .ok()
+                    .and_then(|r| r.media.and_then(|m| m.files.last().cloned()))
+                    .map(PathBuf::from)
+                    .filter(|p| media::is_video_file(p));
+                let check = |ff: PathBuf, p: PathBuf| async move {
+                    tokio::task::spawn_blocking(move || media::has_video_stream(&ff, &p))
+                        .await
+                        .ok()
+                        .flatten()
+                };
+                if let Some(path) = file {
+                    if check(ff.clone(), path.clone()).await == Some(false) {
+                        tracing::warn!("{} came without a picture, downloading it again", rec.url);
+                        let _ = tokio::fs::remove_file(&path).await;
+                        let gone = path.to_string_lossy().into_owned();
+                        self.with_entry(id, |e| {
+                            if let Some(m) = e.rec.media.as_mut() {
+                                m.files.retain(|f| f != &gone);
+                            }
+                            e.rec.downloaded = 0;
+                            e.rec.total = None;
+                            e.live.phase = Some("preparing".into());
+                        });
+                        let mut job = base.clone();
+                        job.local_info = None;
+                        job.quality = media::SAFE_VIDEO.into();
+                        if !attempts.last().copied().unwrap_or(false) {
+                            job.cookies_file = None;
+                            job.cookies_browser = String::new();
+                        }
+                        let this = self.clone();
+                        let id2 = id.to_string();
+                        let mut meter = media::SpeedMeter::default();
+                        result = media::run(job, cancel.child_token(), move |ev| {
+                            this.with_entry(&id2, |e| match ev {
+                                MediaEvent::Progress {
+                                    downloaded, total, ..
+                                } => {
+                                    e.rec.downloaded = downloaded;
+                                    if total.is_some() {
+                                        e.rec.total = total;
+                                    }
+                                    e.live.speed = meter.sample(downloaded);
+                                    e.live.phase = Some("downloading".into());
+                                }
+                                MediaEvent::Phase(p) => e.live.phase = Some(p),
+                                MediaEvent::File(path) => {
+                                    if let Some(m) = e.rec.media.as_mut() {
+                                        m.files.push(path.to_string_lossy().into_owned());
+                                    }
+                                    if let Some(n) = path.file_name() {
+                                        e.rec.name = n.to_string_lossy().into_owned();
+                                        e.rec.category = util::category_for(&e.rec.name);
+                                    }
+                                    if let Ok(meta) = std::fs::metadata(&path) {
+                                        e.rec.total = Some(meta.len());
+                                        e.rec.downloaded = meta.len();
+                                    }
+                                }
+                                _ => {}
+                            });
+                            this.dirty.store(true, Ordering::Relaxed);
+                        })
+                        .await;
+                        let again = self
+                            .record(id)
+                            .ok()
+                            .and_then(|r| r.media.and_then(|m| m.files.last().cloned()))
+                            .map(PathBuf::from)
+                            .filter(|p| media::is_video_file(p));
+                        if let (Ok(true), Some(p)) = (&result, again) {
+                            if check(ff, p).await == Some(false) {
+                                bail!("{} only sent the sound of this video, without the picture. Try again later, or sign in to the site in your browser and choose it in Settings → Media → Use cookies from browser", media::site_name(&rec.url));
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if matches!(result, Ok(true))
+            && !media.quality.starts_with("audio")
+            && base.container == "mp4-h264"
+        {
+            if let Some(ff) = base.ffmpeg.clone() {
+                self.ensure_h264(id, &ff, &cancel).await?;
+            }
+        }
         match result {
             Err(e) if !has_cookies && media::needs_sign_in(&format!("{e:#}")) => {
                 bail!(
                     "{} only shows this to signed-in users. Sign in to it in your browser and download with the Multron Download Manager browser extension, or choose your browser in Settings → Media → Use cookies from browser ({e})",
+                    media::site_name(&rec.url)
+                )
+            }
+            Err(e) if media::needs_sign_in(&format!("{e:#}")) => {
+                bail!(
+                    "{} did not accept your sign-in. Make sure you are signed in to it in your browser, then open the video and download it with the browser extension's button while it plays ({e})",
                     media::site_name(&rec.url)
                 )
             }
@@ -1806,6 +2753,63 @@ impl Manager {
             }
             other => other,
         }
+    }
+
+    async fn ensure_h264(
+        self: &Arc<Self>,
+        id: &str,
+        ffmpeg: &Path,
+        cancel: &CancellationToken,
+    ) -> Result<()> {
+        let files: Vec<PathBuf> = self
+            .record(id)
+            .ok()
+            .and_then(|r| r.media.map(|m| m.files))
+            .unwrap_or_default()
+            .into_iter()
+            .map(PathBuf::from)
+            .filter(|p| media::is_video_file(p) && p.is_file())
+            .collect();
+        for file in files {
+            self.with_entry(id, |e| {
+                e.live.phase = Some("converting".into());
+                e.live.speed = 0;
+                e.live.eta = None;
+            });
+            self.dirty.store(true, Ordering::Relaxed);
+            let converted = media::to_h264(ffmpeg, &file, cancel).await.map_err(|e| {
+                anyhow!(
+                    "the video could not be converted to H.264 (Settings → Media → Format): {e:#}"
+                )
+            })?;
+            let Some(new) = converted else {
+                continue;
+            };
+            tracing::info!("converted {} to H.264", file.display());
+            let old = file.to_string_lossy().into_owned();
+            let fresh = new.to_string_lossy().into_owned();
+            self.with_entry(id, |e| {
+                if let Some(m) = e.rec.media.as_mut() {
+                    for f in m.files.iter_mut().filter(|f| **f == old) {
+                        *f = fresh.clone();
+                    }
+                }
+                if file
+                    .file_name()
+                    .is_some_and(|n| n.to_string_lossy() == e.rec.name)
+                {
+                    if let Some(n) = new.file_name() {
+                        e.rec.name = n.to_string_lossy().into_owned();
+                    }
+                    if let Ok(meta) = std::fs::metadata(&new) {
+                        e.rec.total = Some(meta.len());
+                        e.rec.downloaded = meta.len();
+                    }
+                }
+            });
+            self.dirty.store(true, Ordering::Relaxed);
+        }
+        Ok(())
     }
 
     fn torrent_if_running(&self) -> Option<Arc<TorrentEngine>> {
@@ -2432,6 +3436,8 @@ impl Manager {
     }
 
     pub async fn background(self: Arc<Self>) {
+        self.check_category_language();
+        crate::clipboard::watch(self.clone());
         let s = self.settings();
         if s.ip_filter_enabled {
             let stale = std::fs::metadata(&self.paths.ip_filter)
@@ -2663,6 +3669,12 @@ impl Manager {
             .with_entry(id, |e| e.run.as_ref().map(|r| r.limiter.clone()))
             .flatten()
             .ok_or_else(|| anyhow!("download not found"))?;
+        if let Some(wait) = media::available_in(&formats, media::unix_now()) {
+            tokio::select! {
+                _ = cancel.cancelled() => bail!("cancelled"),
+                _ = tokio::time::sleep(wait) => {}
+            }
+        }
         let mut probed = Vec::new();
         for format in &formats {
             let url = format["url"].as_str().unwrap_or_default().to_string();
@@ -2811,6 +3823,25 @@ impl Manager {
         }
     }
 
+    fn privacy_on_exit(&self) {
+        let s = self.settings();
+        if s.privacy_clear_history_on_exit {
+            self.history.clear();
+        }
+        if s.privacy_clear_finished_on_exit {
+            self.entries
+                .lock()
+                .retain(|e| e.rec.status != Status::Completed);
+        }
+        if s.privacy_clear_cookies_on_exit {
+            if let Ok(dir) = std::fs::read_dir(&self.paths.cookies) {
+                for entry in dir.flatten() {
+                    let _ = std::fs::remove_file(entry.path());
+                }
+            }
+        }
+    }
+
     pub async fn shutdown(&self) {
         let runs: Vec<CancellationToken> = self
             .entries
@@ -2825,6 +3856,7 @@ impl Manager {
             tokio::time::sleep(Duration::from_millis(600)).await;
         }
         self.tick();
+        self.privacy_on_exit();
         self.persist();
         if let Some(engine) = self.torrent_if_running() {
             engine.stop().await;
@@ -2834,6 +3866,11 @@ impl Manager {
 
 fn is_waiting(e: &Entry) -> bool {
     e.rec.kind != Kind::Torrent && e.rec.status == Status::Queued && e.run.is_none()
+}
+
+#[cfg(test)]
+pub fn blank_record_for_tests(url: &str) -> DownloadRecord {
+    blank_record(url)
 }
 
 fn blank_record(url: &str) -> DownloadRecord {
@@ -2859,6 +3896,21 @@ fn blank_record(url: &str) -> DownloadRecord {
         speed_limit: 0,
         scan_state: String::new(),
         scan_detail: None,
+        cloud_scanned_at: None,
+        quarantined: false,
+        type_mismatch: false,
+        later: false,
+        tags: Vec::new(),
+        note: String::new(),
+        mirrors: Vec::new(),
+        mirror_tries: 0,
+        signature: String::new(),
+        auto_extract: None,
+        extract_with: None,
+        login_user: String::new(),
+        login_secret: String::new(),
+        extract_state: String::new(),
+        extract_detail: None,
         cloud_state: String::new(),
         cloud_before: None,
         cloud_detail: None,
@@ -3096,5 +4148,47 @@ mod tests {
             .collect();
         assert_eq!(left, vec!["keep.mp4".to_string()]);
         std::fs::remove_dir_all(&dir).ok();
+    }
+}
+
+fn merged_name(name: &str, filename: Option<&str>) -> String {
+    let chosen = filename
+        .filter(|f| !f.trim().is_empty())
+        .map(util::sanitize_filename)
+        .unwrap_or_else(|| util::sanitize_filename(name));
+    let stem = match chosen.rsplit_once('.') {
+        Some((s, ext))
+            if !s.is_empty()
+                && ["mp4", "m4v", "mov", "mkv", "webm"]
+                    .contains(&ext.to_ascii_lowercase().as_str()) =>
+        {
+            s.to_string()
+        }
+        _ => chosen,
+    };
+    let stem = if stem.trim().is_empty() {
+        "video".to_string()
+    } else {
+        stem
+    };
+    format!("{stem}.mp4")
+}
+
+#[cfg(test)]
+mod merged_name_tests {
+    use super::merged_name;
+
+    #[test]
+    fn joined_videos_get_the_extension_name_and_mp4() {
+        assert_eq!(
+            merged_name("AQME-mk9vci_DFPZ", Some("ezilaclari_story_17950.mp4")),
+            "ezilaclari_story_17950.mp4"
+        );
+        assert_eq!(
+            merged_name("AQME-mk9vci_DFPZ", None),
+            "AQME-mk9vci_DFPZ.mp4"
+        );
+        assert_eq!(merged_name("clip.webm", Some("")), "clip.mp4");
+        assert_eq!(merged_name("my.story.v2", None), "my.story.v2.mp4");
     }
 }

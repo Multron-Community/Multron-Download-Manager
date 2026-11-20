@@ -123,6 +123,7 @@ Name: "magnetassoc"; Description: "{cm:AssocMagnet}"; GroupDescription: "{cm:Ass
 [Files]
 Source: "{#SourceExe}"; DestDir: "{app}"; DestName: "{#AppExe}"; Flags: ignoreversion
 Source: "..\..\LICENSE"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\..\lang\*.ini"; DestDir: "{app}\lang"; Flags: ignoreversion
 Source: "..\..\extension\*"; DestDir: "{app}\browser-extension"; Flags: ignoreversion recursesubdirs createallsubdirs
 Source: "..\..\extension-build\firefox\*"; DestDir: "{app}\browser-extension-firefox"; Flags: ignoreversion recursesubdirs createallsubdirs
 #ifdef WebView2Bootstrapper

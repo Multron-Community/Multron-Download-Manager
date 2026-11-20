@@ -8,7 +8,9 @@
   import Icon from './Icon.svelte';
   import { cloudReason } from '../lib/cloud';
 
-  let tab = $state<'files' | 'threats'>('files');
+  let showFiles = $state(false);
+  const RING = 36;
+  const CIRCLE = 2 * Math.PI * RING;
   let now = $state(Date.now());
   const timer = setInterval(() => (now = Date.now()), 1000);
   onDestroy(() => clearInterval(timer));
@@ -47,6 +49,16 @@
   const notScanned = $derived(!!report && !report.running && !report.stopped && report.state === 'skipped');
   const partly = $derived(!!report && !report.running && !report.stopped && report.state === 'partial');
   const reason = $derived(cloudReason(report?.summary));
+  const ring = $derived(report?.running ? percent : 100);
+  const tone = $derived(
+    report?.threats
+      ? { text: 'text-bad' }
+      : report?.suspicious || notScanned || partly || report?.stopped || report?.state === 'error'
+        ? { text: 'text-warn' }
+        : report?.running
+          ? { text: 'text-accent' }
+          : { text: 'text-ok' }
+  );
 
   function result(f: CloudFinding) {
     switch (f.verdict) {
@@ -78,74 +90,72 @@
 </script>
 
 {#if app.cloudReportFor}
-  <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation">
-    <div class="w-full max-w-[860px] h-[86vh] max-h-[720px] bg-menu border border-line rounded-[14px] shadow-2xl flex flex-col overflow-hidden">
-      <div class="flex items-start gap-3 px-5 py-4 border-b border-line">
-        <div class="w-[38px] h-[38px] rounded-full flex items-center justify-center flex-shrink-0 {report?.threats ? 'bg-bad/20 text-bad' : report?.suspicious || notScanned || partly ? 'bg-warn/20 text-warn' : 'bg-accent/20 text-accent'}">
-          <Icon name="shield" size={19} />
-        </div>
-        <div class="min-w-0 flex-1">
-          <h2 class="text-[15px] font-semibold flex items-center gap-2">
-            {t('Multron Cloud scan')}
-            <span class="px-1.5 rounded bg-accent/15 text-accent text-[10px] font-semibold uppercase tracking-wide">{t('Cloud')}</span>
-            <span class="px-1.5 rounded bg-warn/15 text-warn text-[10px] font-semibold uppercase tracking-wide">{t('Testing')}</span>
-          </h2>
-          <div class="text-[12px] text-muted truncate" title={report?.name ?? ''}>
-            {report?.id === 'all' ? t('All downloads') + (report.ids.length ? ' · ' + t('{count} downloads', { count: report.ids.length }) : '') : (report?.name ?? '')}
-          </div>
-        </div>
+  <div class="fixed inset-0 bg-black/55 backdrop-blur-sm z-50 flex items-center justify-center p-4" role="presentation">
+    <div class="w-full max-w-[600px] max-h-[86vh] bg-menu border border-line rounded-[16px] shadow-2xl flex flex-col overflow-hidden">
+      <div class="flex items-center gap-2 px-5 pt-4">
+        <span class="text-[12px] font-semibold text-muted flex items-center gap-1.5"><Icon name="shield" size={13} />{t('Multron Cloud scan')}</span>
+        <span class="px-1.5 rounded bg-warn/15 text-warn text-[9.5px] font-semibold uppercase tracking-wide">{t('Testing')}</span>
+        <div class="flex-1"></div>
         <button class="icon-btn" title={t('Close')} onclick={close}><Icon name="x" size={14} /></button>
       </div>
 
       {#if !report}
-        <div class="p-6 text-[12.5px] text-muted">{t('Starting the scan…')}</div>
+        <div class="px-6 py-10 text-center text-[12.5px] text-muted">{t('Starting the scan…')}</div>
       {:else}
-        <div class="px-5 pt-4 pb-3 space-y-3 border-b border-line">
-          <div>
-            <div class="flex justify-between items-baseline text-[12.5px] mb-1.5">
-              <span class="font-semibold">
-                {#if report.running}
-                  {t('Scanning {done} of {total} files', { done: Math.min(report.done + 1, report.total), total: report.total })}
-                {:else if report.stopped}
-                  {t('Stopped after {done} of {total} files', { done: report.done, total: report.total })}
-                {:else if report.threats}
-                  {t('Threats found')}
-                {:else if report.suspicious}
-                  {t('Suspicious files found')}
-                {:else if report.state === 'error'}
-                  {t('The scan could not be finished')}
-                {:else if notScanned}
-                  {t('Not scanned')}
-                {:else if partly}
-                  {t('Partly scanned')}
-                {:else}
-                  {t('No threat found')}
-                {/if}
-              </span>
-              <span class="text-muted">{percent}%</span>
+        <div class="px-6 pt-3 pb-5 flex items-center gap-5">
+          <div class="relative w-[84px] h-[84px] flex-shrink-0">
+            <svg viewBox="0 0 84 84" class="w-full h-full -rotate-90">
+              <circle cx="42" cy="42" r={RING} fill="none" stroke="currentColor" stroke-width="6" class="text-line" />
+              <circle cx="42" cy="42" r={RING} fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round" class="{tone.text} transition-all duration-500" stroke-dasharray={CIRCLE} stroke-dashoffset={CIRCLE * (1 - ring / 100)} />
+            </svg>
+            <div class="absolute inset-0 flex items-center justify-center {tone.text}">
+              {#if report.running}
+                <span class="text-[16px] font-semibold text-white">{percent}%</span>
+              {:else}
+                <Icon name={report.threats || report.suspicious ? 'alert' : notScanned || partly || report.state === 'error' || report.stopped ? 'shield' : 'check'} size={28} />
+              {/if}
             </div>
-            <div class="h-[8px] rounded-full bg-line overflow-hidden">
-              <div class="h-full rounded-full transition-all {report.threats ? 'bg-bad' : report.suspicious || notScanned || partly ? 'bg-warn' : report.running ? 'bg-accent' : 'bg-ok'}" style="width: {percent}%"></div>
+          </div>
+          <div class="min-w-0 flex-1">
+            <h2 class="text-[18px] font-semibold leading-tight">
+              {#if report.running}
+                {t('Scanning {done} of {total} files', { done: Math.min(report.done + 1, report.total), total: report.total })}
+              {:else if report.stopped}
+                {t('Stopped after {done} of {total} files', { done: report.done, total: report.total })}
+              {:else if report.threats}
+                {t('Threats found')}
+              {:else if report.suspicious}
+                {t('Suspicious files found')}
+              {:else if report.state === 'error'}
+                {t('The scan could not be finished')}
+              {:else if notScanned}
+                {t('Not scanned')}
+              {:else if partly}
+                {t('Partly scanned')}
+              {:else}
+                {t('No threat found')}
+              {/if}
+            </h2>
+            <div class="text-[12px] text-muted truncate mt-0.5" title={report.name ?? ''}>
+              {report.id === 'all' ? t('All downloads') + (report.ids.length ? ' · ' + t('{count} downloads', { count: report.ids.length }) : '') : (report.name ?? '')}
             </div>
-            {#if !report.running && report.state === 'error' && reason}
-              <div class="text-[11.5px] text-bad mt-1.5 select-text">{reason}</div>
-            {:else if !report.running && (report.stopped || report.notChecked > 0 || report.state === 'unknown') && reason}
-              <div class="text-[11.5px] text-warn mt-1.5 select-text">{reason}</div>
+            <div class="text-[11px] text-dim mt-1.5 flex flex-wrap gap-x-3 gap-y-0.5">
+              <span class="whitespace-nowrap">{t('Elapsed')} <b class="text-muted font-semibold">{duration(elapsed)}</b></span>
+              {#if remaining != null}<span class="whitespace-nowrap">{t('Remaining')} <b class="text-muted font-semibold">{duration(remaining)}</b></span>{/if}
+              {#if report.uploaded}<span class="whitespace-nowrap">{t('Uploaded to the cloud')} <b class="text-muted font-semibold">{report.uploaded} · {bytes(report.uploadedBytes)}</b></span>{/if}
+              {#if report.known}<span class="whitespace-nowrap">{t('Known by fingerprint')} <b class="text-muted font-semibold">{report.known}</b></span>{/if}
+            </div>
+            {#if !report.running && reason && (report.state === 'error' || report.stopped || report.notChecked > 0 || report.state === 'unknown')}
+              <div class="text-[11.5px] mt-1.5 select-text {report.state === 'error' ? 'text-bad' : 'text-warn'}">{reason}</div>
             {/if}
           </div>
+        </div>
 
-          <div class="grid grid-cols-4 gap-2 text-[11.5px]">
-            <div><div class="text-muted">{t('Elapsed')}</div><div class="font-semibold text-[13px]">{duration(elapsed)}</div></div>
-            <div><div class="text-muted">{t('Remaining')}</div><div class="font-semibold text-[13px]">{remaining == null ? '—' : duration(remaining)}</div></div>
-            <div><div class="text-muted">{t('Uploaded to the cloud')}</div><div class="font-semibold text-[13px]">{report.uploaded} · {bytes(report.uploadedBytes)}</div></div>
-            <div><div class="text-muted">{t('Known by fingerprint')}</div><div class="font-semibold text-[13px]">{report.known}</div></div>
-          </div>
-
-          {#if report.running}
-            <div class="rounded-[10px] border border-accent/40 bg-accent/5 p-2.5">
-              <div class="text-[12px] mono truncate font-medium" title={report.current ?? ''}>{report.stage === 'checking' ? t('Fingerprint check') : (report.current ?? '…')}</div>
-              <div class="text-[11.5px] text-accent flex items-center gap-1.5 mt-0.5">
-                <Icon name={report.stage === 'uploading' ? 'up' : report.stage === 'hashing' ? 'hash' : 'shield'} size={12} />
+        {#if report.running}
+          <div class="mx-5 mb-4 rounded-[10px] bg-accent/8 border border-accent/25 px-3 py-2">
+            <div class="text-[11.5px] text-accent flex items-center gap-1.5">
+              <Icon name={report.stage === 'uploading' ? 'up' : report.stage === 'hashing' ? 'hash' : 'shield'} size={12} class="flex-shrink-0" />
+              <span class="truncate">
                 {#if report.stage === 'hashing'}
                   {t('Computing fingerprints (SHA-256)… {done} of {total}', { done: report.stageSent + 1, total: report.stageTotal })}
                 {:else if report.stage === 'checking'}
@@ -161,80 +171,73 @@
                 {:else}
                   {t('Connecting to Multron Cloud…')}
                 {/if}
-              </div>
-              {#if report.stage === 'uploading'}
-                <div class="h-[4px] rounded-full bg-line overflow-hidden mt-1.5"><div class="h-full bg-accent transition-all" style="width: {uploadPercent}%"></div></div>
-              {/if}
+              </span>
             </div>
-          {/if}
-
-          <div class="grid grid-cols-5 gap-2">
-            <div class="rounded-[10px] border border-line px-2.5 py-1.5"><div class="text-[17px] font-semibold text-ok">{report.clean}</div><div class="text-[11px] text-muted">{t('Clean')}</div></div>
-            <div class="rounded-[10px] border border-line px-2.5 py-1.5" title={t('No threat was found, but the file is not verified as clean yet')}><div class="text-[17px] font-semibold text-ok/80">{report.unknown ?? 0}</div><div class="text-[11px] text-muted">{t('No detection')}</div></div>
-            <div class="rounded-[10px] border px-2.5 py-1.5 {report.threats ? 'border-bad/50 bg-bad/10' : 'border-line'}"><div class="text-[17px] font-semibold text-bad">{report.threats}</div><div class="text-[11px] text-muted">{t('Threats')}</div></div>
-            <div class="rounded-[10px] border px-2.5 py-1.5 {report.suspicious ? 'border-warn/50 bg-warn/10' : 'border-line'}"><div class="text-[17px] font-semibold text-warn">{report.suspicious}</div><div class="text-[11px] text-muted">{t('Suspicious')}</div></div>
-            <div class="rounded-[10px] border border-line px-2.5 py-1.5"><div class="text-[17px] font-semibold text-muted">{report.notChecked}</div><div class="text-[11px] text-muted">{t('Not checked')}</div></div>
+            {#if report.current && report.stage !== 'checking'}
+              <div class="text-[11px] mono text-muted truncate mt-0.5" title={report.current}>{report.current}</div>
+            {/if}
+            {#if report.stage === 'uploading'}
+              <div class="h-[3px] rounded-full bg-line overflow-hidden mt-1.5"><div class="h-full bg-accent transition-all" style="width: {uploadPercent}%"></div></div>
+            {/if}
           </div>
+        {/if}
+
+        <div class="px-5 pb-4 flex flex-wrap gap-1.5">
+          <span class="pill bg-ok/12 text-ok"><Icon name="check" size={11} />{t('Clean')} <b>{report.clean}</b></span>
+          {#if report.unknown}
+            <span class="pill bg-ok/8 text-ok/85" title={t('No threat was found, but the file is not verified as clean yet')}>{t('No detection')} <b>{report.unknown}</b></span>
+          {/if}
+          <span class="pill {report.threats ? 'bg-bad/15 text-bad' : 'bg-line/60 text-muted'}">{t('Threats')} <b>{report.threats}</b></span>
+          {#if report.suspicious}
+            <span class="pill bg-warn/15 text-warn">{t('Suspicious')} <b>{report.suspicious}</b></span>
+          {/if}
+          {#if report.notChecked}
+            <span class="pill bg-line/60 text-muted">{t('Not checked')} <b>{report.notChecked}</b></span>
+          {/if}
         </div>
 
-        <div class="flex gap-1 px-5 pt-2">
-          <button class="px-3 h-[28px] rounded-full text-[12px] font-medium cursor-pointer {tab === 'files' ? 'bg-accent-strong/25 text-accent' : 'text-muted hover:bg-line'}" onclick={() => (tab = 'files')}>{t('All files')} ({report.done})</button>
-          <button class="px-3 h-[28px] rounded-full text-[12px] font-medium cursor-pointer {tab === 'threats' ? 'bg-bad/15 text-bad' : threats.length ? 'text-bad hover:bg-bad/10' : 'text-muted hover:bg-line'}" onclick={() => (tab = 'threats')}>{t('Threats')} ({threats.length})</button>
-        </div>
+        <div class="flex-1 min-h-0 overflow-y-auto px-5 pb-3 space-y-1.5">
+          {#each threats as f (f.path)}
+            <div class="rounded-[10px] border p-2.5 flex items-center gap-2.5 {f.verdict === 'malicious' ? 'border-bad/45 bg-bad/10' : 'border-warn/45 bg-warn/10'}">
+              <Icon name="alert" size={15} class="flex-shrink-0 {f.verdict === 'malicious' ? 'text-bad' : 'text-warn'}" />
+              <div class="min-w-0 flex-1">
+                <div class="text-[12px] mono truncate" title={f.name}>{f.name}</div>
+                <div class="text-[11px] {f.verdict === 'malicious' ? 'text-bad' : 'text-warn'} truncate select-text" title={f.detail ?? ''}>{f.verdict === 'malicious' ? t('Threat found') : t('Suspicious file')}{f.detail ? ' · ' + f.detail : ''}</div>
+              </div>
+              <button class="btn !h-[26px] !text-[11.5px] flex-shrink-0" onclick={() => reveal(f)}><Icon name="folderOpen" size={12} />{t('Show in folder')}</button>
+            </div>
+          {/each}
 
-        <div class="flex-1 min-h-0 overflow-y-auto px-5 py-2">
-          {#if tab === 'threats'}
-            {#if threats.length}
-              <ul class="space-y-1.5">
-                {#each threats as f (f.path)}
-                  <li class="rounded-[10px] border p-2.5 flex items-start gap-2.5 {f.verdict === 'malicious' ? 'border-bad/50 bg-bad/10' : 'border-warn/50 bg-warn/10'}">
-                    <Icon name="alert" size={14} class="mt-[2px] flex-shrink-0 {f.verdict === 'malicious' ? 'text-bad' : 'text-warn'}" />
-                    <div class="min-w-0 flex-1">
-                      <div class="text-[12px] mono truncate" title={f.name}>{f.name}</div>
-                      <div class="text-[11.5px] {f.verdict === 'malicious' ? 'text-bad' : 'text-warn'} select-text">{f.verdict === 'malicious' ? t('Threat found') : t('Suspicious file')}{f.detail ? ' · ' + f.detail : ''}</div>
-                    </div>
-                    <button class="btn !h-[26px] !text-[11.5px] flex-shrink-0" onclick={() => reveal(f)}><Icon name="folderOpen" size={12} />{t('Show in folder')}</button>
+          {#if files.length}
+            <button class="w-full flex items-center gap-1.5 text-[11.5px] text-muted hover:text-white py-1 cursor-pointer" onclick={() => (showFiles = !showFiles)}>
+              <Icon name="chevron" size={11} class="transition-transform {showFiles ? 'rotate-90' : ''}" />
+              {t('All files')} ({report.done})
+            </button>
+            {#if showFiles}
+              <ul class="rounded-[10px] border border-line divide-y divide-line/60 overflow-hidden">
+                {#each files as f, i (f.path + i)}
+                  {@const r = result(f)}
+                  <li class="px-3 py-1.5 flex items-center gap-3 text-[11.5px]" title={cloudReason(f.detail) || how(f)}>
+                    <span class="mono truncate flex-1 min-w-0">{f.name}</span>
+                    <span class="text-dim flex-shrink-0">{bytes(f.size)}</span>
+                    <span class="px-1.5 py-[1px] rounded font-medium flex-shrink-0 {r.cls}">{r.text}</span>
                   </li>
                 {/each}
               </ul>
-            {:else}
-              <p class="text-[12px] text-muted py-2">{report.running ? t('No threats so far.') : t('No threats were found.')}</p>
+              {#if report.done > files.length}
+                <p class="text-[11px] text-dim py-1">{t('Only the last {count} files are shown.', { count: files.length })}</p>
+              {/if}
             {/if}
-          {:else if files.length}
-            <table class="w-full text-[11.5px] table-fixed">
-              <thead class="text-muted text-left sticky top-0 bg-menu">
-                <tr>
-                  <th class="font-medium py-1">{t('File')}</th>
-                  <th class="font-medium py-1 w-[80px] text-right pr-3">{t('Size')}</th>
-                  <th class="font-medium py-1 w-[120px]">{t('Result')}</th>
-                  <th class="font-medium py-1 w-[170px]">{t('How')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {#each files as f, i (f.path + i)}
-                  {@const r = result(f)}
-                  <tr class="border-t border-line/60 {f.verdict === 'malicious' ? 'bg-bad/5' : ''}">
-                    <td class="py-1 pr-2 mono truncate" title={f.detail ? f.name + ' — ' + cloudReason(f.detail) : f.name}>{f.name}</td>
-                    <td class="py-1 text-right pr-3 text-muted">{bytes(f.size)}</td>
-                    <td class="py-1"><span class="px-1.5 py-[1px] rounded font-medium {r.cls}" title={cloudReason(f.detail)}>{r.text}</span></td>
-                    <td class="py-1 text-muted truncate" title={cloudReason(f.detail) || how(f)}>{how(f)}</td>
-                  </tr>
-                {/each}
-              </tbody>
-            </table>
-            {#if report.done > files.length}
-              <p class="text-[11px] text-muted py-1.5">{t('Only the last {count} files are shown.', { count: files.length })}</p>
-            {/if}
-          {:else}
-            <p class="text-[12px] text-muted py-2">{report.running ? t('Starting the scan…') : t('No file was checked.')}</p>
+          {:else if !report.running}
+            <p class="text-[12px] text-muted py-1">{t('No file was checked.')}</p>
           {/if}
         </div>
       {/if}
 
-      <div class="flex justify-end gap-2 px-4 py-3 border-t border-line">
+      <div class="flex justify-end gap-2 px-5 py-3 border-t border-line">
         {#if report?.running}
           <button class="btn btn-danger" disabled={stopping === report.id} onclick={stop}>{stopping === report.id ? t('Stopping…') : t('Stop scan')}</button>
-          <button class="btn" onclick={close}>{t('Keep scanning in the background')}</button>
+          <button class="btn btn-accent" onclick={close}>{t('Keep scanning in the background')}</button>
         {:else}
           <button class="btn btn-accent" onclick={close}>{t('Close')}</button>
         {/if}

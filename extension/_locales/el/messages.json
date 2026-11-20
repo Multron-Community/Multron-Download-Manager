@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Το Multron Download Manager δεν εκτελείται και δεν ήταν δυνατή η εκκίνησή του. Ξεκινήστε την εφαρμογή και δοκιμάστε ξανά."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Εγκρίνετε αυτό το πρόγραμμα περιήγησης στο παράθυρο του Multron Download Manager και δοκιμάστε ξανά."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: αίτημα σύνδεσης"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "Η εφαρμογή απέρριψε τη λήψη (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Δεν βρέθηκε τίποτα για λήψη σε αυτή τη σελίδα."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Το Multron Download Manager δεν εκτελείται. Ξεκινήστε την εφαρμογή και δοκιμάστε ξανά."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Λήψη συνδέσμου με το Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Λήψη βίντεο/ήχου από σύνδεσμο με το Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Λήψη αυτού του πολυμέσου με το Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Λήψη βίντεο αυτής της σελίδας με το Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Λήψη όλων από αυτή τη σελίδα με το Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Λήψη επιλεγμένου συνδέσμου με το Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "Η επιλογή δεν είναι σύνδεσμος."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Εγκρίνετε αυτό το πρόγραμμα περιήγησης στο παράθυρο του Multron Download Manager. Η λήψη θα περιμένει ως τότε."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Στάλθηκε στο Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Το Multron Download Manager δεν δέχτηκε τη λήψη"
+  },
+  "Save_videos_as_1": {
+    "message": "Αποθήκευση βίντεο ως $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Χρήση της μορφής βίντεο που ορίστηκε στο Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 με H.264 και AAC: παίζει παντού, και στο WhatsApp και σε παλαιότερα κινητά και τηλεοράσεις (έως 1080p στο YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Έλεγχος μεγεθών…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Τα μεγέθη δεν είναι διαθέσιμα για αυτό το βίντεο"
+  },
+  "Hide_on_this_page": {
+    "message": "Απόκρυψη σε αυτή τη σελίδα"
+  },
+  "Download_1": {
+    "message": "Λήψη: $1"
+  },
+  "Download_video": {
+    "message": "Λήψη βίντεο"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Σύρετε για μετακίνηση · διπλό κλικ για επαναφορά"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Λήψη με το Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Απόκρυψη σε πλήρη οθόνη σε αυτή τη σελίδα (απενεργοποίηση παντού στο Multron Download Manager: Ρυθμίσεις → Ενοποίηση με το πρόγραμμα περιήγησης)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Απόκρυψη σε πλήρη οθόνη σε αυτή τη σελίδα"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Το Multron Download Manager δεν εκτελείται: λήψη στο πρόγραμμα περιήγησης"
+  },
+  "Best_quality": {
+    "message": "Καλύτερη ποιότητα"
+  },
+  "Audio_1": {
+    "message": "Ήχος ($1)"
+  },
+  "Default": {
+    "message": "Προεπιλογή"
+  },
+  "Reddit_post": {
+    "message": "Ανάρτηση Reddit"
+  },
+  "Facebook_video": {
+    "message": "Βίντεο Facebook"
+  },
+  "App_not_running": {
+    "message": "Η εφαρμογή δεν εκτελείται"
+  },
+  "Not_approved_v_1": {
+    "message": "Δεν εγκρίθηκε · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Συνδέθηκε · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Τα μεγέθη δεν είναι διαθέσιμα για αυτή τη σελίδα"
+  },
+  "Sending": {
+    "message": "Αποστολή…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Το Multron Download Manager δεν το δέχτηκε — ελέγξτε την εφαρμογή."
+  },
+  "This_page": {
+    "message": "Αυτή η σελίδα"
+  },
+  "File_on_this_page": {
+    "message": "Αρχείο σε αυτή τη σελίδα"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Κύλιση και συλλογή…"
+  },
+  "Collecting": {
+    "message": "Συλλογή…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "Βρέθηκαν $1 στοιχεία. Επιλέξτε τα στο Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Κάτι πήγε στραβά."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Εισαγάγετε σύνδεσμο http(s) ή magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Η πρόσβαση δόθηκε. Φορτώστε ξανά τη σελίδα για να δείτε το κουμπί."
+  },
+  "Access_was_not_granted": {
+    "message": "Η πρόσβαση δεν δόθηκε."
+  },
+  "Connected": {
+    "message": "Συνδέθηκε ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Εγκρίνετε το αίτημα στο παράθυρο του Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Έλεγχος…"
+  },
+  "Connect": {
+    "message": "Σύνδεση"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Το Multron Download Manager χρειάζεται πρόσβαση σε ιστότοπους για να δείχνει το κουμπί Λήψη βίντεο και να αναλαμβάνει τις λήψεις."
+  },
+  "Allow_on_all_sites": {
+    "message": "Να επιτρέπεται σε όλους τους ιστότοπους"
+  },
+  "Download": {
+    "message": "Λήψη"
+  },
+  "Video_format": {
+    "message": "Μορφή βίντεο"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, παίζει παντού)"
+  },
+  "Everything_on_this_page": {
+    "message": "Όλα σε αυτή τη σελίδα"
+  },
+  "Visible_part": {
+    "message": "Ορατό τμήμα"
+  },
+  "Scroll_5_screens": {
+    "message": "Κύλιση 5 οθονών"
+  },
+  "Scroll_20_screens": {
+    "message": "Κύλιση 20 οθονών"
+  },
+  "Scroll_60_screens": {
+    "message": "Κύλιση 60 οθονών"
+  },
+  "Download_all": {
+    "message": "Λήψη όλων…"
+  },
+  "Link_or_magnet": {
+    "message": "Σύνδεσμος ή magnet"
+  },
+  "Send": {
+    "message": "Αποστολή"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Ανάληψη λήψεων του προγράμματος περιήγησης"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Άνοιγμα συνδέσμων magnet στο Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Εμφάνιση κουμπιού λήψης σε σελίδες βίντεο"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Αποστολή cookies ιστότοπου (ιδιωτικά αρχεία / μόνο με σύνδεση)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Παράβλεψη αρχείων μικρότερων από (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Ποτέ ανάληψη από"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Ποτέ ανάληψη αυτών των τύπων αρχείων"
+  },
+  "App_port": {
+    "message": "Θύρα εφαρμογής"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Οι ατέρμονες ροές (Reddit, Instagram, X…) φορτώνουν περισσότερα κατά την κύλιση"
+  },
+  "https_or_magnet": {
+    "message": "https://… ή magnet:?…"
+  },
+  "extDescription": {
+    "message": "Στείλτε λήψεις, βίντεο (YouTube, Reddit, Instagram, X, TikTok…), αρχεία Google Drive / MEGA και torrent στο Multron Download Manager."
+  }
+}

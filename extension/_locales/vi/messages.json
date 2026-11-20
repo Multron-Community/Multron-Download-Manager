@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager không chạy và không thể khởi động. Hãy mở ứng dụng rồi thử lại."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Hãy duyệt trình duyệt này trong cửa sổ Multron Download Manager, rồi thử lại."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: yêu cầu kết nối"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "Ứng dụng đã từ chối lượt tải (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Không tìm thấy gì để tải trên trang này."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager không chạy. Hãy mở ứng dụng rồi thử lại."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Tải liên kết bằng Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Tải video/âm thanh từ liên kết bằng Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Tải media này bằng Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Tải video trên trang này bằng Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Tải tất cả từ trang này bằng Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Tải liên kết đã chọn bằng Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "Vùng chọn không phải là liên kết."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Hãy duyệt trình duyệt này trong cửa sổ Multron Download Manager. Lượt tải sẽ chờ đến lúc đó."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Đã gửi tới Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager không nhận lượt tải"
+  },
+  "Save_videos_as_1": {
+    "message": "Lưu video dạng $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Dùng định dạng video đặt trong Multron Download Manager"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 với H.264 và AAC: phát được mọi nơi, kể cả trên WhatsApp và điện thoại, TV đời cũ (tối đa 1080p trên YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Đang kiểm tra kích thước…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Không có thông tin kích thước cho video này"
+  },
+  "Hide_on_this_page": {
+    "message": "Ẩn trên trang này"
+  },
+  "Download_1": {
+    "message": "Tải về: $1"
+  },
+  "Download_video": {
+    "message": "Tải video"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Kéo để di chuyển · nhấp đúp để đưa về chỗ cũ"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Tải bằng Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Ẩn khi toàn màn hình trên trang này (tắt ở mọi nơi trong Multron Download Manager: Cài đặt → Tích hợp trình duyệt)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Ẩn khi toàn màn hình trên trang này"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager không chạy: đang tải trong trình duyệt"
+  },
+  "Best_quality": {
+    "message": "Chất lượng tốt nhất"
+  },
+  "Audio_1": {
+    "message": "Âm thanh ($1)"
+  },
+  "Default": {
+    "message": "Mặc định"
+  },
+  "Reddit_post": {
+    "message": "Bài đăng Reddit"
+  },
+  "Facebook_video": {
+    "message": "Video Facebook"
+  },
+  "App_not_running": {
+    "message": "Ứng dụng không chạy"
+  },
+  "Not_approved_v_1": {
+    "message": "Chưa được duyệt · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Đã kết nối · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Không có thông tin kích thước cho trang này"
+  },
+  "Sending": {
+    "message": "Đang gửi…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager không nhận — hãy kiểm tra ứng dụng."
+  },
+  "This_page": {
+    "message": "Trang này"
+  },
+  "File_on_this_page": {
+    "message": "Tệp trên trang này"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Đang cuộn và thu thập…"
+  },
+  "Collecting": {
+    "message": "Đang thu thập…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "Tìm thấy $1 mục. Chọn chúng trong Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Đã xảy ra lỗi."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Nhập liên kết http(s) hoặc magnet."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Đã cấp quyền. Tải lại trang để thấy nút."
+  },
+  "Access_was_not_granted": {
+    "message": "Chưa được cấp quyền."
+  },
+  "Connected": {
+    "message": "Đã kết nối ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Hãy duyệt yêu cầu trong cửa sổ Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Đang kiểm tra…"
+  },
+  "Connect": {
+    "message": "Kết nối"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager cần quyền truy cập trang web để hiển thị nút Tải video và tiếp nhận lượt tải."
+  },
+  "Allow_on_all_sites": {
+    "message": "Cho phép trên mọi trang"
+  },
+  "Download": {
+    "message": "Tải về"
+  },
+  "Video_format": {
+    "message": "Định dạng video"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, phát được mọi nơi)"
+  },
+  "Everything_on_this_page": {
+    "message": "Mọi thứ trên trang này"
+  },
+  "Visible_part": {
+    "message": "Phần hiển thị"
+  },
+  "Scroll_5_screens": {
+    "message": "Cuộn 5 màn hình"
+  },
+  "Scroll_20_screens": {
+    "message": "Cuộn 20 màn hình"
+  },
+  "Scroll_60_screens": {
+    "message": "Cuộn 60 màn hình"
+  },
+  "Download_all": {
+    "message": "Tải tất cả…"
+  },
+  "Link_or_magnet": {
+    "message": "Liên kết hoặc magnet"
+  },
+  "Send": {
+    "message": "Gửi"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Tiếp nhận lượt tải của trình duyệt"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Mở liên kết magnet trong Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "Hiện nút tải trên trang video"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Gửi cookie của trang (tệp riêng tư / cần đăng nhập)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Bỏ qua tệp nhỏ hơn (KB)"
+  },
+  "Never_take_over_from": {
+    "message": "Không bao giờ tiếp nhận từ"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Không bao giờ tiếp nhận các loại tệp này"
+  },
+  "App_port": {
+    "message": "Cổng ứng dụng"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Nguồn cấp vô tận (Reddit, Instagram, X…) tải thêm khi cuộn"
+  },
+  "https_or_magnet": {
+    "message": "https://… hoặc magnet:?…"
+  },
+  "extDescription": {
+    "message": "Gửi lượt tải, video (YouTube, Reddit, Instagram, X, TikTok…), tệp Google Drive / MEGA và torrent tới Multron Download Manager."
+  }
+}

@@ -160,6 +160,10 @@ async fn ping(State(mgr): State<Arc<Manager>>, headers: HeaderMap) -> Json<Value
         "mediaEnabled": s.media_enabled,
         "torrentEnabled": s.torrent_enabled,
         "fullscreenButton": s.fullscreen_video_button,
+        "availableQualities": s.media_available_qualities,
+        "siteOptions": s.site_options,
+        "language": crate::i18n::resolve(&s.language),
+        "theme": s.theme,
         "extensionBuild": crate::browsers::extension_build(&mgr.app),
     }))
 }
@@ -294,7 +298,14 @@ async fn sizes(
     }
     let browser = mgr.settings().cookies_from_browser.clone();
     match mgr.tools.probe(req.url.trim(), None, &browser).await {
-        Ok(info) => (StatusCode::OK, Json(json!({ "sizes": info.sizes }))),
+        Ok(info) => (
+            StatusCode::OK,
+            Json(json!({
+                "sizes": info.sizes,
+                "heights": info.heights,
+                "audioOnly": info.audio_only,
+            })),
+        ),
         Err(e) => (
             StatusCode::BAD_GATEWAY,
             Json(json!({ "error": format!("{e:#}") })),
@@ -323,6 +334,14 @@ async fn download(
             Json(json!({ "error": "missing url" })),
         );
     }
+    if mgr.settings().block_private_links && crate::util::private_network_link(&req.url) {
+        return (
+            StatusCode::FORBIDDEN,
+            Json(
+                json!({ "error": "links to your local network are blocked in Settings → Security" }),
+            ),
+        );
+    }
     if let Some(existing) = mgr.find_duplicate(&req) {
         mgr.push_pending(Pending::Duplicate {
             request: Box::new(req),
@@ -331,14 +350,24 @@ async fn download(
         return (StatusCode::OK, Json(json!({ "ok": true, "confirm": true })));
     }
     let s = mgr.settings();
-    if s.confirm_browser_downloads || s.ask_sha256 {
-        mgr.push_pending(Pending::Add {
-            request: Box::new(req),
-        });
+    let program = s.ask_for_programs
+        && req
+            .filename
+            .clone()
+            .filter(|f| !f.trim().is_empty())
+            .or_else(|| crate::util::filename_from_url(&req.url))
+            .is_some_and(|f| crate::security::is_program(std::path::Path::new(&f)));
+    if s.confirm_browser_downloads || s.ask_sha256 || program {
+        crate::askwin::open(&mgr.app, req);
         return (StatusCode::OK, Json(json!({ "ok": true, "confirm": true })));
     }
     match mgr.add(req).await {
-        Ok(id) => (StatusCode::OK, Json(json!({ "ok": true, "id": id }))),
+        Ok(id) => {
+            if s.progress_window && !id.is_empty() {
+                crate::askwin::open_progress(&mgr.app, &id);
+            }
+            (StatusCode::OK, Json(json!({ "ok": true, "id": id })))
+        }
         Err(e) => (
             StatusCode::UNPROCESSABLE_ENTITY,
             Json(json!({ "error": format!("{e:#}") })),

@@ -5,20 +5,30 @@
   import { t } from './lib/i18n.svelte';
   import { api, errorText } from './lib/api';
   import { applyAppearance } from './lib/theme';
+  import { builtinBackground } from './lib/backgrounds';
   import { bytes, speed } from './lib/format';
   import Sidebar from './components/Sidebar.svelte';
+  import CommandPalette from './components/CommandPalette.svelte';
   import Icon from './components/Icon.svelte';
   import Header from './components/Header.svelte';
   import DownloadList from './components/DownloadList.svelte';
   import DetailsPane from './components/DetailsPane.svelte';
   import StatusBar from './components/StatusBar.svelte';
   import NewTaskModal from './components/NewTaskModal.svelte';
-  import SettingsView from './components/SettingsView.svelte';
   import Dialogs from './components/Dialogs.svelte';
   import ExtensionSetup from './components/ExtensionSetup.svelte';
   import BatchModal from './components/BatchModal.svelte';
-  import RssView from './components/RssView.svelte';
   import CreateTorrentModal from './components/CreateTorrentModal.svelte';
+  import type { Component } from 'svelte';
+
+  const VIEWS: Record<string, () => Promise<{ default: Component }>> = {
+    settings: () => import('./components/SettingsView.svelte'),
+    rss: () => import('./components/RssView.svelte'),
+    search: () => import('./components/SearchView.svelte'),
+    grabber: () => import('./components/LinkGrabberView.svelte'),
+    stats: () => import('./components/StatsView.svelte'),
+    history: () => import('./components/HistoryView.svelte')
+  };
 
   let initError = $state<string | null>(null);
 
@@ -28,12 +38,49 @@
       applyAppearance({
         theme: a.theme,
         accentColor: a.accentColor,
+        accentCustom: a.accentCustom,
+        accentContrast: a.accentContrast,
+        accentText: a.accentText,
+        buttonColor: a.buttonColor,
+        glassEffect: a.glassEffect,
+        hoverGlow: a.hoverGlow,
+        clickRipple: a.clickRipple,
+        stateGlow: a.stateGlow,
+        motion: a.motion,
+        effectsOff: a.effectsOff,
+        headingColor: a.headingColor,
+        lightBrightness: a.lightBrightness,
+        darkBrightness: a.darkBrightness,
+        roundedCorners: a.roundedCorners,
         transparency: a.transparency,
         backdropMaterial: a.backdropMaterial,
-        transparencyLevel: a.transparencyLevel
+        transparencyLevel: a.transparencyLevel,
+        wallpaper: !!wallpaperUrl,
+        wallpaperOpacity: a.backgroundOpacity
       });
     }
   });
+
+  let wallpaperUrl = $state<string | null>(null);
+  let wallpaperFor = '';
+  $effect(() => {
+    const path = (app.appearancePreview ?? app.settings)?.backgroundImage ?? '';
+    if (path === wallpaperFor) return;
+    wallpaperFor = path;
+    if (!path) {
+      wallpaperUrl = null;
+      return;
+    }
+    const builtin = builtinBackground(path);
+    if (builtin) {
+      wallpaperUrl = builtin.image;
+      return;
+    }
+    api.backgroundData(path).then((url) => {
+      if (wallpaperFor === path) wallpaperUrl = url;
+    }).catch(() => (wallpaperUrl = null));
+  });
+  let wallpaperBlur = $derived((app.appearancePreview ?? app.settings)?.backgroundBlur ?? 0);
   let dragging = $state(false);
 
   onMount(() => {
@@ -73,19 +120,28 @@
   }
 </script>
 
-<div class="w-screen h-screen bg-bg flex flex-col overflow-hidden">
+{#if wallpaperUrl}
+  <div class="fixed inset-0 -z-10 bg-cover bg-center pointer-events-none" style="background-image: url({wallpaperUrl}); filter: blur({wallpaperBlur}px); transform: scale({wallpaperBlur ? 1.06 : 1});"></div>
+{/if}
+<div class="app-root w-screen h-screen bg-bg flex flex-col overflow-hidden {app.stats.downloadSpeed > 0 || app.stats.uploadSpeed > 0 ? 'busy' : ''}">
   {#if initError}
     <div class="m-auto text-center space-y-2">
       <p class="text-bad text-[14px]">Multron Download Manager could not start</p>
       <p class="text-muted text-[12px] mono">{initError}</p>
     </div>
   {:else if app.ready}
-    <div class="flex-1 flex overflow-hidden min-h-0">
+    <div class="app-shell flex-1 flex overflow-hidden min-h-0">
       <Sidebar />
-      {#if app.view === 'settings'}
-        <SettingsView />
-      {:else if app.view === 'rss'}
-        <RssView />
+      {#if VIEWS[app.view]}
+        {#key app.view}
+          {#await VIEWS[app.view]()}
+            <div class="flex-1 bg-bg"></div>
+          {:then view}
+            <div class="view-enter flex-1 flex min-w-0 min-h-0 overflow-hidden">
+              <view.default />
+            </div>
+          {/await}
+        {/key}
       {:else}
         <div class="flex-1 flex flex-col min-w-0 min-h-0">
           <Header />
@@ -138,3 +194,4 @@
     </div>
   </div>
 {/if}
+<CommandPalette />

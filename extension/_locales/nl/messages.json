@@ -1,0 +1,236 @@
+{
+  "extName": {
+    "message": "Multron Download Manager"
+  },
+  "Multron_Download_Manager_is_not_running_and_could_not_be_started_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager draait niet en kon niet worden gestart. Start de app en probeer het opnieuw."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_then_try_again": {
+    "message": "Keur deze browser goed in het venster van Multron Download Manager en probeer het opnieuw."
+  },
+  "Multron_Download_Manager_connection_request": {
+    "message": "Multron Download Manager: verbindingsverzoek"
+  },
+  "The_app_rejected_the_download_HTTP_1": {
+    "message": "De app weigerde de download (HTTP $1)."
+  },
+  "Nothing_to_download_was_found_on_this_page": {
+    "message": "Er is niets om te downloaden gevonden op deze pagina."
+  },
+  "Multron_Download_Manager_is_not_running_Start_the_app_and_try_again": {
+    "message": "Multron Download Manager draait niet. Start de app en probeer het opnieuw."
+  },
+  "Download_link_with_Multron_Download_Manager": {
+    "message": "Link downloaden met Multron Download Manager"
+  },
+  "Download_video_audio_from_link_with_Multron_Download_Manager": {
+    "message": "Video/audio van link downloaden met Multron Download Manager"
+  },
+  "Download_this_media_with_Multron_Download_Manager": {
+    "message": "Deze media downloaden met Multron Download Manager"
+  },
+  "Download_video_on_this_page_with_Multron_Download_Manager": {
+    "message": "Video op deze pagina downloaden met Multron Download Manager"
+  },
+  "Download_all_from_this_page_with_Multron_Download_Manager": {
+    "message": "Alles van deze pagina downloaden met Multron Download Manager…"
+  },
+  "Download_selected_link_with_Multron_Download_Manager": {
+    "message": "Geselecteerde link downloaden met Multron Download Manager"
+  },
+  "The_selection_is_not_a_link": {
+    "message": "De selectie is geen link."
+  },
+  "Approve_this_browser_in_the_Multron_Download_Manager_window_The_download_waits_until_then": {
+    "message": "Keur deze browser goed in het venster van Multron Download Manager. De download wacht tot dan."
+  },
+  "Sent_to_Multron_Download_Manager": {
+    "message": "Verstuurd naar Multron Download Manager"
+  },
+  "Multron_Download_Manager_did_not_accept_the_download": {
+    "message": "Multron Download Manager heeft de download niet geaccepteerd"
+  },
+  "Save_videos_as_1": {
+    "message": "Video's opslaan als $1"
+  },
+  "Use_the_video_format_set_in_Multron_Download_Manager": {
+    "message": "Het videoformaat uit Multron Download Manager gebruiken"
+  },
+  "MP4_with_H_264_and_AAC_plays_everywhere_also_in_WhatsApp_and_on_older_phones_and_TVs_up_to_1080p_on_YouTube": {
+    "message": "MP4 met H.264 en AAC: speelt overal af, ook in WhatsApp en op oudere telefoons en tv's (tot 1080p op YouTube)"
+  },
+  "Checking_sizes": {
+    "message": "Groottes controleren…"
+  },
+  "Sizes_are_not_available_for_this_video": {
+    "message": "Groottes zijn niet beschikbaar voor deze video"
+  },
+  "Hide_on_this_page": {
+    "message": "Verbergen op deze pagina"
+  },
+  "Download_1": {
+    "message": "Downloaden: $1"
+  },
+  "Download_video": {
+    "message": "Video downloaden"
+  },
+  "Drag_to_move_double_click_to_put_it_back": {
+    "message": "Sleep om te verplaatsen · dubbelklik om terug te zetten"
+  },
+  "Download_with_Multron_Download_Manager": {
+    "message": "Downloaden met Multron Download Manager"
+  },
+  "Hide_in_fullscreen_on_this_page_turn_it_off_everywhere_in_Multron_Download_Manager_Settings_Browser_Integration": {
+    "message": "Verbergen in volledig scherm op deze pagina (zet het overal uit in Multron Download Manager: Instellingen → Browserintegratie)"
+  },
+  "Hide_in_fullscreen_on_this_page": {
+    "message": "Verbergen in volledig scherm op deze pagina"
+  },
+  "Multron_Download_Manager_is_not_running_downloading_in_the_browser": {
+    "message": "Multron Download Manager draait niet: downloaden in de browser"
+  },
+  "Best_quality": {
+    "message": "Beste kwaliteit"
+  },
+  "Audio_1": {
+    "message": "Audio ($1)"
+  },
+  "Default": {
+    "message": "Standaard"
+  },
+  "Reddit_post": {
+    "message": "Reddit-bericht"
+  },
+  "Facebook_video": {
+    "message": "Facebook-video"
+  },
+  "App_not_running": {
+    "message": "App draait niet"
+  },
+  "Not_approved_v_1": {
+    "message": "Niet goedgekeurd · v$1"
+  },
+  "Connected_v_1": {
+    "message": "Verbonden · v$1"
+  },
+  "Sizes_are_not_available_for_this_page": {
+    "message": "Groottes zijn niet beschikbaar voor deze pagina"
+  },
+  "Sending": {
+    "message": "Versturen…"
+  },
+  "Multron_Download_Manager_did_not_accept_it_check_the_app": {
+    "message": "Multron Download Manager heeft het niet geaccepteerd — controleer de app."
+  },
+  "This_page": {
+    "message": "Deze pagina"
+  },
+  "File_on_this_page": {
+    "message": "Bestand op deze pagina"
+  },
+  "Scrolling_and_collecting": {
+    "message": "Scrollen en verzamelen…"
+  },
+  "Collecting": {
+    "message": "Verzamelen…"
+  },
+  "Found_1_items_Pick_them_in_Multron": {
+    "message": "$1 items gevonden. Kies ze in Multron."
+  },
+  "Something_went_wrong": {
+    "message": "Er ging iets mis."
+  },
+  "Enter_an_http_s_or_magnet_link": {
+    "message": "Voer een http(s)- of magnetlink in."
+  },
+  "Access_granted_Reload_the_page_to_see_the_button": {
+    "message": "Toegang verleend. Herlaad de pagina om de knop te zien."
+  },
+  "Access_was_not_granted": {
+    "message": "Toegang is niet verleend."
+  },
+  "Connected": {
+    "message": "Verbonden ✓"
+  },
+  "Approve_the_request_in_the_Multron_Download_Manager_window": {
+    "message": "Keur het verzoek goed in het venster van Multron Download Manager."
+  },
+  "Checking": {
+    "message": "Controleren…"
+  },
+  "Connect": {
+    "message": "Verbinden"
+  },
+  "Multron_Download_Manager_needs_access_to_websites_to_show_the_Download_video_button_and_take_over_downloads": {
+    "message": "Multron Download Manager heeft toegang tot websites nodig om de knop Video downloaden te tonen en downloads over te nemen."
+  },
+  "Allow_on_all_sites": {
+    "message": "Toestaan op alle sites"
+  },
+  "Download": {
+    "message": "Downloaden"
+  },
+  "Video_format": {
+    "message": "Videoformaat"
+  },
+  "MP4_H_264_plays_everywhere": {
+    "message": "MP4 (H.264, speelt overal af)"
+  },
+  "Everything_on_this_page": {
+    "message": "Alles op deze pagina"
+  },
+  "Visible_part": {
+    "message": "Zichtbaar deel"
+  },
+  "Scroll_5_screens": {
+    "message": "5 schermen scrollen"
+  },
+  "Scroll_20_screens": {
+    "message": "20 schermen scrollen"
+  },
+  "Scroll_60_screens": {
+    "message": "60 schermen scrollen"
+  },
+  "Download_all": {
+    "message": "Alles downloaden…"
+  },
+  "Link_or_magnet": {
+    "message": "Link of magnet"
+  },
+  "Send": {
+    "message": "Versturen"
+  },
+  "Take_over_browser_downloads": {
+    "message": "Browserdownloads overnemen"
+  },
+  "Open_magnet_links_in_Multron_Download_Manager": {
+    "message": "Magnetlinks openen in Multron Download Manager"
+  },
+  "Show_the_download_button_on_video_pages": {
+    "message": "De downloadknop tonen op videopagina's"
+  },
+  "Send_site_cookies_private_login_only_files": {
+    "message": "Sitecookies meesturen (privé- / alleen-na-inloggen-bestanden)"
+  },
+  "Ignore_files_smaller_than_KB": {
+    "message": "Bestanden kleiner dan (KB) negeren"
+  },
+  "Never_take_over_from": {
+    "message": "Nooit overnemen van"
+  },
+  "Never_take_over_these_file_types": {
+    "message": "Deze bestandstypen nooit overnemen"
+  },
+  "App_port": {
+    "message": "App-poort"
+  },
+  "Infinite_feeds_Reddit_Instagram_X_load_more_while_scrolling": {
+    "message": "Oneindige feeds (Reddit, Instagram, X…) laden meer tijdens het scrollen"
+  },
+  "https_or_magnet": {
+    "message": "https://… of magnet:?…"
+  },
+  "extDescription": {
+    "message": "Stuur downloads, video's (YouTube, Reddit, Instagram, X, TikTok…), Google Drive- / MEGA-bestanden en torrents naar Multron Download Manager."
+  }
+}

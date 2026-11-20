@@ -6,8 +6,11 @@ const DEFAULTS = {
   sendCookies: true,
   mediaButton: true,
   fullscreenButton: true,
+  availableQualities: true,
+  siteOptions: true,
   interceptMagnets: true,
-  skipDomains: ''
+  skipDomains: '',
+  skipExtensions: ''
 };
 
 const MEDIA_HOSTS = [
@@ -82,6 +85,13 @@ async function ping(force = false) {
   if (value?.version) reloadIfUpdated(value.version);
   if (value?.extensionBuild) reloadIfRebuilt(value.extensionBuild);
   if (typeof value?.fullscreenButton === 'boolean') syncFullscreenButton(value.fullscreenButton);
+  for (const key of ['availableQualities', 'siteOptions']) {
+    if (typeof value?.[key] === 'boolean') {
+      chrome.storage.local.get({ [key]: true }).then((s) => s[key] !== value[key] && chrome.storage.local.set({ [key]: value[key] })).catch(() => {});
+    }
+  }
+  if (value?.language) syncLanguage(value.language);
+  if (typeof value?.theme === 'string') chrome.storage.local.get({ uiTheme: '' }).then(({ uiTheme }) => uiTheme !== value.theme && chrome.storage.local.set({ uiTheme: value.theme })).catch(() => {});
   return value;
 }
 
@@ -198,11 +208,11 @@ function qualitySizes(url) {
   if (!url) return Promise.resolve(null);
   if (!sizeCache.has(url)) {
     const pending = call('sizes', { url }, 100000)
-      .then((r) => (r.ok ? r.data?.sizes ?? null : null))
+      .then((r) => (r.ok && r.data?.sizes ? { sizes: r.data.sizes, heights: r.data.heights || [], audioOnly: r.data.audioOnly === true } : null))
       .catch(() => null)
-      .then((sizes) => {
-        if (!sizes) sizeCache.delete(url);
-        return sizes;
+      .then((info) => {
+        if (!info) sizeCache.delete(url);
+        return info;
       });
     sizeCache.set(url, pending);
     if (sizeCache.size > 50) sizeCache.delete(sizeCache.keys().next().value);
@@ -255,6 +265,53 @@ function updateBadge(info) {
   chrome.action.setBadgeBackgroundColor({ color: !info ? '#ff5a52' : '#ffb340' }).catch(() => {});
 }
 
+let uiMessages = null;
+
+function fill(text, subs) {
+  return subs.reduce((s, v, i) => s.split('$' + (i + 1)).join(String(v)), text);
+}
+
+function tr(text, ...subs) {
+  const id = text.replace(/[^A-Za-z0-9]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 120);
+  if (uiMessages) return fill(uiMessages[id] || text, subs);
+  let out = '';
+  try {
+    out = chrome.i18n.getMessage(id, subs.map(String));
+  } catch {
+    out = '';
+  }
+  return out || fill(text, subs);
+}
+
+const LOCALE_DIRS = { en: 'en', de: 'de', es: 'es', fr: 'fr', it: 'it', ja: 'ja', ko: 'ko', ru: 'ru', tr: 'tr', 'pt-br': 'pt_BR', 'zh-cn': 'zh_CN', 'zh-tw': 'zh_TW', pl: 'pl', nl: 'nl', uk: 'uk', cs: 'cs', sv: 'sv', ro: 'ro', hu: 'hu', el: 'el', id: 'id', vi: 'vi', th: 'th', hi: 'hi' };
+
+chrome.storage.local.get({ uiMessages: null }).then(({ uiMessages: m }) => {
+  if (m && typeof m === 'object') uiMessages = m;
+}).catch(() => {});
+
+async function syncLanguage(lang) {
+  const dir = LOCALE_DIRS[String(lang || '').toLowerCase()];
+  if (!dir) return;
+  const { uiLang } = await chrome.storage.local.get({ uiLang: '' });
+  if (uiLang === dir && uiMessages) return;
+  try {
+    const raw = await (await fetch(chrome.runtime.getURL(`_locales/${dir}/messages.json`))).json();
+    const flat = {};
+    for (const [k, v] of Object.entries(raw)) if (v && typeof v.message === 'string') flat[k] = v.message;
+    uiMessages = flat;
+    await chrome.storage.local.set({ uiLang: dir, uiMessages: flat });
+    createMenus();
+  } catch {
+    return;
+  }
+}
+
+function extensionOf(name) {
+  const base = String(name || '').split(/[?#]/)[0].split(/[\\/]/).pop() || '';
+  const dot = base.lastIndexOf('.');
+  return dot > 0 ? base.slice(dot + 1).toLowerCase() : '';
+}
+
 function notify(message, title = 'Multron Download Manager') {
   chrome.notifications
     .create({ type: 'basic', iconUrl: 'icons/icon128.png', title, message })
@@ -299,16 +356,16 @@ async function send(req) {
     await ensureRunning();
     r = await call('download', body, 15000);
   } catch {
-    notify('Multron Download Manager is not running and could not be started. Start the app and try again.');
+    notify(tr('Multron Download Manager is not running and could not be started. Start the app and try again.'));
     return false;
   }
   if (r.status === 401) {
-    notify('Approve this browser in the Multron Download Manager window, then try again.', 'Multron Download Manager: connection request');
+    notify(tr('Approve this browser in the Multron Download Manager window, then try again.'), tr('Multron Download Manager: connection request'));
     pingCache.at = 0;
     return false;
   }
   if (!r.ok) {
-    notify(r.data?.error ?? `The app rejected the download (HTTP ${r.status}).`);
+    notify(r.data?.error ?? tr('The app rejected the download (HTTP $1).', r.status));
     return false;
   }
   return true;
@@ -322,8 +379,8 @@ async function grabPage(tabId, pages = 0) {
     return { error: 'Reload the page and try again (the extension is not active on it yet).' };
   }
   if (!page?.items?.length) {
-    notify('Nothing to download was found on this page.');
-    return { error: 'Nothing to download was found on this page.' };
+    notify(tr('Nothing to download was found on this page.'));
+    return { error: tr('Nothing to download was found on this page.') };
   }
   const hosts = [...new Set([page.pageUrl, ...page.items.map((i) => i.url)].map((u) => {
     try {
@@ -338,11 +395,11 @@ async function grabPage(tabId, pages = 0) {
     await ensureRunning();
     r = await call('batch', body, 15000);
   } catch {
-    notify('Multron Download Manager is not running. Start the app and try again.');
+    notify(tr('Multron Download Manager is not running. Start the app and try again.'));
     return { error: 'Multron Download Manager is not running.' };
   }
   if (r.status === 401) {
-    notify('Approve this browser in the Multron Download Manager window, then try again.', 'Multron Download Manager: connection request');
+    notify(tr('Approve this browser in the Multron Download Manager window, then try again.'), tr('Multron Download Manager: connection request'));
     return { error: 'Approve this browser in Multron Download Manager first.' };
   }
   if (!r.ok) return { error: r.data?.error ?? `HTTP ${r.status}` };
@@ -352,12 +409,12 @@ async function grabPage(tabId, pages = 0) {
 function createMenus() {
   chrome.contextMenus.removeAll(() => {
     const add = (id, title, contexts) => chrome.contextMenus.create({ id, title, contexts });
-    add('multron-link', 'Download link with Multron Download Manager', ['link']);
-    add('multron-link-media', 'Download video/audio from link with Multron Download Manager', ['link']);
-    add('multron-media', 'Download this media with Multron Download Manager', ['video', 'audio', 'image']);
-    add('multron-page', 'Download video on this page with Multron Download Manager', ['page']);
-    add('multron-grab', 'Download all from this page with Multron Download Manager…', ['page']);
-    add('multron-selection', 'Download selected link with Multron Download Manager', ['selection']);
+    add('multron-link', tr('Download link with Multron Download Manager'), ['link']);
+    add('multron-link-media', tr('Download video/audio from link with Multron Download Manager'), ['link']);
+    add('multron-media', tr('Download this media with Multron Download Manager'), ['video', 'audio', 'image']);
+    add('multron-page', tr('Download video on this page with Multron Download Manager'), ['page']);
+    add('multron-grab', tr('Download all from this page with Multron Download Manager…'), ['page']);
+    add('multron-selection', tr('Download selected link with Multron Download Manager'), ['selection']);
   });
 }
 
@@ -403,7 +460,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     case 'multron-selection': {
       const text = (info.selectionText || '').trim();
       if (/^(https?:\/\/|magnet:)/i.test(text)) await send({ url: text, kind: 'auto', referrer: page });
-      else notify('The selection is not a link.');
+      else notify(tr('The selection is not a link.'));
       break;
     }
   }
@@ -455,6 +512,12 @@ async function takeOver(item, url, giveBack) {
     .map((d) => d.trim().toLowerCase())
     .filter(Boolean);
   if (skip.some((d) => host === d || host.endsWith('.' + d))) return giveBack();
+  const skipTypes = String(s.skipExtensions || '')
+    .split(/[\s,]+/)
+    .map((e) => e.trim().replace(/^\./, '').toLowerCase())
+    .filter(Boolean);
+  const type = extensionOf(item.filename) || extensionOf(item.finalUrl || url);
+  if (type && skipTypes.includes(type)) return giveBack();
   const size = item.totalBytes > 0 ? item.totalBytes : item.fileSize;
   if (s.minSizeKB > 0 && size > 0 && size < s.minSizeKB * 1024) return giveBack();
 
@@ -462,7 +525,7 @@ async function takeOver(item, url, giveBack) {
   if (!info) return giveBack();
   if (!info.paired) {
     call('pair', {}, 4000).catch(() => {});
-    notify('Approve this browser in the Multron Download Manager window. The download waits until then.', 'Multron Download Manager: connection request');
+    notify(tr('Approve this browser in the Multron Download Manager window. The download waits until then.'), tr('Multron Download Manager: connection request'));
     if (!(await waitForApproval(60000))) return giveBack();
   }
 

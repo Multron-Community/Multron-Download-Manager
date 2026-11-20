@@ -1,0 +1,34 @@
+id: io.github.Multron_Community.MultronDownloadManager
+runtime: org.gnome.Platform
+runtime-version: '48'
+sdk: org.gnome.Sdk
+command: multron-download-manager
+finish-args:
+  - --share=ipc
+  - --share=network
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=home
+  - --filesystem=xdg-download
+  - --talk-name=org.kde.StatusNotifierWatcher
+  - --talk-name=org.freedesktop.Notifications
+modules:
+  - shared-modules/libayatana-appindicator/libayatana-appindicator-gtk3.json
+
+  - name: multron-download-manager
+    buildsystem: simple
+    sources:
+      - type: file
+        path: app.deb
+      - type: file
+        path: io.github.Multron_Community.MultronDownloadManager.metainfo.xml
+    build-commands:
+      - ar -x app.deb
+      - mkdir -p unpacked && tar -xf data.tar.* -C unpacked
+      - mkdir -p /app && cp -a unpacked/usr/. /app/
+      - test -x /app/bin/multron-download-manager
+      - desktop=$(ls /app/share/applications/*.desktop | head -n 1) && mv "$desktop" "/app/share/applications/${FLATPAK_ID}.desktop"
+      - desktop-file-edit --set-icon="${FLATPAK_ID}" "/app/share/applications/${FLATPAK_ID}.desktop"
+      - for icon in /app/share/icons/hicolor/*/apps/*.png; do mv "$icon" "$(dirname "$icon")/${FLATPAK_ID}.png"; done
+      - install -Dm644 "${FLATPAK_ID}.metainfo.xml" "/app/share/metainfo/${FLATPAK_ID}.metainfo.xml"

@@ -1,10 +1,12 @@
-import { mount } from 'svelte'
+import { mount, type Component } from 'svelte'
 import './style.css'
-import App from './App.svelte'
-import NoticeApp from './components/NoticeApp.svelte'
 
-const app = mount(location.hash === '#notice' ? NoticeApp : App, {
-  target: document.getElementById('app')!,
-})
+const hash = location.hash
+const load: Promise<{ default: Component }> =
+  hash === '#notice'
+    ? import('./components/NoticeApp.svelte')
+    : hash.startsWith('#ask=')
+      ? import('./components/AskApp.svelte')
+      : import('./App.svelte')
 
-export default app
+export default load.then(({ default: Root }) => mount(Root, { target: document.getElementById('app')! }))

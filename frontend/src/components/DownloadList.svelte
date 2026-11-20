@@ -54,7 +54,7 @@
     {/each}
   {:else}
     <div class="flex-1 flex flex-col items-center justify-center min-h-[300px] text-center p-8 border border-dashed border-line/70 rounded-[12px] bg-subtle/20">
-      <div class="w-14 h-14 rounded-full bg-line/60 flex items-center justify-center text-muted mb-4">
+      <div class="float-soft w-14 h-14 rounded-full flex items-center justify-center mb-4">
         <Icon name="down" size={26} stroke={1.6} />
       </div>
       <h3 class="text-[15px] font-semibold mb-1.5">{t('No downloads yet')}</h3>

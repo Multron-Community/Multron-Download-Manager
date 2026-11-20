@@ -143,6 +143,36 @@ pub struct DownloadRecord {
     #[serde(default)]
     pub scan_detail: Option<String>,
     #[serde(default)]
+    pub cloud_scanned_at: Option<i64>,
+    #[serde(default)]
+    pub quarantined: bool,
+    #[serde(default)]
+    pub type_mismatch: bool,
+    #[serde(default)]
+    pub later: bool,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub note: String,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub mirrors: Vec<String>,
+    #[serde(default)]
+    pub mirror_tries: u32,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub signature: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_extract: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub extract_with: Option<Vec<String>>,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub login_user: String,
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub login_secret: String,
+    #[serde(default)]
+    pub extract_state: String,
+    #[serde(default)]
+    pub extract_detail: Option<String>,
+    #[serde(default)]
     pub cloud_state: String,
     #[serde(default)]
     pub cloud_detail: Option<String>,
@@ -235,8 +265,17 @@ pub struct AddRequest {
     pub info_hash: Option<String>,
     pub trackers: Vec<String>,
     pub allow_duplicate: bool,
+    pub later: bool,
+    pub mirrors: Vec<String>,
+    pub tags: Vec<String>,
+    pub login_user: Option<String>,
+    pub login_password: Option<String>,
+    pub remember_login: bool,
     pub audio_url: Option<String>,
     pub container: Option<String>,
+    pub note: String,
+    pub auto_extract: Option<bool>,
+    pub extract_password: Option<String>,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]
@@ -245,6 +284,10 @@ pub struct Duplicate {
     pub id: String,
     pub name: String,
     pub status: Status,
+    #[serde(default)]
+    pub previous: bool,
+    #[serde(default)]
+    pub at: Option<i64>,
 }
 
 pub fn same_link(a: &str, b: &str) -> bool {

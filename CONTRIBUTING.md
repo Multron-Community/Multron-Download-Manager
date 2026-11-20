@@ -35,5 +35,5 @@ Do not add code you copied from projects whose license does not allow this, such
 
 - Follow the existing code: Rust is formatted with `cargo fmt`, the UI uses Svelte 5 and Tailwind CSS v4.
 - Do not add code comments; name things clearly instead.
-- All UI text is written in English and wrapped in `t('…')`. Add the translation for every language file in `frontend/src/lang/` — `npm run check:i18n` lists anything missing.
+- All UI text is written in English and wrapped in `t('…')`. Add the translation to every language file in `lang/` (`<code>.ini`, keyed by the English text) — `npm run check:i18n` lists anything missing.
 - The app is English by default and follows the system language.

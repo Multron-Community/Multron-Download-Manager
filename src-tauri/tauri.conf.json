@@ -2,12 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Multron Download Manager",
   "mainBinaryName": "multron-download-manager",
-  "version": "0.0.11",
+  "version": "1.0.0",
   "identifier": "com.multron.downloadmanager",
   "build": {
     "beforeDevCommand": "node scripts/extension-builds.mjs && npm --prefix frontend run dev",
     "devUrl": "http://localhost:5173",
-    "beforeBuildCommand": "node scripts/extension-builds.mjs && npm --prefix frontend run build",
+    "beforeBuildCommand": "node scripts/extension-builds.mjs && node scripts/build-frontend.mjs",
     "frontendDist": "../frontend/dist"
   },
   "app": {
@@ -94,6 +94,7 @@
       "minimumSystemVersion": "11.0"
     },
     "resources": {
+      "../lang/": "lang/",
       "../extension/": "browser-extension/",
       "../extension-build/firefox/": "browser-extension-firefox/"
     }

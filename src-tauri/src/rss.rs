@@ -13,6 +13,10 @@ pub struct RssItem {
     pub page: Option<String>,
     pub published: Option<String>,
     pub size: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub seeders: Option<u64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub leechers: Option<u64>,
 }
 
 #[derive(Default)]
@@ -24,10 +28,50 @@ struct Draft {
     magnet: String,
     published: String,
     size: Option<u64>,
+    seeders: Option<u64>,
+    leechers: Option<u64>,
+    peers: Option<u64>,
+}
+
+pub fn human_size(v: &str) -> Option<u64> {
+    let v = v.trim();
+    let split = v.find(|c: char| !(c.is_ascii_digit() || c == '.' || c == ','))?;
+    let n: f64 = v[..split].replace(',', ".").trim().parse().ok()?;
+    let unit = v[split..].trim().to_ascii_lowercase();
+    let mul: f64 = match unit.as_str() {
+        "b" | "bytes" => 1.0,
+        "kb" => 1e3,
+        "kib" => 1024.0,
+        "mb" => 1e6,
+        "mib" => 1048576.0,
+        "gb" => 1e9,
+        "gib" => 1073741824.0,
+        "tb" => 1e12,
+        "tib" => 1099511627776.0,
+        _ => return None,
+    };
+    (n.is_finite() && n >= 0.0).then(|| (n * mul).round() as u64)
+}
+
+fn archive_torrent(url: &str) -> Option<String> {
+    let rest = url
+        .strip_prefix("https://archive.org/details/")
+        .or_else(|| url.strip_prefix("http://archive.org/details/"))?;
+    let id = rest.split(['/', '?', '#']).next()?;
+    (!id.is_empty()
+        && id
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || "-_.".contains(c)))
+    .then(|| format!("https://archive.org/download/{id}/{id}_archive.torrent"))
 }
 
 impl Draft {
-    fn finish(self) -> Option<RssItem> {
+    fn finish(mut self) -> Option<RssItem> {
+        if self.magnet.is_empty() && self.enclosure.is_empty() {
+            if let Some(t) = archive_torrent(&self.link) {
+                self.enclosure = t;
+            }
+        }
         let is_torrent =
             |u: &str| u.starts_with("magnet:") || u.to_ascii_lowercase().contains(".torrent");
         let download = [&self.magnet, &self.enclosure, &self.link]
@@ -52,6 +96,11 @@ impl Draft {
             page,
             published: (!self.published.is_empty()).then_some(self.published),
             size: self.size,
+            seeders: self.seeders,
+            leechers: self.leechers.or_else(|| {
+                self.peers
+                    .map(|p| p.saturating_sub(self.seeders.unwrap_or(0)))
+            }),
         })
     }
 }
@@ -125,10 +174,13 @@ pub fn parse(xml: &str) -> (Option<String>, Vec<RssItem>) {
                         "attr" => {
                             let key = attr(&e, "name").unwrap_or_default();
                             let value = attr(&e, "value").unwrap_or_default();
-                            if key == "magneturl" {
-                                d.magnet = value;
-                            } else if key == "size" {
-                                d.size = value.parse().ok();
+                            match key.as_str() {
+                                "magneturl" => d.magnet = value,
+                                "size" => d.size = value.parse().ok(),
+                                "seeders" => d.seeders = value.parse().ok(),
+                                "leechers" => d.leechers = value.parse().ok(),
+                                "peers" => d.peers = value.parse().ok(),
+                                _ => {}
                             }
                         }
                         _ => {}
@@ -170,7 +222,18 @@ pub fn parse(xml: &str) -> (Option<String>, Vec<RssItem>) {
                         "guid" | "id" => d.id = value,
                         "pubdate" | "published" | "updated" | "date" => d.published = value,
                         "magneturi" => d.magnet = value,
-                        "contentlength" | "size" => d.size = value.parse().ok().or(d.size),
+                        "infohash"
+                            if d.magnet.is_empty()
+                                && value.len() == 40
+                                && value.chars().all(|c| c.is_ascii_hexdigit()) =>
+                        {
+                            d.magnet = format!("magnet:?xt=urn:btih:{}", value.to_ascii_lowercase())
+                        }
+                        "contentlength" | "size" => {
+                            d.size = value.parse().ok().or_else(|| human_size(&value)).or(d.size)
+                        }
+                        "seeders" => d.seeders = value.parse().ok().or(d.seeders),
+                        "leechers" => d.leechers = value.parse().ok().or(d.leechers),
                         _ => {}
                     },
                     None => {
@@ -220,6 +283,39 @@ pub fn matches(rule: &RssRule, feed_url: &str, title: &str) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn archive_org_items_download_their_torrent() {
+        let xml = r#"<rss><channel><item><title>Some OS</title><link>https://archive.org/details/funbot-os-linux</link></item>
+            <item><title>Film</title><link>https://archive.org/details/film1</link><enclosure url="https://archive.org/download/film1/format=MPEG4" type="video/h264"/></item></channel></rss>"#;
+        let items = parse(xml).1;
+        assert_eq!(
+            items[0].download,
+            "https://archive.org/download/funbot-os-linux/funbot-os-linux_archive.torrent"
+        );
+        assert_eq!(
+            items[0].page.as_deref(),
+            Some("https://archive.org/details/funbot-os-linux")
+        );
+        assert_eq!(
+            items[1].download,
+            "https://archive.org/download/film1/format=MPEG4"
+        );
+    }
+
+    #[test]
+    fn turns_an_info_hash_into_a_magnet() {
+        let xml = r#"<rss><channel><item><title>Data set</title><infohash>9C11420AFBBB9000229D77EE0E1E6B128B94E20A</infohash><link>https://academictorrents.com/details/9c11</link></item></channel></rss>"#;
+        let items = parse(xml).1;
+        assert_eq!(
+            items[0].download,
+            "magnet:?xt=urn:btih:9c11420afbbb9000229d77ee0e1e6b128b94e20a"
+        );
+        assert_eq!(
+            items[0].page.as_deref(),
+            Some("https://academictorrents.com/details/9c11")
+        );
+    }
 
     #[test]
     fn reads_rss_with_magnets_and_enclosures() {
