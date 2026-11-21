@@ -1,6 +1,6 @@
 [package]
 name = "multron-download-manager"
-version = "1.0.1"
+version = "1.0.2"
 description = "Multron Download Manager - fast multi-connection, media and torrent downloader"
 authors = ["Multron Community"]
 license-file = "../LICENSE"
@@ -82,5 +82,5 @@ strip = true
 [target.'cfg(windows)'.dependencies]
 webview2-com = "0.39"
 windows-core = "0.62"
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Ole", "Win32_UI_Shell", "Win32_UI_Shell_Common"] }
+windows = { version = "0.62", features = ["Win32_Foundation", "Win32_System_Com", "Win32_System_Memory", "Win32_System_Ole", "Win32_System_SystemServices", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }
 windows-sys = { version = "0.60", features = ["Win32_Foundation", "Win32_System_IO", "Win32_System_Ioctl", "Win32_Graphics_Dwm", "Win32_Security", "Win32_Security_Cryptography", "Win32_System_Power"] }

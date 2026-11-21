@@ -62,6 +62,11 @@
   </keywords>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.2" date="2026-11-21">
+      <description>
+        <p>Bug fixes.</p>
+      </description>
+    </release>
     <release version="1.0.1" date="2026-11-21">
       <description>
         <p>No CPU use while the window is idle or in the tray, less memory in the tray and looping effects off by default. The browser extension now catches video and audio streams from the page, and its video download button stays on the video instead of covering menus and pop-ups.</p>
