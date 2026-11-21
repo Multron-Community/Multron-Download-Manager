@@ -677,7 +677,7 @@ impl Manager {
         entries.iter_mut().find(|e| e.rec.id == id).map(f)
     }
 
-    fn record(&self, id: &str) -> Result<DownloadRecord> {
+    pub(crate) fn record(&self, id: &str) -> Result<DownloadRecord> {
         self.with_entry(id, |e| e.rec.clone())
             .ok_or_else(|| anyhow!("download not found"))
     }
@@ -1516,6 +1516,7 @@ impl Manager {
                     .container
                     .clone()
                     .filter(|c| crate::settings::CONTAINERS.contains(&c.as_str())),
+                stream: req.stream,
             });
         }
 
@@ -2429,6 +2430,8 @@ impl Manager {
             filename: media.filename.clone(),
             js_runtime,
             local_info: None,
+            referer: rec.referrer.clone().filter(|_| media.stream),
+            user_agent: rec.user_agent.clone().filter(|_| media.stream),
         };
         let mut base = base;
         let has_cookies = base.cookies_file.is_some() || !base.cookies_browser.trim().is_empty();

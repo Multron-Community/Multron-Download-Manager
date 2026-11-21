@@ -468,6 +468,33 @@
     return { url: streams.video, audioUrl: streams.audio, kind: 'media', mediaType: 'video', name, filename: name };
   }
 
+  let caughtStreams = [];
+  const streamMenus = new Set();
+  chrome.runtime
+    .sendMessage({ type: 'streams' })
+    .then((list) => setStreams(list))
+    .catch(() => {});
+  chrome.runtime.onMessage.addListener((msg) => {
+    if (msg?.type === 'streams') setStreams(msg.list);
+  });
+
+  function setStreams(list) {
+    caughtStreams = Array.isArray(list) ? list : [];
+    for (const render of streamMenus) render();
+  }
+
+  function bestStream() {
+    const manifest = caughtStreams.find((s) => s.kind === 'hls') || caughtStreams.find((s) => s.kind === 'dash');
+    if (manifest) return manifest;
+    return caughtStreams.filter((s) => s.kind === 'file').sort((a, b) => (b.size || 0) - (a.size || 0))[0] || null;
+  }
+
+  function streamItem(stream) {
+    const title = meta('og:title') || document.title;
+    if (stream.kind === 'file') return { url: stream.url, kind: 'auto', mediaType: 'video', name: title || stream.name, thumbnail: meta('og:image') };
+    return { url: stream.url, kind: 'media', mediaType: 'video', name: title, thumbnail: meta('og:image'), stream: true };
+  }
+
   function videoItem(el) {
     const story = storyItem(el);
     if (story) return story;
@@ -488,6 +515,8 @@
       const u = absolute(src);
       return { url: src, kind: 'auto', mediaType: 'video', name: u ? pathOf(u).split('/').pop() : document.title };
     }
+    const caught = !mediaPage() ? bestStream() : null;
+    if (caught) return streamItem(caught);
     return { url: location.href, kind: 'media', mediaType: 'video', name: meta('og:title') || document.title, thumbnail: meta('og:image') };
   }
 
@@ -555,7 +584,8 @@
       audioUrl: item.audioUrl || undefined,
       pageTitle: resolveName(item),
       thumbnail: item.thumbnail || meta('og:image'),
-      referrer: location.href
+      referrer: location.href,
+      stream: item.stream || undefined
     });
   }
 
@@ -656,6 +686,45 @@
       });
       menu.appendChild(item);
     }
+    const caught = document.createElement('div');
+    caught.className = 'multron-caught';
+    menu.appendChild(caught);
+    const KINDS = { hls: tr('HLS stream'), dash: tr('DASH stream'), file: tr('Media file') };
+    let shown = false;
+    const renderStreams = () => {
+      if (wrap.isConnected) shown = true;
+      else if (shown) {
+        streamMenus.delete(renderStreams);
+        return;
+      }
+      caught.replaceChildren();
+      caught.hidden = !caughtStreams.length;
+      if (!caughtStreams.length) return;
+      const title = document.createElement('div');
+      title.className = 'multron-caught-title';
+      title.textContent = tr('Caught on this page');
+      caught.appendChild(title);
+      for (const stream of [...caughtStreams].reverse()) {
+        const row = document.createElement('button');
+        const name = document.createElement('span');
+        name.className = 'multron-caught-name';
+        name.textContent = `${KINDS[stream.kind] || stream.kind} · ${stream.name}`;
+        const size = document.createElement('span');
+        size.className = 'multron-size';
+        size.textContent = sizeText(stream.size ? { size: stream.size, exact: true } : null);
+        row.title = stream.url;
+        row.append(name, size);
+        row.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          menu.classList.remove('open');
+          sendItem(streamItem(stream));
+        });
+        caught.appendChild(row);
+      }
+    };
+    streamMenus.add(renderStreams);
+    renderStreams();
     shape(null);
     main.addEventListener('click', (e) => {
       e.preventDefault();
@@ -727,6 +796,24 @@
 
   let overlay = null;
   let overlayTarget = null;
+  let overlayHost = null;
+  const PLAYERS = '#movie_player, .html5-video-player, .video-js, .jwplayer, .plyr, .vjs-player, .fp-player, [data-testid="videoPlayer"]';
+
+  function playerHost(target) {
+    const known = target.parentElement?.closest(PLAYERS);
+    if (known && getComputedStyle(known).position !== 'static') return known;
+    const vr = target.getBoundingClientRect();
+    let host = null;
+    for (let el = target.parentElement; el && el !== document.body && el !== document.documentElement; el = el.parentElement) {
+      const r = el.getBoundingClientRect();
+      if (r.width > vr.width * 1.5 + 40 || r.height > vr.height * 1.5 + 40) break;
+      if (el.shadowRoot || el.tagName === 'VIDEO') continue;
+      if (getComputedStyle(el).position !== 'static') host = el;
+    }
+    return host;
+  }
+
+  const overlayResize = typeof ResizeObserver === 'function' ? new ResizeObserver(() => placeOverlay()) : null;
 
   function visibleRect(el) {
     const r = el.getBoundingClientRect();
@@ -781,6 +868,14 @@
     const x = overlayPlace ? r.left + overlayPlace.x * r.width : r.right - 12;
     const y = overlayPlace ? r.top + overlayPlace.y * r.height : r.top + 12;
     const w = overlay.offsetWidth || 0;
+    if (overlayHost) {
+      const h = overlayHost.getBoundingClientRect();
+      const top = Math.min(h.bottom - 40, Math.max(h.top + 8, y));
+      const left = Math.min(h.right - 8, Math.max(h.left + 8 + w, x));
+      overlay.style.top = `${top - h.top - overlayHost.clientTop + overlayHost.scrollTop}px`;
+      overlay.style.left = `${left - h.left - overlayHost.clientLeft + overlayHost.scrollLeft}px`;
+      return;
+    }
     overlay.style.top = `${Math.min(innerHeight - 40, Math.max(8, y))}px`;
     overlay.style.left = `${Math.min(innerWidth - 8, Math.max(8 + w, x))}px`;
   }
@@ -845,6 +940,8 @@
       overlay?.remove();
       overlay = null;
       overlayTarget = null;
+      overlayHost = null;
+      overlayResize?.disconnect();
       return;
     }
     if (!overlay) {
@@ -852,12 +949,26 @@
       overlay.className = 'multron-video';
       overlay.appendChild(qualityButton(tr('Download video'), (q) => overlayTarget && sendItem(videoItem(overlayTarget), q), () => overlayTarget && videoItem(overlayTarget)));
       overlay.appendChild(closeButton());
-      document.documentElement.appendChild(overlay);
+      for (const type of ['click', 'dblclick', 'mousedown', 'mouseup', 'pointerdown', 'pointerup', 'touchstart', 'touchend', 'contextmenu']) {
+        overlay.addEventListener(type, (e) => overlayHost && e.stopPropagation());
+      }
       const handle = overlay.querySelector('.multron-btn');
       handle.title = tr('Drag to move · double-click to put it back');
       makeDraggable(handle);
     }
+    if (overlayTarget !== target) {
+      overlayResize?.disconnect();
+      overlayResize?.observe(target);
+    }
     overlayTarget = target;
+    const host = playerHost(target);
+    if (host !== overlayHost || overlay.parentElement !== (host || document.documentElement)) {
+      if (overlayHost) overlayResize?.unobserve(overlayHost);
+      overlayHost = host;
+      if (host) overlayResize?.observe(host);
+      overlay.classList.toggle('multron-anchored', !!host);
+      (host || document.documentElement).appendChild(overlay);
+    }
     const label = overlay.querySelector('.multron-btn span');
     const name = resolveName(videoItem(target));
     const wanted = tr('Download: $1', name);

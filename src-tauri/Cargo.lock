@@ -3455,7 +3455,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "multron-download-manager"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -3501,6 +3501,9 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "uuid",
+ "webview2-com",
+ "windows",
+ "windows-core",
  "windows-sys 0.60.2",
  "zip",
 ]

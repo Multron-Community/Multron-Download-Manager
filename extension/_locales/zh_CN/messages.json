@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "将下载、视频（YouTube、Reddit、Instagram、X、TikTok…）、Google 云端硬盘 / MEGA 文件和种子发送到 Multron Download Manager。"
+  },
+  "Caught_on_this_page": {
+    "message": "在此页面捕获"
+  },
+  "HLS_stream": {
+    "message": "HLS 流"
+  },
+  "DASH_stream": {
+    "message": "DASH 流"
+  },
+  "Media_file": {
+    "message": "媒体文件"
   }
 }

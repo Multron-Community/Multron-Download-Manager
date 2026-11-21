@@ -677,6 +677,7 @@
     radial-gradient(34% 42% at 82% 72%, color-mix(in srgb, var(--color-seed) 12%, transparent), transparent 70%),
     radial-gradient(30% 36% at 60% 10%, color-mix(in srgb, var(--color-accent) 9%, transparent), transparent 70%);
   filter: blur(30px);
+  will-change: transform;
   animation: aurora 26s ease-in-out infinite alternate;
 }
 :root.wallpaper .app-root::before,
@@ -1201,6 +1202,7 @@
 }
 :root.motion-off .app-root::before {
   animation: none !important;
+  will-change: auto;
 }
 
 :root.motion-off .download-card.flash-done,

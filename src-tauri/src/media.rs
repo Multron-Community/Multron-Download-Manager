@@ -743,11 +743,28 @@ impl Tools {
         cookies: Option<&Path>,
         browser: &str,
     ) -> Result<MediaInfo> {
+        self.probe_stream(url, cookies, browser, None, None).await
+    }
+
+    pub async fn probe_stream(
+        &self,
+        url: &str,
+        cookies: Option<&Path>,
+        browser: &str,
+        referer: Option<&str>,
+        user_agent: Option<&str>,
+    ) -> Result<MediaInfo> {
         let exe = self.ensure_ytdlp(|_| {}).await?;
         let mut cmd = Command::new(exe);
         cmd.args(["--encoding", "utf-8"]);
         cmd.args(["-J", "--flat-playlist", "--no-warnings", "--skip-download"]);
         apply_cookies(&mut cmd, cookies, browser);
+        if let Some(referer) = referer.filter(|r| r.starts_with("http")) {
+            cmd.arg("--referer").arg(referer);
+        }
+        if let Some(agent) = user_agent.filter(|a| !a.trim().is_empty()) {
+            cmd.arg("--user-agent").arg(agent);
+        }
         apply_js_runtime(&mut cmd, self.deno_location().as_deref());
         cmd.arg("--").arg(url);
         cmd.stdin(Stdio::null())
@@ -1154,6 +1171,17 @@ pub struct MediaJob {
     pub filename: Option<String>,
     pub js_runtime: Option<PathBuf>,
     pub local_info: Option<PathBuf>,
+    pub referer: Option<String>,
+    pub user_agent: Option<String>,
+}
+
+fn apply_stream_headers(cmd: &mut Command, job: &MediaJob) {
+    if let Some(referer) = job.referer.as_deref().filter(|r| r.starts_with("http")) {
+        cmd.arg("--referer").arg(referer);
+    }
+    if let Some(agent) = job.user_agent.as_deref().filter(|a| !a.trim().is_empty()) {
+        cmd.arg("--user-agent").arg(agent);
+    }
 }
 
 fn output_template(job: &MediaJob) -> String {
@@ -1193,6 +1221,7 @@ pub async fn extract(job: &MediaJob) -> Result<Value> {
         &job.container,
     ));
     apply_cookies(&mut cmd, job.cookies_file.as_deref(), &job.cookies_browser);
+    apply_stream_headers(&mut cmd, job);
     apply_js_runtime(&mut cmd, job.js_runtime.as_deref());
     cmd.arg("--").arg(&job.url);
     cmd.stdin(Stdio::null())
@@ -1978,6 +2007,7 @@ pub async fn run(
                 cmd.args(["--limit-rate", &format!("{}K", job.rate_limit)]);
             }
             apply_cookies(&mut cmd, job.cookies_file.as_deref(), &job.cookies_browser);
+            apply_stream_headers(&mut cmd, &job);
             apply_js_runtime(&mut cmd, job.js_runtime.as_deref());
             cmd.args(youtube_split_args(&job.url, job.fragments));
             cmd.arg("--").arg(&job.url);
@@ -2413,6 +2443,8 @@ mod tests {
                 filename: None,
                 js_runtime: Some(tools.join(exe("deno"))),
                 local_info: None,
+                referer: None,
+                user_agent: None,
             };
             let started = std::time::Instant::now();
             let mut info = extract(&job).await.unwrap();
@@ -2507,6 +2539,8 @@ mod tests {
                 filename: None,
                 js_runtime: Some(tools.join(exe("deno"))),
                 local_info: None,
+                referer: None,
+                user_agent: None,
             };
             let mut totals = MediaTotals::default();
             let mut exact = None;
@@ -2580,6 +2614,125 @@ mod tests {
         assert!(tools.managed_deno().is_file());
         let status = tools.status().await;
         assert_eq!(status.deno_version.as_deref(), Some(version.as_str()));
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn downloads_a_caught_stream_with_the_page_address() {
+        let Some(tools) = test_ffmpeg().filter(|d| d.join(exe("yt-dlp")).is_file()) else {
+            return;
+        };
+        let dir = std::env::temp_dir().join(format!("mdm-stream-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let served = dir.join("served");
+        std::fs::create_dir_all(&served).unwrap();
+        let ok = std::process::Command::new(tools.join(exe("ffmpeg")))
+            .args([
+                "-hide_banner",
+                "-loglevel",
+                "error",
+                "-y",
+                "-f",
+                "lavfi",
+                "-i",
+            ])
+            .arg("testsrc=duration=3:size=160x120:rate=10")
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:duration=3"])
+            .args([
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-f",
+                "hls",
+                "-hls_time",
+                "1",
+                "-hls_list_size",
+                "0",
+            ])
+            .arg(served.join("live.m3u8"))
+            .status()
+            .unwrap()
+            .success();
+        assert!(ok, "could not make the test stream");
+        const PAGE: &str = "http://site.example/watch/1";
+        let files = served.clone();
+        let app = axum::Router::new()
+            .route(
+                "/{file}",
+                axum::routing::get(
+                    move |axum::extract::Path(file): axum::extract::Path<String>| {
+                        let files = files.clone();
+                        async move {
+                            std::fs::read(files.join(file))
+                                .map_err(|_| axum::http::StatusCode::NOT_FOUND)
+                        }
+                    },
+                ),
+            )
+            .layer(axum::middleware::from_fn(
+                |req: axum::extract::Request, next: axum::middleware::Next| async move {
+                    let referer = req.headers().get("referer").and_then(|v| v.to_str().ok());
+                    let agent = req
+                        .headers()
+                        .get("user-agent")
+                        .and_then(|v| v.to_str().ok());
+                    if referer != Some(PAGE) || agent != Some("Mozilla/5.0 test") {
+                        return axum::response::IntoResponse::into_response(
+                            axum::http::StatusCode::FORBIDDEN,
+                        );
+                    }
+                    next.run(req).await
+                },
+            ));
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/live.m3u8", listener.local_addr().unwrap());
+        tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+        let job = |out: &str, headers: bool| MediaJob {
+            exe: tools.join(exe("yt-dlp")),
+            url: url.clone(),
+            dir: dir.join(out),
+            quality: "best".into(),
+            container: "mp4".into(),
+            playlist: false,
+            fragments: 4,
+            rate_limit: 0,
+            ffmpeg: Some(tools.clone()),
+            cookies_file: None,
+            cookies_browser: String::new(),
+            embed_metadata: false,
+            embed_thumbnail: false,
+            filename: Some("stream".into()),
+            js_runtime: None,
+            local_info: None,
+            referer: headers.then(|| PAGE.to_string()),
+            user_agent: headers.then(|| "Mozilla/5.0 test".to_string()),
+        };
+        let refused = run(job("without", false), CancellationToken::new(), |_| {}).await;
+        assert!(
+            !matches!(refused, Ok(true)),
+            "the stream should need the page address"
+        );
+        let mut saved = Vec::new();
+        let done = run(job("with", true), CancellationToken::new(), |ev| {
+            if let MediaEvent::File(p) = ev {
+                saved.push(p);
+            }
+        })
+        .await
+        .unwrap();
+        assert!(done);
+        let file = dir.join("with").join("stream.mp4");
+        assert!(
+            file.is_file(),
+            "no file in {:?}: {saved:?}",
+            dir.join("with")
+        );
+        assert!(std::fs::metadata(&file).unwrap().len() > 10_000);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[tokio::test]

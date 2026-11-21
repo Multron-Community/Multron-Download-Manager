@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Надсилайте завантаження, відео (YouTube, Reddit, Instagram, X, TikTok…), файли Google Drive / MEGA і торенти в Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Знайдено на цій сторінці"
+  },
+  "HLS_stream": {
+    "message": "Потік HLS"
+  },
+  "DASH_stream": {
+    "message": "Потік DASH"
+  },
+  "Media_file": {
+    "message": "Медіафайл"
   }
 }

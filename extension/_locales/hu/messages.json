@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Letöltések, videók (YouTube, Reddit, Instagram, X, TikTok…), Google Drive / MEGA fájlok és torrentek küldése a(z) Multron Download Manager programba."
+  },
+  "Caught_on_this_page": {
+    "message": "Ezen az oldalon észlelve"
+  },
+  "HLS_stream": {
+    "message": "HLS-adatfolyam"
+  },
+  "DASH_stream": {
+    "message": "DASH-adatfolyam"
+  },
+  "Media_file": {
+    "message": "Médiafájl"
   }
 }

@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "İndirmeleri, videoları (YouTube, Reddit, Instagram, X, TikTok…), Google Drive / MEGA dosyalarını ve torrentleri Multron Download Manager'a gönderin."
+  },
+  "Caught_on_this_page": {
+    "message": "Bu sayfada yakalananlar"
+  },
+  "HLS_stream": {
+    "message": "HLS akışı"
+  },
+  "DASH_stream": {
+    "message": "DASH akışı"
+  },
+  "Media_file": {
+    "message": "Medya dosyası"
   }
 }

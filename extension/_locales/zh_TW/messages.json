@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "將下載、影片（YouTube、Reddit、Instagram、X、TikTok…）、Google 雲端硬碟 / MEGA 檔案和種子傳送到 Multron Download Manager。"
+  },
+  "Caught_on_this_page": {
+    "message": "在此頁面擷取"
+  },
+  "HLS_stream": {
+    "message": "HLS 串流"
+  },
+  "DASH_stream": {
+    "message": "DASH 串流"
+  },
+  "Media_file": {
+    "message": "媒體檔案"
   }
 }

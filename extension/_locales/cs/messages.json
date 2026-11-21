@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Posílejte stahování, videa (YouTube, Reddit, Instagram, X, TikTok…), soubory z Google Drive / MEGA a torrenty do Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Zachyceno na této stránce"
+  },
+  "HLS_stream": {
+    "message": "Stream HLS"
+  },
+  "DASH_stream": {
+    "message": "Stream DASH"
+  },
+  "Media_file": {
+    "message": "Mediální soubor"
   }
 }

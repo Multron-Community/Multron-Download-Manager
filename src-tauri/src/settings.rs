@@ -243,7 +243,7 @@ impl Default for Settings {
             click_ripple: true,
             state_glow: false,
             motion: "on".into(),
-            effects_off: Vec::new(),
+            effects_off: QUIET_EFFECTS.iter().map(|e| e.to_string()).collect(),
             heading_color: "accent".into(),
             light_brightness: 0,
             dark_brightness: 0,
@@ -595,6 +595,14 @@ impl Settings {
             self.confirm_browser_downloads = true;
             self.progress_window = true;
         }
+        if self.settings_version < 8 {
+            for effect in QUIET_EFFECTS {
+                if !self.effects_off.iter().any(|e| e == effect) {
+                    self.effects_off.push(effect.to_string());
+                }
+            }
+            self.effects_off.sort();
+        }
         self.category_folders.retain(|_, v| !v.trim().is_empty());
         for c in &mut self.custom_categories {
             if c.icon.len() > 24 || !c.icon.chars().all(|ch| ch.is_ascii_alphanumeric()) {
@@ -818,7 +826,17 @@ pub struct RssRule {
     pub start_paused: bool,
 }
 
-pub const SETTINGS_VERSION: u32 = 7;
+pub const SETTINGS_VERSION: u32 = 8;
+
+const QUIET_EFFECTS: [&str; 7] = [
+    "accents",
+    "aurora",
+    "fill",
+    "live",
+    "progress",
+    "spotlight",
+    "state",
+];
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Default)]
 #[serde(rename_all = "camelCase", default)]
@@ -1238,6 +1256,26 @@ mod tests {
         }
         .normalized();
         assert_eq!((wild.light_brightness, wild.dark_brightness), (-30, 30));
+    }
+
+    #[test]
+    fn looping_effects_are_off_by_default() {
+        let quiet: Vec<String> = QUIET_EFFECTS.iter().map(|e| e.to_string()).collect();
+        assert_eq!(Settings::default().effects_off, quiet);
+        let old = Settings {
+            settings_version: 7,
+            effects_off: vec!["cards".into()],
+            ..Settings::default()
+        }
+        .normalized();
+        assert!(old.effects_off.contains(&"cards".to_string()));
+        assert!(quiet.iter().all(|e| old.effects_off.contains(e)));
+        let chosen = Settings {
+            effects_off: Vec::new(),
+            ..Settings::default()
+        }
+        .normalized();
+        assert!(chosen.effects_off.is_empty());
     }
 
     #[test]

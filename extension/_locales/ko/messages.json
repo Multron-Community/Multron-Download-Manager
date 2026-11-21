@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "다운로드, 동영상(YouTube, Reddit, Instagram, X, TikTok…), Google 드라이브 / MEGA 파일과 토렌트를 Multron Download Manager로 보냅니다."
+  },
+  "Caught_on_this_page": {
+    "message": "이 페이지에서 감지됨"
+  },
+  "HLS_stream": {
+    "message": "HLS 스트림"
+  },
+  "DASH_stream": {
+    "message": "DASH 스트림"
+  },
+  "Media_file": {
+    "message": "미디어 파일"
   }
 }

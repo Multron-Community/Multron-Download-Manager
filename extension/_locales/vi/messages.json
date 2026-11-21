@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Gửi lượt tải, video (YouTube, Reddit, Instagram, X, TikTok…), tệp Google Drive / MEGA và torrent tới Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Bắt được trên trang này"
+  },
+  "HLS_stream": {
+    "message": "Luồng HLS"
+  },
+  "DASH_stream": {
+    "message": "Luồng DASH"
+  },
+  "Media_file": {
+    "message": "Tệp phương tiện"
   }
 }

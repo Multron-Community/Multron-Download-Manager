@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Wysyłaj pobrania, filmy (YouTube, Reddit, Instagram, X, TikTok…), pliki z Google Drive / MEGA i torrenty do Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Wykryte na tej stronie"
+  },
+  "HLS_stream": {
+    "message": "Strumień HLS"
+  },
+  "DASH_stream": {
+    "message": "Strumień DASH"
+  },
+  "Media_file": {
+    "message": "Plik multimedialny"
   }
 }

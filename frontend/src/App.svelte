@@ -1,11 +1,14 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, untrack } from 'svelte';
   import { getCurrentWebview } from '@tauri-apps/api/webview';
+  import { getCurrentWindow } from '@tauri-apps/api/window';
+  import { listen } from '@tauri-apps/api/event';
   import { app } from './lib/store.svelte';
   import { t } from './lib/i18n.svelte';
   import { api, errorText } from './lib/api';
   import { applyAppearance } from './lib/theme';
   import { builtinBackground } from './lib/backgrounds';
+  import { prepareWallpaper } from './lib/wallpaper';
   import { bytes, speed } from './lib/format';
   import Sidebar from './components/Sidebar.svelte';
   import CommandPalette from './components/CommandPalette.svelte';
@@ -61,6 +64,7 @@
     }
   });
 
+  let wallpaperSource = $state<string | null>(null);
   let wallpaperUrl = $state<string | null>(null);
   let wallpaperFor = '';
   $effect(() => {
@@ -68,19 +72,44 @@
     if (path === wallpaperFor) return;
     wallpaperFor = path;
     if (!path) {
-      wallpaperUrl = null;
+      wallpaperSource = null;
       return;
     }
     const builtin = builtinBackground(path);
     if (builtin) {
-      wallpaperUrl = builtin.image;
+      wallpaperSource = builtin.image;
       return;
     }
     api.backgroundData(path).then((url) => {
-      if (wallpaperFor === path) wallpaperUrl = url;
-    }).catch(() => (wallpaperUrl = null));
+      if (wallpaperFor === path) wallpaperSource = url;
+    }).catch(() => (wallpaperSource = null));
   });
-  let wallpaperBlur = $derived((app.appearancePreview ?? app.settings)?.backgroundBlur ?? 0);
+  let wallpaperBlur = $derived(Math.max(0, (app.appearancePreview ?? app.settings)?.backgroundBlur ?? 0));
+  let viewSize = $state(0);
+  let wallpaperJob = 0;
+  function showWallpaper(url: string | null) {
+    if (wallpaperUrl?.startsWith('blob:') && wallpaperUrl !== url) URL.revokeObjectURL(wallpaperUrl);
+    wallpaperUrl = url;
+  }
+  $effect(() => {
+    const src = wallpaperSource;
+    const blur = wallpaperBlur;
+    if (blur > 0) void viewSize;
+    const job = ++wallpaperJob;
+    if (!src) {
+      showWallpaper(null);
+      return;
+    }
+    const timer = setTimeout(() => {
+      prepareWallpaper(src, blur)
+        .then((url) => {
+          if (job === wallpaperJob) showWallpaper(url);
+          else if (url.startsWith('blob:')) URL.revokeObjectURL(url);
+        })
+        .catch(() => job === wallpaperJob && showWallpaper(src));
+    }, untrack(() => wallpaperUrl) ? 150 : 0);
+    return () => clearTimeout(timer);
+  });
   let dragging = $state(false);
 
   onMount(() => {
@@ -101,6 +130,65 @@
       .then((fn) => (unlisten = fn))
       .catch(() => {});
 
+    const IDLE_MS = 10000;
+    let windowShown = true;
+    let idle = false;
+    let idleTimer = 0;
+    let sweep = 0;
+    const loops = () => document.getAnimations().filter((a) => a.effect?.getTiming().iterations === Infinity);
+    const pauseLoops = () => {
+      for (const a of loops()) if (a.playState === 'running') a.pause();
+    };
+    const markHidden = () => {
+      const paused = !windowShown || idle || document.visibilityState === 'hidden';
+      if (paused === !!sweep) return;
+      if (paused) {
+        pauseLoops();
+        sweep = window.setInterval(pauseLoops, 2000);
+      } else {
+        clearInterval(sweep);
+        sweep = 0;
+        for (const a of loops()) if (a.playState === 'paused') a.play();
+      }
+    };
+    const wake = () => {
+      clearTimeout(idleTimer);
+      idleTimer = window.setTimeout(() => {
+        idle = true;
+        markHidden();
+      }, IDLE_MS);
+      if (idle) {
+        idle = false;
+        markHidden();
+      }
+    };
+    const onFocus = () => wake();
+    const onBlur = () => {
+      clearTimeout(idleTimer);
+      idle = true;
+      markHidden();
+    };
+    const activity = ['pointermove', 'pointerdown', 'keydown', 'wheel'] as const;
+    for (const type of activity) window.addEventListener(type, wake, { passive: true, capture: true });
+    window.addEventListener('focus', onFocus);
+    window.addEventListener('blur', onBlur);
+    wake();
+    let unlistenVisibility: (() => void) | undefined;
+    listen<boolean>('main-visibility', (e) => {
+      windowShown = e.payload;
+      markHidden();
+    })
+      .then((fn) => (unlistenVisibility = fn))
+      .catch(() => {});
+    const win = getCurrentWindow();
+    Promise.all([win.isVisible(), win.isMinimized()])
+      .then(([visible, minimized]) => {
+        windowShown = visible && !minimized;
+        markHidden();
+      })
+      .catch(() => {});
+    document.addEventListener('visibilitychange', markHidden);
+
     const onPaste = (e: ClipboardEvent) => {
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA')) return;
@@ -108,8 +196,23 @@
       if (text && /^(https?:\/\/|magnet:)/i.test(text)) app.openAdd({ url: text });
     };
     window.addEventListener('paste', onPaste);
+    let resizeTimer = 0;
+    const onResize = () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = window.setTimeout(() => (viewSize = window.innerWidth * 10000 + window.innerHeight), 400);
+    };
+    window.addEventListener('resize', onResize);
     return () => {
+      clearTimeout(resizeTimer);
+      window.removeEventListener('resize', onResize);
       unlisten?.();
+      unlistenVisibility?.();
+      document.removeEventListener('visibilitychange', markHidden);
+      clearTimeout(idleTimer);
+      clearInterval(sweep);
+      for (const type of activity) window.removeEventListener(type, wake, { capture: true });
+      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('blur', onBlur);
       window.removeEventListener('paste', onPaste);
     };
   });
@@ -121,7 +224,7 @@
 </script>
 
 {#if wallpaperUrl}
-  <div class="fixed inset-0 -z-10 bg-cover bg-center pointer-events-none" style="background-image: url({wallpaperUrl}); filter: blur({wallpaperBlur}px); transform: scale({wallpaperBlur ? 1.06 : 1});"></div>
+  <div class="fixed inset-0 -z-10 bg-cover bg-center pointer-events-none" style="background-image: url({wallpaperUrl}); transform: translateZ(0);"></div>
 {/if}
 <div class="app-root w-screen h-screen bg-bg flex flex-col overflow-hidden {app.stats.downloadSpeed > 0 || app.stats.uploadSpeed > 0 ? 'busy' : ''}">
   {#if initError}

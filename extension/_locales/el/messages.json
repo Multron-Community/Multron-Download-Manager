@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Στείλτε λήψεις, βίντεο (YouTube, Reddit, Instagram, X, TikTok…), αρχεία Google Drive / MEGA και torrent στο Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Εντοπίστηκαν σε αυτή τη σελίδα"
+  },
+  "HLS_stream": {
+    "message": "Ροή HLS"
+  },
+  "DASH_stream": {
+    "message": "Ροή DASH"
+  },
+  "Media_file": {
+    "message": "Αρχείο πολυμέσων"
   }
 }

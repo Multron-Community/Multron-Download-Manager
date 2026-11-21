@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Skicka nedladdningar, videor (YouTube, Reddit, Instagram, X, TikTok…), Google Drive- / MEGA-filer och torrenter till Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Hittade på den här sidan"
+  },
+  "HLS_stream": {
+    "message": "HLS-ström"
+  },
+  "DASH_stream": {
+    "message": "DASH-ström"
+  },
+  "Media_file": {
+    "message": "Mediefil"
   }
 }

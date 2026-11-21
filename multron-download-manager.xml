@@ -34,9 +34,9 @@
 </Company_Info>
 <Program_Info>
 <Program_Name>Multron Download Manager</Program_Name>
-<Program_Version>1.0.0</Program_Version>
+<Program_Version>1.0.1</Program_Version>
 <Program_Release_Month>11</Program_Release_Month>
-<Program_Release_Day>20</Program_Release_Day>
+<Program_Release_Day>21</Program_Release_Day>
 <Program_Release_Year>2026</Program_Release_Year>
 <Program_Cost_Dollars>0</Program_Cost_Dollars>
 <Program_Cost_Other_Code>USD</Program_Cost_Other_Code>
@@ -46,14 +46,14 @@
 <Program_Install_Support>Install and Uninstall</Program_Install_Support>
 <Program_OS_Support>Windows 10,Windows 11,Mac OS X,Linux</Program_OS_Support>
 <Program_Language>English,Turkish,German,French,Spanish,Italian,Portuguese,Russian,Japanese,Korean,ChineseSimplified,ChineseTraditional</Program_Language>
-<Program_Change_Info>Torrent search, a JDownloader-style link grabber, batch links, category folders in your language and custom categories, 24 languages in the app and the browser extension, security levels from Basic to Strict, adjustable brightness, a glass look and a simpler Multron Cloud scan window. Torrents: torrent search, ready-made ip blocklists, add your own sites. RSS feeds: find feeds, youtube and youtube music, internet archive. Adding downloads: more for torrents, less babysitting, linkgrabber, find every file on a page, analyse and add links, progress while scanning, site rules, link grabber, several links at once, hosts that ask you to wait, expired links are renewed, download later and the scheduler, stop all, site logins, sounds, ask before every download, in its own window, link-protection sites (click'n'load), captchas: you solve them, the rest is automatic. Archives: automatic extraction, passwords for archives, safe by design, archive passwords as a list. Organize and find:…</Program_Change_Info>
+<Program_Change_Info>No CPU use while the window is idle or in the tray, less memory, IDM-style stream catching in the browser extension, dragging finished downloads out of the list, and a video download button that stays on the video. Performance: no cpu use while idle, looping effects are off by default, less memory in the tray, lighter background images. Downloads: drag finished downloads out of the list. Browser extension: catches video and audio streams from the page, streams that need the page address work, the download button stays on the video.</Program_Change_Info>
 <Program_Specific_Category>Download Managers</Program_Specific_Category>
 <Program_Category_Class>Internet::Download Managers</Program_Category_Class>
 <Program_System_Requirements>Windows 10 or 11 (x64), macOS 11 or later (Apple Silicon or Intel), or Linux with glibc 2.35 or newer, such as Ubuntu 22.04+ (x86_64 or arm64). WebView2 on Windows is installed automatically.</Program_System_Requirements>
 <File_Info>
-<File_Size_Bytes>11870410</File_Size_Bytes>
-<File_Size_K>11592</File_Size_K>
-<File_Size_MB>11.32</File_Size_MB>
+<File_Size_Bytes>11859367</File_Size_Bytes>
+<File_Size_K>11581</File_Size_K>
+<File_Size_MB>11.31</File_Size_MB>
 </File_Info>
 <Expire_Info>
 <Has_Expire_Info>N</Has_Expire_Info>
@@ -98,7 +98,7 @@ Also: queue control, bulk actions, categories, tray icon, taskbar progress, ligh
 <Application_XML_File_URL>https://raw.githubusercontent.com/Multron-Community/Multron-Download-Manager/main/multron-download-manager.xml</Application_XML_File_URL>
 </Application_URLs>
 <Download_URLs>
-<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v1.0.0/Multron-Download-Manager-1.0.0-x64-Setup.exe</Primary_Download_URL>
+<Primary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v1.0.1/Multron-Download-Manager-1.0.1-x64-Setup.exe</Primary_Download_URL>
 <Secondary_Download_URL>https://github.com/Multron-Community/Multron-Download-Manager/releases/latest</Secondary_Download_URL>
 <Additional_Download_URL_1></Additional_Download_URL_1>
 <Additional_Download_URL_2></Additional_Download_URL_2>

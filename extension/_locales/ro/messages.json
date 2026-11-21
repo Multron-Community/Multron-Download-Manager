@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Trimiteți descărcări, videoclipuri (YouTube, Reddit, Instagram, X, TikTok…), fișiere Google Drive / MEGA și torrente la Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Detectate pe această pagină"
+  },
+  "HLS_stream": {
+    "message": "Flux HLS"
+  },
+  "DASH_stream": {
+    "message": "Flux DASH"
+  },
+  "Media_file": {
+    "message": "Fișier media"
   }
 }

@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "ส่งการดาวน์โหลด วิดีโอ (YouTube, Reddit, Instagram, X, TikTok…) ไฟล์ Google Drive / MEGA และทอร์เรนต์ไปยัง Multron Download Manager"
+  },
+  "Caught_on_this_page": {
+    "message": "ตรวจพบในหน้านี้"
+  },
+  "HLS_stream": {
+    "message": "สตรีม HLS"
+  },
+  "DASH_stream": {
+    "message": "สตรีม DASH"
+  },
+  "Media_file": {
+    "message": "ไฟล์สื่อ"
   }
 }

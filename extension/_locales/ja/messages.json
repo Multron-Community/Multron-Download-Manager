@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "ダウンロード、動画 (YouTube、Reddit、Instagram、X、TikTok…)、Google ドライブ / MEGA のファイル、トレントを Multron Download Manager に送信します。"
+  },
+  "Caught_on_this_page": {
+    "message": "このページで検出"
+  },
+  "HLS_stream": {
+    "message": "HLS ストリーム"
+  },
+  "DASH_stream": {
+    "message": "DASH ストリーム"
+  },
+  "Media_file": {
+    "message": "メディア ファイル"
   }
 }

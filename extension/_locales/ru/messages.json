@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Отправляйте загрузки, видео (YouTube, Reddit, Instagram, X, TikTok…), файлы Google Drive / MEGA и торренты в Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Найдено на этой странице"
+  },
+  "HLS_stream": {
+    "message": "Поток HLS"
+  },
+  "DASH_stream": {
+    "message": "Поток DASH"
+  },
+  "Media_file": {
+    "message": "Медиафайл"
   }
 }

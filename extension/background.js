@@ -548,9 +548,118 @@ async function takeOver(item, url, giveBack) {
   }
 }
 
+const STREAM_LIMIT = 15;
+const MANIFEST_TYPES = /^(application\/(vnd\.apple\.mpegurl|x-mpegurl)|audio\/(mpegurl|x-mpegurl))$/;
+const MEDIA_EXT = /\.(mp4|m4v|webm|mkv|mov|flv|m4a|mp3|ogg|oga|opus|wav|flac)$/;
+const SEGMENT = /\.(ts|m4s|aac|cmfv|cmfa|vtt)$|\/(seg|segment|chunk|frag|fragment)[-_]?\d|[?&](range|bytes|segment)=/i;
+const SKIP_HOSTS = /(^|\.)(googlevideo\.com|youtube\.com|ytimg\.com|doubleclick\.net|googlesyndication\.com)$/;
+const streams = new Map();
+let streamsLoaded = null;
+
+function loadStreams() {
+  streamsLoaded ??= (chrome.storage.session?.get('streams') ?? Promise.resolve({}))
+    .then((v) => {
+      for (const [tab, list] of Object.entries(v?.streams || {})) streams.set(Number(tab), list);
+    })
+    .catch(() => {});
+  return streamsLoaded;
+}
+
+let saveTimer = 0;
+function saveStreams() {
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => {
+    chrome.storage.session?.set({ streams: Object.fromEntries(streams) }).catch(() => {});
+  }, 500);
+}
+
+function header(headers, name) {
+  return headers?.find((h) => h.name.toLowerCase() === name)?.value || '';
+}
+
+function streamOf(d) {
+  let u;
+  try {
+    u = new URL(d.url);
+  } catch {
+    return null;
+  }
+  if (!/^https?:$/.test(u.protocol) || SKIP_HOSTS.test(u.hostname)) return null;
+  const type = header(d.responseHeaders, 'content-type').split(';')[0].trim().toLowerCase();
+  const path = u.pathname.toLowerCase();
+  let kind = null;
+  if (MANIFEST_TYPES.test(type) || path.endsWith('.m3u8')) kind = 'hls';
+  else if (type === 'application/dash+xml' || path.endsWith('.mpd')) kind = 'dash';
+  else if ((/^(video|audio)\//.test(type) && type !== 'video/mp2t') || MEDIA_EXT.test(path)) kind = 'file';
+  if (!kind) return null;
+  if (kind === 'file' && SEGMENT.test(u.pathname + u.search)) return null;
+  const range = header(d.responseHeaders, 'content-range').match(/\/(\d+)\s*$/);
+  const length = Number(header(d.responseHeaders, 'content-length')) || 0;
+  const size = range ? Number(range[1]) : d.statusCode === 200 ? length : 0;
+  if (kind === 'file' && size && size < 512 * 1024) return null;
+  const disposition = header(d.responseHeaders, 'content-disposition').match(/filename\*?=(?:UTF-8'')?"?([^";]+)/i);
+  const raw = disposition ? disposition[1] : u.pathname.split('/').pop() || u.hostname;
+  let name = raw;
+  try {
+    name = decodeURIComponent(raw);
+  } catch {
+  }
+  return { url: d.url, kind, type, size, name, at: Date.now() };
+}
+
+function notifyStreams(tabId) {
+  chrome.tabs.sendMessage(tabId, { type: 'streams', list: streams.get(tabId) || [] }, { frameId: 0 }).catch(() => {});
+}
+
+chrome.webRequest?.onHeadersReceived.addListener(
+  (d) => {
+    if (d.tabId < 0 || d.statusCode >= 400) return;
+    const found = streamOf(d);
+    if (!found) return;
+    loadStreams().then(() => {
+      const list = streams.get(d.tabId) || [];
+      const known = list.find((s) => s.url === found.url);
+      if (known) {
+        if (found.size > known.size) known.size = found.size;
+        return;
+      }
+      list.push(found);
+      streams.set(d.tabId, list.slice(-STREAM_LIMIT));
+      saveStreams();
+      notifyStreams(d.tabId);
+    });
+  },
+  { urls: ['http://*/*', 'https://*/*'], types: ['media', 'xmlhttprequest', 'other', 'object'] },
+  ['responseHeaders']
+);
+
+const tabPages = new Map();
+chrome.tabs.onUpdated.addListener((tabId, info) => {
+  if (!info.url) return;
+  const page = info.url.split('#')[0];
+  if (tabPages.has(tabId) && tabPages.get(tabId) !== page) {
+    loadStreams().then(() => {
+      streams.delete(tabId);
+      saveStreams();
+      notifyStreams(tabId);
+    });
+  }
+  tabPages.set(tabId, page);
+});
+chrome.tabs.onRemoved.addListener((tabId) => {
+  tabPages.delete(tabId);
+  loadStreams().then(() => {
+    if (streams.delete(tabId)) saveStreams();
+  });
+});
+
 chrome.runtime.onMessage.addListener((msg, sender, reply) => {
   (async () => {
     switch (msg?.type) {
+      case 'streams':
+        await loadStreams();
+        reply(sender?.tab?.id != null ? streams.get(sender.tab.id) || [] : []);
+        break;
       case 'ping':
         reply(await ping(!!msg.force));
         break;

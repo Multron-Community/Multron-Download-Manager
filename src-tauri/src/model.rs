@@ -69,6 +69,8 @@ pub struct MediaOptions {
     pub audio_url: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub container: Option<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub stream: bool,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -276,6 +278,7 @@ pub struct AddRequest {
     pub note: String,
     pub auto_extract: Option<bool>,
     pub extract_password: Option<String>,
+    pub stream: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

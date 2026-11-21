@@ -156,6 +156,10 @@
   transform: translateX(-100%);
   font: 600 13px/1 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
 }
+.multron-video.multron-anchored {
+  position: absolute;
+  z-index: 1000;
+}
 .multron-video .multron-btn {
   touch-action: none;
   height: 32px;
@@ -422,5 +426,28 @@ html[data-multron-theme='light'] .multron-size.loading {
 
 .multron-menu button > span:first-child,
 .multron-menu .multron-size {
+  white-space: nowrap;
+}
+
+.multron-caught[hidden] {
+  display: none;
+}
+.multron-caught {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.multron-caught-title {
+  padding: 6px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  opacity: 0.6;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.multron-caught-name {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }

@@ -77,7 +77,8 @@ export const api = {
     invoke<ProbeInfo>('check_link', { url, referrer, cookies }),
   probeUrl: (url: string, referrer?: string | null, cookies?: BrowserCookie[]) =>
     invoke<ProbeInfo>('probe_url', { url, referrer, cookies }),
-  mediaProbe: (url: string, cookies?: BrowserCookie[]) => invoke<MediaInfo>('media_probe', { url, cookies }),
+  mediaProbe: (url: string, cookies?: BrowserCookie[], referrer?: string | null, userAgent?: string | null) =>
+    invoke<MediaInfo>('media_probe', { url, cookies, referrer: referrer ?? null, userAgent: userAgent ?? null }),
   torrentInspect: (source: string, file?: string | null) =>
     invoke<TorrentPreview>('torrent_inspect', { source, file }),
   add: (request: AddRequest) => invoke<string>('add_download', { request }),
@@ -121,6 +122,7 @@ export const api = {
   setExpectedHash: (id: string, hash: string | null) => invoke<void>('set_expected_hash', { id, hash }),
   openFile: (id: string, confirmed = false, skipScan = false) => invoke<void>('open_file', { id, confirmed, skipScan }),
   showInFolder: (id: string) => invoke<void>('show_in_folder', { id }),
+  dragOut: (ids: string[]) => invoke<number>('drag_out', { ids }),
   openPath: (path: string) => invoke<void>('open_path', { path }),
   openUrl: (url: string) => invoke<void>('open_url', { url }),
   torrentDetails: (id: string) => invoke<TorrentDetails>('torrent_details', { id }),

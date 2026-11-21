@@ -400,6 +400,7 @@ export interface AddRequest {
   quality?: string | null;
   container?: string | null;
   playlist?: boolean;
+  stream?: boolean;
   referrer?: string | null;
   userAgent?: string | null;
   cookies?: BrowserCookie[];

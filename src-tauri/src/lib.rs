@@ -9,6 +9,7 @@ mod clipboard;
 mod cloudscan;
 mod commands;
 mod crawl;
+mod dragout;
 mod engine;
 mod extras;
 mod feeds;
@@ -51,10 +52,52 @@ use model::AddRequest;
 
 pub fn show_main_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        set_webview_active(app, true);
         let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
+        report_visibility(app, true);
     }
+}
+
+pub fn report_visibility(app: &AppHandle, shown: bool) {
+    let _ = app.emit("main-visibility", shown);
+    set_webview_active(app, shown);
+}
+
+static WEBVIEW_ACTIVE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);
+
+fn set_webview_active(app: &AppHandle, active: bool) {
+    if WEBVIEW_ACTIVE.swap(active, std::sync::atomic::Ordering::SeqCst) == active {
+        return;
+    }
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    #[cfg(windows)]
+    let _ = window.with_webview(move |w| {
+        use webview2_com::Microsoft::Web::WebView2::Win32::{
+            ICoreWebView2_19, COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW,
+            COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL,
+        };
+        use windows_core::Interface;
+        let controller = w.controller();
+        unsafe {
+            let _ = controller.SetIsVisible(active);
+            if let Ok(core) = controller
+                .CoreWebView2()
+                .and_then(|c| c.cast::<ICoreWebView2_19>())
+            {
+                let _ = core.SetMemoryUsageTargetLevel(if active {
+                    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_NORMAL
+                } else {
+                    COREWEBVIEW2_MEMORY_USAGE_TARGET_LEVEL_LOW
+                });
+            }
+        }
+    });
+    #[cfg(not(windows))]
+    let _ = window;
 }
 
 fn handle_args(app: &AppHandle, args: impl IntoIterator<Item = String>) {
@@ -120,7 +163,9 @@ pub fn run() {
 
             let minimized =
                 std::env::args().any(|a| a == "--minimized") || settings.start_minimized;
-            if !minimized {
+            if minimized {
+                set_webview_active(&handle, false);
+            } else {
                 show_main_window(&handle);
             }
             bridge::restart(mgr.clone());
@@ -154,15 +199,24 @@ pub fn run() {
             Ok(())
         })
         .on_window_event(|window, event| {
-            if let WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() != "main" {
-                    return;
+            if window.label() != "main" {
+                return;
+            }
+            match event {
+                WindowEvent::CloseRequested { api, .. } => {
+                    let mgr = window.state::<Arc<Manager>>();
+                    if mgr.settings().close_to_tray {
+                        api.prevent_close();
+                        let _ = window.hide();
+                        report_visibility(window.app_handle(), false);
+                    }
                 }
-                let mgr = window.state::<Arc<Manager>>();
-                if mgr.settings().close_to_tray {
-                    api.prevent_close();
-                    let _ = window.hide();
+                WindowEvent::Resized(_) | WindowEvent::Focused(_) => {
+                    let shown = window.is_visible().unwrap_or(true)
+                        && !window.is_minimized().unwrap_or(false);
+                    report_visibility(window.app_handle(), shown);
                 }
+                _ => {}
             }
         })
         .invoke_handler(tauri::generate_handler![
@@ -196,6 +250,8 @@ pub fn run() {
             commands::set_expected_hash,
             commands::open_file,
             commands::show_in_folder,
+            commands::drag_out,
+            commands::drag_out_supported,
             commands::open_path,
             commands::language_list,
             commands::language_strings,

@@ -108,6 +108,8 @@ pub async fn media_probe(
     mgr: Mgr<'_>,
     url: String,
     cookies: Option<Vec<BrowserCookie>>,
+    referrer: Option<String>,
+    user_agent: Option<String>,
 ) -> R<MediaInfo> {
     let settings = mgr.settings();
     let cookie_file = match cookies.filter(|c| !c.is_empty()) {
@@ -123,7 +125,13 @@ pub async fn media_probe(
     };
     let res = mgr
         .tools
-        .probe(&url, cookie_file.as_deref(), &settings.cookies_from_browser)
+        .probe_stream(
+            &url,
+            cookie_file.as_deref(),
+            &settings.cookies_from_browser,
+            referrer.as_deref(),
+            user_agent.as_deref(),
+        )
         .await
         .map_err(anyhow_err);
     if let Some(p) = cookie_file {
@@ -246,6 +254,30 @@ pub fn show_in_folder(app: AppHandle, mgr: Mgr<'_>, id: String) -> R<()> {
     } else {
         app.opener().reveal_item_in_dir(path).map_err(err)
     }
+}
+
+#[tauri::command]
+pub fn drag_out(mgr: Mgr<'_>, window: tauri::WebviewWindow, ids: Vec<String>) -> R<usize> {
+    let files: Vec<std::path::PathBuf> = ids
+        .iter()
+        .filter(|id| {
+            mgr.record(id)
+                .is_ok_and(|r| r.status == crate::model::Status::Completed)
+        })
+        .filter(|id| mgr.open_check(id, false, true).is_ok())
+        .filter_map(|id| mgr.file_path(id).ok())
+        .filter(|p| p.exists())
+        .collect();
+    let count = files.len();
+    if count > 0 {
+        crate::dragout::start(&window, files).map_err(anyhow_err)?;
+    }
+    Ok(count)
+}
+
+#[tauri::command]
+pub fn drag_out_supported() -> bool {
+    crate::dragout::supported()
 }
 
 #[tauri::command]

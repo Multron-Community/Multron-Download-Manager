@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "Kirim unduhan, video (YouTube, Reddit, Instagram, X, TikTok…), file Google Drive / MEGA, dan torrent ke Multron Download Manager."
+  },
+  "Caught_on_this_page": {
+    "message": "Terdeteksi di halaman ini"
+  },
+  "HLS_stream": {
+    "message": "Stream HLS"
+  },
+  "DASH_stream": {
+    "message": "Stream DASH"
+  },
+  "Media_file": {
+    "message": "File media"
   }
 }

@@ -141,6 +141,32 @@
       else app.openDownload(item);
     } else await app.run(() => api.resume(item.id));
   }
+
+  let dragFrom: { x: number; y: number } | null = null;
+  let dragged = false;
+  function dragDown(e: PointerEvent) {
+    dragged = false;
+    dragFrom = null;
+    if (e.button !== 0 || e.shiftKey || e.ctrlKey || e.metaKey || item.status !== 'completed' || app.platform !== 'windows') return;
+    if ((e.target as Element | null)?.closest('button, a, input, select, textarea')) return;
+    dragFrom = { x: e.clientX, y: e.clientY };
+  }
+  function dragMove(e: PointerEvent) {
+    if (!dragFrom) return;
+    if ((e.buttons & 1) === 0) {
+      dragFrom = null;
+      return;
+    }
+    if (e.type === 'pointermove' && Math.hypot(e.clientX - dragFrom.x, e.clientY - dragFrom.y) < 6) return;
+    dragFrom = null;
+    dragged = true;
+    window.getSelection()?.removeAllRanges();
+    const ids = app.checked.includes(item.id) ? app.checkedItems.filter((d) => d.status === 'completed').map((d) => d.id) : [item.id];
+    api
+      .dragOut(ids)
+      .then((n) => n === 0 && app.toast('warning', t('This file cannot be dragged out: it is missing, in quarantine or marked as a threat.')))
+      .catch((err) => app.toast('error', String(err)));
+  }
 </script>
 
 <svelte:window onclick={() => (speedMenu = false)} />
@@ -148,8 +174,18 @@
 <div
   role="button"
   tabindex="0"
-  onclick={(e) => app.pick(item.id, e)}
+  onclick={(e) => {
+    if (dragged) {
+      dragged = false;
+      return;
+    }
+    app.pick(item.id, e);
+  }}
   onmousedown={(e) => e.shiftKey && e.preventDefault()}
+  onpointerdown={dragDown}
+  onpointermove={dragMove}
+  onpointerleave={dragMove}
+  ondragstart={(e) => item.status === 'completed' && e.preventDefault()}
   onkeydown={(e) => e.key === 'Enter' && (app.selectedId = item.id)}
   ondblclick={openOnDoubleClick}
   data-state={item.cloudState === 'threat' || item.quarantined ? 'threat' : item.status}

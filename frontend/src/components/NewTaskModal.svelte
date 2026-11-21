@@ -170,7 +170,9 @@
     mediaLoading = true;
     mediaError = null;
     try {
-      media = await api.mediaProbe(url.trim(), extra.cookies);
+      media = extra.stream
+        ? await api.mediaProbe(url.trim(), extra.cookies, extra.referrer, extra.userAgent)
+        : await api.mediaProbe(url.trim(), extra.cookies);
       if (media.isPlaylist) playlist = true;
     } catch (e) {
       mediaError = errorText(e);

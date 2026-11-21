@@ -232,5 +232,17 @@
   },
   "extDescription": {
     "message": "डाउनलोड, वीडियो (YouTube, Reddit, Instagram, X, TikTok…), Google Drive / MEGA फ़ाइलें और टोरेंट Multron Download Manager को भेजें।"
+  },
+  "Caught_on_this_page": {
+    "message": "इस पेज पर मिले"
+  },
+  "HLS_stream": {
+    "message": "HLS स्ट्रीम"
+  },
+  "DASH_stream": {
+    "message": "DASH स्ट्रीम"
+  },
+  "Media_file": {
+    "message": "मीडिया फ़ाइल"
   }
 }
