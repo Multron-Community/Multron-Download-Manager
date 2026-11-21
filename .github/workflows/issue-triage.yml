@@ -1,0 +1,197 @@
+name: Advanced Automated Issue Triage
+
+on:
+  issues:
+    types: [opened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+  contents: read
+
+jobs:
+  triage:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run Triage Engine
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const { owner, repo } = context.repo;
+            const maintainers = ['iemirakman', 'winball501'];
+
+            // 1. Maintainer yanıt verdiğinde 'status: needs-triage' etiketini otomatik kaldır
+            if (context.eventName === 'issue_comment') {
+              const commenter = context.payload.comment.user.login;
+              if (maintainers.includes(commenter)) {
+                try {
+                  await github.rest.issues.removeLabel({
+                    owner,
+                    repo,
+                    issue_number: context.payload.issue.number,
+                    name: 'status: needs-triage'
+                  });
+                } catch (e) {
+                  // Etiket zaten yoksa sessizce geç
+                }
+              }
+              return;
+            }
+
+            // 2. Yeni açılan issue analizi
+            const issue = context.payload.issue;
+            const author = issue.user.login;
+            const isMaintainer = maintainers.includes(author);
+            const title = issue.title || '';
+            const body = issue.body || '';
+            const combinedText = `${title}\n${body}`;
+            const lowerText = combinedText.toLowerCase();
+
+            const taxonomy = [
+              // Tür (Type)
+              { label: 'bug', color: 'd73a4a', desc: 'Something is not working properly', group: 'type', keywords: ['bug', 'error', 'crash', 'fail', 'failed', 'broken', 'not working', 'freeze', 'stuck', 'hata', 'çalışmıyor', 'çöküyor', 'donuyor'] },
+              { label: 'enhancement', color: 'a2eeef', desc: 'New feature or improvement request', group: 'type', keywords: ['feature', 'request', 'suggestion', 'add ', 'support', 'improve', 'allow ', 'option', 'özellik', 'istek', 'öneri'] },
+              { label: 'question', color: 'd876e3', desc: 'General usage or configuration question', group: 'type', keywords: ['how to', 'how do i', 'question', 'help', 'where is', 'nasıl', 'soru', 'yardım'] },
+
+              // Bileşen (Area)
+              { label: 'area: browser-extension', color: '7057ff', desc: 'Chrome / Firefox browser extension', group: 'area', keywords: ['extension', 'chrome', 'firefox', 'xpi', 'addon', 'add-on', 'browser', 'popup', 'webrequest', 'eklenti', 'tarayıcı'] },
+              { label: 'area: media-engine', color: '008672', desc: 'yt-dlp, FFmpeg, HLS/DASH streams', group: 'area', keywords: ['yt-dlp', 'youtube', 'ffmpeg', 'm3u8', 'mpd', 'stream', '360p', '1080p', '4k', 'audio', 'video', 'subtitle', 'playlist'] },
+              { label: 'area: torrent', color: '1d76db', desc: 'BitTorrent and magnet link engine', group: 'area', keywords: ['torrent', 'magnet', 'tracker', 'dht', 'seed', 'peer', 'infohash'] },
+              { label: 'area: ui-ux', color: 'fbca04', desc: 'Svelte frontend, themes, trays, localization', group: 'area', keywords: ['ui', 'ux', 'theme', 'dark mode', 'light mode', 'tray', 'window', 'drag', 'drop', 'localization', 'translation', 'language', 'russian', 'turkish', 'arayüz', 'çeviri', 'dil'] },
+              { label: 'area: packaging', color: '5319e7', desc: 'Installers and package managers', group: 'area', keywords: ['flatpak', 'flathub', 'snap', 'winget', 'chocolatey', 'homebrew', 'brew', 'dmg', 'msi', 'exe', 'appimage', 'quarantine', 'gatekeeper', 'smartscreen', 'install'] },
+              { label: 'area: core-network', color: '0e8a16', desc: 'Rust/Tauri core, proxy, Tor, LinkGrabber, RSS', group: 'area', keywords: ['proxy', 'socks', 'tor', 'speed limit', 'linkgrabber', 'rss', 'cloud', 'quarantine', 'schedule', 'queue', 'tauri', 'rust'] },
+
+              // İşletim Sistemi (OS)
+              { label: 'os: windows', color: '0075ca', desc: 'Windows specific', group: 'os', keywords: ['windows', 'win10', 'win11', 'windows 10', 'windows 11', '.exe', '.msi', 'explorer'] },
+              { label: 'os: macos', color: 'cfd3d7', desc: 'macOS specific', group: 'os', keywords: ['macos', 'mac os', 'osx', 'apple silicon', 'm1', 'm2', 'm3', 'm4', '.dmg', 'finder'] },
+              { label: 'os: linux', color: 'e99695', desc: 'Linux specific', group: 'os', keywords: ['linux', 'ubuntu', 'arch', 'fedora', 'debian', 'wayland', 'x11', 'gnome', 'kde'] }
+            ];
+
+            const ensureLabel = async (name, color, description) => {
+              try {
+                await github.rest.issues.getLabel({ owner, repo, name });
+              } catch (e) {
+                try {
+                  await github.rest.issues.createLabel({ owner, repo, name, color, description });
+                } catch (createErr) {
+                  // Eşzamanlı oluşturulmuşsa yoksay
+                }
+              }
+              return name;
+            };
+
+            const existingLabels = (issue.labels || []).map(l => typeof l === 'string' ? l : l.name);
+            const matched = [];
+            const detectedAreas = [];
+            const detectedOS = [];
+            let detectedType = null;
+
+            for (const rule of taxonomy) {
+              if (rule.keywords.some(kw => lowerText.includes(kw))) {
+                if (!existingLabels.includes(rule.label)) {
+                  await ensureLabel(rule.label, rule.color, rule.desc);
+                  matched.push(rule.label);
+                }
+                if (rule.group === 'type' && !detectedType) detectedType = rule.label;
+                if (rule.group === 'area') detectedAreas.push(rule.label.replace('area: ', ''));
+                if (rule.group === 'os') detectedOS.push(rule.label.replace('os: ', ''));
+              }
+            }
+
+            // Sürüm ve Hata Kaydı (Log) Denetimi
+            const versionMatch = combinedText.match(/\bv?\d+\.\d+\.\d+(?:-[a-z0-9.]+)?\b/i);
+            const detectedVersion = versionMatch ? versionMatch[0] : null;
+            const hasLogsOrRepro = /```[\s\S]*?```/.test(body) || /\b(error|exception|panic|stderr|traceback|failed|steps to reproduce|expected|actual)\b/i.test(body);
+            const isBug = detectedType === 'bug' || existingLabels.includes('bug');
+
+            if (!isMaintainer) {
+              await ensureLabel('status: needs-triage', 'ededed', 'Awaiting maintainer review');
+              matched.push('status: needs-triage');
+
+              if (isBug && (!detectedVersion || detectedOS.length === 0 || !hasLogsOrRepro)) {
+                await ensureLabel('status: needs-info', 'd93f0b', 'More environment details or logs needed');
+                matched.push('status: needs-info');
+              }
+            }
+
+            if (matched.length > 0) {
+              await github.rest.issues.addLabels({
+                owner,
+                repo,
+                issue_number: issue.number,
+                labels: [...new Set(matched)]
+              });
+            }
+
+            // Maintainer kendi yol haritası için issue açtıysa yorum bırakma
+            if (isMaintainer) {
+              return;
+            }
+
+            // 3. Benzer / Tekrar Issue Taraması
+            const stopWords = new Set(['the', 'and', 'for', 'with', 'not', 'working', 'bug', 'feature', 'request', 'issue', 'multron', 'download', 'manager', 'when', 'how', 'can', 'add', 'support', 'error', 'crash', 'app', 'please', 'help']);
+            const searchTerms = title
+              .toLowerCase()
+              .replace(/[^a-z0-9\s-]/g, ' ')
+              .split(/\s+/)
+              .filter(w => w.length >= 3 && !stopWords.has(w))
+              .slice(0, 4);
+
+            let relatedSection = '';
+            if (searchTerms.length >= 2) {
+              try {
+                const query = `repo:${owner}/${repo} is:issue ${searchTerms.join(' ')}`;
+                const searchRes = await github.rest.search.issuesAndPullRequests({
+                  q: query,
+                  per_page: 5
+                });
+                const candidates = (searchRes.data.items || [])
+                  .filter(item => item.number !== issue.number)
+                  .slice(0, 3);
+
+                if (candidates.length > 0) {
+                  const lines = candidates.map(c => `- #${c.number} — ${c.title} _(${c.state})_`);
+                  relatedSection = `\n### 🔍 Potentially Related Issues\n${lines.join('\n')}\n`;
+                }
+              } catch (e) {
+                // Arama limiti oluşursa sessizce atla
+              }
+            }
+
+            // 4. Bug Eksik Bilgi Kontrol Listesi
+            let diagnosticSection = '';
+            if (isBug) {
+              const vCheck = detectedVersion ? `✅ **App Version:** \`${detectedVersion}\`` : `⚠️ **App Version:** Missing _(please check \`Settings → About\`, e.g., \`v1.0.0\`)_`;
+              const osCheck = detectedOS.length > 0 ? `✅ **Operating System:** \`${detectedOS.join(', ')}\`` : `⚠️ **Operating System:** Missing _(Windows / macOS / Linux)_`;
+              const logCheck = hasLogsOrRepro ? `✅ **Logs / Reproduction Steps:** Provided` : `⚠️ **Logs / Reproduction Steps:** Missing _(please share steps or error output if available)_`;
+
+              diagnosticSection = `\n### 📋 Bug Report Completeness\n- ${vCheck}\n- ${osCheck}\n- ${logCheck}\n`;
+            }
+
+            const componentText = detectedAreas.length > 0 ? detectedAreas.map(a => `\`${a}\``).join(', ') : '_Unclassified_';
+            const osText = detectedOS.length > 0 ? detectedOS.map(o => `\`${o}\``).join(', ') : '_Not specified_';
+            const typeText = detectedType ? `\`${detectedType}\`` : '_Needs review_';
+
+            const commentBody = [
+              `Hi @${author}, thank you for contributing to **Multron Download Manager**!`,
+              ``,
+              `### 🤖 Automated Triage Report`,
+              `| Field | Detected |`,
+              `| :--- | :--- |`,
+              `| **Type** | ${typeText} |`,
+              `| **Component** | ${componentText} |`,
+              `| **Platform** | ${osText} |`,
+              `| **App Version** | ${detectedVersion ? `\`${detectedVersion}\`` : '_Not specified_'} |`,
+              diagnosticSection,
+              relatedSection,
+              `---`,
+              `<sub>This issue has been queued for maintainer review. Once @iemirakman or @winball501 responds, the triage status will update automatically.</sub>`
+            ].join('\n');
+
+            await github.rest.issues.createComment({
+              owner,
+              repo,
+              issue_number: issue.number,
+              body: commentBody
+            });
