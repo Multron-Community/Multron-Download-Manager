@@ -74,7 +74,17 @@
     'clickNLoad',
     'clickNLoadKnownOnly',
     'httpsOnly',
-    'askBeforeOpeningFiles'
+    'askBeforeOpeningFiles',
+    'autoUpdate',
+    'checkUpdatesOnStartup',
+    'ytdlpAutoUpdate',
+    'autoDetectSha256',
+    'confirmBrowserDownloads',
+    'cloudBlockThreats',
+    'cloudQuarantine',
+    'cloudRescanOnOpen',
+    'privacyClearCookiesOnExit',
+    'autoExtract'
   ] as const;
   type SecurityKey = (typeof SECURITY_KEYS)[number];
   const securityBase: Record<SecurityKey, boolean> = {
@@ -93,15 +103,30 @@
     clickNLoad: true,
     clickNLoadKnownOnly: false,
     httpsOnly: false,
-    askBeforeOpeningFiles: false
+    askBeforeOpeningFiles: false,
+    autoUpdate: true,
+    checkUpdatesOnStartup: true,
+    ytdlpAutoUpdate: true,
+    autoDetectSha256: true,
+    confirmBrowserDownloads: false,
+    cloudBlockThreats: true,
+    cloudQuarantine: true,
+    cloudRescanOnOpen: true,
+    privacyClearCookiesOnExit: false,
+    autoExtract: true
   };
-  const securityStandard = { ...securityBase, askForPrograms: true, askBeforeStartingPrograms: true, blockInsecureRedirects: true };
-  const securityHigh = { ...securityStandard, blockInsecurePrograms: true, blockPrivateLinks: true, clickNLoadKnownOnly: true };
+  const securityStandard = { ...securityBase, askForPrograms: true, askBeforeStartingPrograms: true, blockInsecureRedirects: true, confirmBrowserDownloads: true };
+  const securityHigh = { ...securityStandard, blockInsecurePrograms: true, blockPrivateLinks: true, clickNLoadKnownOnly: true, privacyClearCookiesOnExit: true };
+  const SECURITY_EXTRA: Record<string, string> = {
+    standard: 'Also asks before a download from the browser starts.',
+    high: 'Also asks before a download from the browser starts, and removes saved browser cookies when the app closes.',
+    strict: 'Also asks before a download from the browser starts, removes saved browser cookies when the app closes and does not unpack archives automatically.'
+  };
   const SECURITY_LEVELS: { id: string; label: string; desc: string; values: Record<SecurityKey, boolean> }[] = [
     { id: 'basic', label: 'Basic', desc: 'Checks run quietly in the background and nothing asks for confirmation. Disguised programs and broken signatures are still marked.', values: securityBase },
     { id: 'standard', label: 'Standard (recommended)', desc: 'The default. Asks before programs are downloaded from the browser or started, and stops secure links that redirect to unencrypted ones.', values: securityStandard },
     { id: 'high', label: 'High', desc: 'Standard, and also refuses programs from unencrypted links, refuses links to your local network from the browser and accepts Click\'n\'Load only from known link-protection sites.', values: securityHigh },
-    { id: 'strict', label: 'Strict', desc: 'High, and also refuses every unencrypted (http://) link, asks before any downloaded file opens and turns Click\'n\'Load off.', values: { ...securityHigh, httpsOnly: true, askBeforeOpeningFiles: true, clickNLoad: false } }
+    { id: 'strict', label: 'Strict', desc: 'High, and also refuses every unencrypted (http://) link, asks before any downloaded file opens and turns Click\'n\'Load off.', values: { ...securityHigh, httpsOnly: true, askBeforeOpeningFiles: true, clickNLoad: false, autoExtract: false } }
   ];
   let securityLevel = $derived.by(() => {
     const d = draft;
@@ -2038,7 +2063,10 @@
                 <div class="sec-info flex-1 rounded-[10px] border border-line p-4 min-w-0">
                   <div class="text-[14px] font-semibold">{securityLevel === 'custom' ? t('Custom') : t(SECURITY_LEVELS[securityStep].label)}</div>
                   <p class="text-[12px] text-muted leading-relaxed mt-1.5">
-                    {#if securityLevel === 'custom'}{t('Your own mix of the options below. Pick a level to go back to a ready-made set.')}{:else}{t(SECURITY_LEVELS[securityStep].desc)}{/if}
+                    {#if securityLevel === 'custom'}{t('Your own mix of the options below. Pick a level to go back to a ready-made set.')}{:else}{t(SECURITY_LEVELS[securityStep].desc)}{#if SECURITY_EXTRA[securityLevel]}{' ' + t(SECURITY_EXTRA[securityLevel])}{/if}{/if}
+                  </p>
+                  <p class="text-[11px] text-dim leading-relaxed mt-1.5">
+                    {t('Every level also keeps app and yt-dlp updates, checksum checks from the download page and Multron Cloud threat blocking, quarantine and re-checks turned on.')}
                   </p>
                 </div>
               </div>

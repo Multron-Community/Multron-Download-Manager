@@ -79,12 +79,6 @@
         </button>
       {/if}
     </div>
-    <button class="icon-btn" title="Discord" aria-label="Discord" onclick={() => app.run(() => api.openUrl('https://discord.gg/xXmQw3MUAR'))}>
-      <svg width="15" height="15" viewBox="-0.5 2 25 25" fill="#5865F2" aria-hidden="true"><path d="M17.5 4.96c-1.33-.6-2.76-1.03-4.26-1.25-.19.34-.4.75-.56 1.12-1.57-.23-3.14-.23-4.69 0-.17-.37-.38-.78-.57-1.12-1.5.22-2.93.65-4.26 1.25C.13 10.63-.4 16.2.22 21.68c1.78 1.3 3.51 2.08 5.23 2.6.43-.58.82-1.19 1.16-1.83-1.68-.62-2.31-1.65-2.31-1.65s.19.12.51.29c.14.07.28.14.41.21.32.14.65.26.98.37 2.1.72 4.31.96 6.55.96 2.23 0 4.45-.24 6.55-.96.33-.11.66-.23.98-.37.14-.07.27-.14.41-.21.32-.17.51-.29.51-.29s-.62 1.03-2.31 1.65c.34.64.73 1.25 1.16 1.83 1.72-.52 3.45-1.3 5.23-2.6.68-6.17-.43-11.64-2.92-16.72zM7.74 17.54c-1.14 0-2.07-1.04-2.07-2.31 0-1.27.92-2.31 2.07-2.31 1.16 0 2.08 1.05 2.07 2.31 0 1.27-.92 2.31-2.07 2.31zm8.52 0c-1.14 0-2.07-1.04-2.07-2.31 0-1.27.92-2.31 2.07-2.31 1.16 0 2.08 1.05 2.07 2.31 0 1.27-.92 2.31-2.07 2.31z" /></svg>
-    </button>
-    <button class="icon-btn" title={t('Support Multron Download Manager on Patreon')} aria-label={t('Support Multron Download Manager on Patreon')} onclick={() => app.run(() => api.openUrl('https://www.patreon.com/cw/multron'))}>
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="#FF424D" aria-hidden="true"><path d="M15.386.524c-4.764 0-8.64 3.876-8.64 8.64 0 4.75 3.876 8.613 8.64 8.613 4.75 0 8.614-3.864 8.614-8.613C24 4.4 20.136.524 15.386.524M.003 23.537h4.22V.524H.003" /></svg>
-    </button>
     <button class="icon-btn" title={dark ? t('Switch to light theme') : t('Switch to dark theme')} onclick={() => app.toggleTheme()}>
       <Icon name={dark ? 'sun' : 'moon'} size={14} />
     </button>

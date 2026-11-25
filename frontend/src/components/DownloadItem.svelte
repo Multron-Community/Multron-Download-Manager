@@ -45,6 +45,7 @@
     connecting: 'Connecting',
     downloading: 'Downloading',
     verifying: 'Verifying',
+    unpacking: 'Unpacking…',
     merging: 'Merging',
     converting: 'Converting',
     tagging: 'Adding metadata',

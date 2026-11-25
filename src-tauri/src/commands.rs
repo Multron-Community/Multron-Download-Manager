@@ -141,6 +141,18 @@ pub async fn media_probe(
 }
 
 #[tauri::command]
+pub async fn archive_list(
+    mgr: Mgr<'_>,
+    url: String,
+    referrer: Option<String>,
+    cookies: Option<Vec<BrowserCookie>>,
+) -> R<crate::remote_archive::Listing> {
+    mgr.list_archive(&url, referrer, cookies.as_deref().unwrap_or_default())
+        .await
+        .map_err(anyhow_err)
+}
+
+#[tauri::command]
 pub async fn torrent_inspect(
     mgr: Mgr<'_>,
     source: String,
@@ -550,6 +562,18 @@ pub fn ask_progress(mgr: Mgr<'_>, window: tauri::WebviewWindow) -> Option<(Strin
 }
 
 #[tauri::command]
+pub fn ask_confirm(window: tauri::WebviewWindow) -> Option<String> {
+    crate::askwin::confirm(crate::askwin::key_of(window.label())?)
+}
+
+#[tauri::command]
+pub fn open_confirm_window(app: AppHandle, mgr: Mgr<'_>, id: String) -> R<()> {
+    mgr.record(&id).map_err(anyhow_err)?;
+    crate::askwin::open_confirm(&app, &id);
+    Ok(())
+}
+
+#[tauri::command]
 pub fn ask_started(window: tauri::WebviewWindow) {
     if let Some(key) = crate::askwin::key_of(window.label()) {
         crate::askwin::forget(key);
@@ -717,6 +741,11 @@ pub async fn podcast_search(mgr: Mgr<'_>, term: String) -> R<Vec<crate::feeds::P
 #[tauri::command]
 pub async fn rss_download(mgr: Mgr<'_>, feed: String, item: String) -> R<String> {
     mgr.rss_download(&feed, &item).await.map_err(anyhow_err)
+}
+
+#[tauri::command]
+pub fn rss_mark(mgr: Mgr<'_>, feed: String, item: String) -> R<()> {
+    mgr.rss_mark(&feed, &item).map_err(anyhow_err)
 }
 
 #[tauri::command]
@@ -988,7 +1017,12 @@ pub async fn browser_list() -> Vec<crate::browsers::Browser> {
 }
 
 #[tauri::command]
-pub async fn setup_extension(app: AppHandle, mgr: Mgr<'_>, browser: String) -> R<String> {
+pub async fn setup_extension(
+    app: AppHandle,
+    mgr: Mgr<'_>,
+    browser: String,
+    store: Option<bool>,
+) -> R<String> {
     mgr.pair_asked.lock().clear();
     tauri::async_runtime::spawn_blocking(move || {
         let b = crate::browsers::detect()
@@ -996,12 +1030,36 @@ pub async fn setup_extension(app: AppHandle, mgr: Mgr<'_>, browser: String) -> R
             .find(|b| b.id == browser)
             .ok_or_else(|| anyhow::anyhow!("{browser} is not installed"))?;
         let folder = crate::browsers::extension_folder_for(&app, &b)?;
-        crate::browsers::open_page(&b)?;
+        if store.unwrap_or(false) {
+            crate::browsers::open_store(&b)?;
+        } else {
+            crate::browsers::open_page(&b)?;
+        }
         Ok::<_, anyhow::Error>(folder.to_string_lossy().into_owned())
     })
     .await
     .map_err(err)?
     .map_err(err)
+}
+
+#[tauri::command]
+pub async fn install_firefox_xpi(app: AppHandle, mgr: Mgr<'_>, browser: String) -> R<String> {
+    mgr.pair_asked.lock().clear();
+    let b = tauri::async_runtime::spawn_blocking(move || {
+        crate::browsers::detect()
+            .into_iter()
+            .find(|b| b.id == browser)
+            .ok_or_else(|| anyhow::anyhow!("{browser} is not installed"))
+    })
+    .await
+    .map_err(err)?
+    .map_err(err)?;
+    let dir = crate::browsers::xpi_dir(&app, &b).map_err(err)?;
+    let file = crate::browsers::download_signed_xpi(&mgr.api_client, &dir)
+        .await
+        .map_err(err)?;
+    crate::browsers::open_xpi(&b, &file).map_err(err)?;
+    Ok(file.to_string_lossy().into_owned())
 }
 
 #[tauri::command]

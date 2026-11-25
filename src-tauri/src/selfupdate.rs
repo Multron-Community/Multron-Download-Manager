@@ -442,6 +442,8 @@ if [ -n "$app" ]; then
 fi
 hdiutil detach -quiet "$mnt"
 xattr -rd com.apple.quarantine {bundle} 2>/dev/null || true
+xattr -cr {bundle} 2>/dev/null || true
+codesign --verify --deep --strict {bundle} 2>/dev/null || codesign --force --deep --sign - {bundle} 2>/dev/null || true
 {relaunch}"#,
                 dmg = sh_quote(&pkg),
                 bundle = sh_quote(&bundle.to_string_lossy()),

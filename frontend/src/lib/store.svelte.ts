@@ -97,6 +97,7 @@ class AppState {
   addOpen = $state(false);
   addPrefill = $state<AddRequest | null>(null);
   addTorrentFile = $state<string | null>(null);
+  addDone: ((id: string) => void) | null = null;
   pairOrigins = $state<string[]>([]);
   extensionSetupOpen = $state(false);
   extensionSetupBrowser = $state<string | null>(null);
@@ -397,9 +398,10 @@ class AppState {
     }
   }
 
-  openAdd(prefill: AddRequest | null = null, torrentFile: string | null = null) {
+  openAdd(prefill: AddRequest | null = null, torrentFile: string | null = null, onDone: ((id: string) => void) | null = null) {
     this.addPrefill = prefill;
     this.addTorrentFile = torrentFile;
+    this.addDone = onDone;
     this.addOpen = true;
   }
 

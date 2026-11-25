@@ -703,6 +703,7 @@ impl Tools {
             transform: None,
             if_range: probe.validator.clone(),
             max_request: None,
+            window: None,
         });
         let mut run = tokio::spawn(engine::run(job));
         let mut tick = tokio::time::interval(Duration::from_millis(250));
@@ -2477,6 +2478,7 @@ mod tests {
                     transform: None,
                     if_range: probe.validator.clone(),
                     max_request: Some(8 << 20),
+                    window: None,
                 }))
                 .await
                 .unwrap();

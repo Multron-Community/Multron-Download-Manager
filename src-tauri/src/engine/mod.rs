@@ -372,6 +372,7 @@ pub struct Job {
     pub transform: Option<Arc<dyn ChunkTransform>>,
     pub if_range: Option<String>,
     pub max_request: Option<u64>,
+    pub window: Option<(u64, u64)>,
 }
 
 impl Job {
@@ -669,11 +670,18 @@ async fn fetch_segment(
     let request_end = job
         .max_request
         .map_or(end, |m| end.min(start + m.max(MIN_STEAL)));
+    let (base, remote_total) = match job.window {
+        Some((base, size)) => (base, Some(size)),
+        None => (0, job.progress.total()),
+    };
     let mut request = job
         .client
         .get(&job.url)
         .headers(job.headers.clone())
-        .header(RANGE, format!("bytes={}-{}", start, request_end - 1));
+        .header(
+            RANGE,
+            format!("bytes={}-{}", base + start, base + request_end - 1),
+        );
     if let Some(v) = &job.if_range {
         request = request.header(IF_RANGE, v.as_str());
     }
@@ -700,9 +708,9 @@ async fn fetch_segment(
         .get(CONTENT_RANGE)
         .and_then(|v| v.to_str().ok())
         .and_then(parse_content_range);
-    match (served, job.progress.total()) {
-        (Some((s, _, _)), _) if s != start => {
-            bail!("server sent bytes from {s} instead of {start}")
+    match (served, remote_total) {
+        (Some((s, _, _)), _) if s != base + start => {
+            bail!("server sent bytes from {s} instead of {}", base + start)
         }
         (Some((_, _, Some(t))), Some(total)) if t != total => {
             bail!("the file size changed on the server ({total} → {t} bytes)")
@@ -807,7 +815,7 @@ fn parse_content_range(v: &str) -> Option<(u64, u64, Option<u64>)> {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
 
     #[test]
@@ -850,7 +858,7 @@ mod tests {
         assert_eq!(validator(&h).as_deref(), Some("\"strong\""));
     }
 
-    async fn range_server(data: Arc<Vec<u8>>, etag: &'static str) -> String {
+    pub(crate) async fn range_server(data: Arc<Vec<u8>>, etag: &'static str) -> String {
         use axum::http::{HeaderMap as H, StatusCode as S};
         let app = axum::Router::new().route(
             "/file.bin",
@@ -970,6 +978,7 @@ mod tests {
             transform: None,
             if_range,
             max_request: None,
+            window: None,
         })
     }
 
@@ -1002,6 +1011,29 @@ mod tests {
         let changed = local_job(&url, dir.join("changed.part"), total, Some("\"v0\"".into()));
         let err = run(changed).await.unwrap_err().to_string();
         assert!(err.contains("changed on the server"), "{err}");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test(flavor = "multi_thread", worker_threads = 4)]
+    async fn window_downloads_only_a_slice_of_the_remote_file() {
+        let data: Vec<u8> = (0..6 * 1024 * 1024u32).map(|i| (i % 253) as u8).collect();
+        let total = data.len() as u64;
+        let (from, len) = (1_234_567u64, 3_000_001u64);
+        let expected = data[from as usize..(from + len) as usize].to_vec();
+        let url = range_server(Arc::new(data), "\"w1\"").await;
+        let dir = std::env::temp_dir().join(format!("mdm-window-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let part = dir.join("slice.part");
+        let job = Arc::new(Job {
+            window: Some((from, total)),
+            if_range: Some("\"w1\"".into()),
+            ..Arc::try_unwrap(local_job(&url, part.clone(), len, None))
+                .ok()
+                .unwrap()
+        });
+        assert!(run(job.clone()).await.unwrap());
+        assert!(job.progress.segments().len() > 1);
+        assert_eq!(std::fs::read(&part).unwrap(), expected);
         let _ = std::fs::remove_dir_all(&dir);
     }
 
@@ -1311,6 +1343,7 @@ mod tests {
                 transform: None,
                 if_range: probe.validator.clone(),
                 max_request: None,
+                window: None,
             });
             let started = std::time::Instant::now();
             assert!(run(job).await.unwrap(), "download did not complete");

@@ -33,15 +33,16 @@ if (!fs.existsSync(exe)) {
   process.exit(1);
 }
 
+const programFiles = process.env.ProgramFiles ?? 'C:\\Program Files';
+const programFilesX86 = process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)';
+const userPrograms = path.join(process.env.LOCALAPPDATA ?? '', 'Programs');
 const candidates = [
   process.env.ISCC,
-  path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Inno Setup 6', 'ISCC.exe'),
-  path.join(process.env.ProgramFiles ?? 'C:\\Program Files', 'Inno Setup 6', 'ISCC.exe'),
-  path.join(process.env.LOCALAPPDATA ?? '', 'Programs', 'Inno Setup 6', 'ISCC.exe')
+  ...['Inno Setup 7', 'Inno Setup 6'].flatMap((dir) => [programFiles, programFilesX86, userPrograms].map((base) => path.join(base, dir, 'ISCC.exe')))
 ].filter(Boolean);
 const iscc = candidates.find((p) => fs.existsSync(p));
 if (!iscc) {
-  console.error('Inno Setup 6 was not found. Install it with:\n  winget install -e --id JRSoftware.InnoSetup\nor set the ISCC environment variable to ISCC.exe.');
+  console.error('Inno Setup was not found. Install it with:\n  winget install -e --id JRSoftware.InnoSetup.7\nor set the ISCC environment variable to ISCC.exe.');
   process.exit(1);
 }
 

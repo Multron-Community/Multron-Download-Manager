@@ -5,7 +5,7 @@
   import { api, errorText } from '../lib/api';
   import { t, i18n } from '../lib/i18n.svelte';
   import { bytes, date } from '../lib/format';
-  import type { FeedView } from '../types';
+  import type { AddRequest, FeedView } from '../types';
   import Icon from './Icon.svelte';
 
   let feeds = $state<FeedView[]>([]);
@@ -151,6 +151,14 @@
   async function download(itemId: string) {
     if (!feed) return;
     if (await app.run(() => api.rssDownload(feed!.url, itemId), 'Added to downloads')) await load();
+  }
+
+  function chooseFiles(item: { id: string; download: string; title: string }) {
+    const url = feed?.url;
+    if (!url) return;
+    app.openAdd({ url: item.download, pageTitle: item.title } as AddRequest, null, () => {
+      api.rssMark(url, item.id).then(load).catch(() => {});
+    });
   }
 
   onMount(() => {
@@ -327,6 +335,9 @@
             {#if done}
               <span class="text-[11px] text-ok flex items-center gap-1"><Icon name="check" size={12} />{t('Added')}</span>
             {:else}
+              {#if !/youtube\.com|youtu\.be/.test(item.download)}
+                <button class="btn !h-[26px]" title={t('Choose files')} onclick={() => chooseFiles(item)}><Icon name="list" size={12} />{t('Choose files')}</button>
+              {/if}
               <button class="btn !h-[26px]" onclick={() => download(item.id)}><Icon name="down" size={12} />{t('Download')}</button>
             {/if}
           </div>

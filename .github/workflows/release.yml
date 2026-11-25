@@ -136,7 +136,7 @@ jobs:
               '',
               'Every file is listed with its SHA-256 in `update.json`, which is signed with the Multron Download Manager release key (`update.json.sig`). Verify a download with `node scripts/verify-update.mjs update.json update.json.sig <file>` from the repository, or check its build provenance with `gh attestation verify <file> --repo Multron-Community/Multron-Download-Manager`. `SHA256SUMS.txt` lists the same hashes without a signature.',
               '',
-              'macOS builds are not notarized: right-click → Open the first time, or run `xattr -cr "/Applications/Multron Download Manager.app"`.'
+              'macOS builds are not notarized by Apple. The first time, open the app once, then go to System Settings → Privacy & Security and click **Open Anyway**. If macOS says the app is damaged, run `xattr -cr "/Applications/Multron Download Manager.app"` in Terminal.'
             ].join('\n');
             if (release) {
               await github.rest.repos.updateRelease({ owner, repo, release_id: release.id, body });
@@ -235,6 +235,30 @@ jobs:
 
       - name: Install npm packages
         run: npm ci && npm ci --prefix frontend
+
+      - name: Apple signing and notarization (when the secrets are set)
+        if: startsWith(matrix.platform, 'macos')
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$APPLE_CERTIFICATE" ] || [ -z "$APPLE_SIGNING_IDENTITY" ]; then
+            echo "::notice::No Apple Developer ID certificate in the secrets, so the macOS app is ad-hoc signed and not notarized"
+            exit 0
+          fi
+          for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+            value="$(printf '%s' "${!name}" | tr -d '\r\n')"
+            [ -n "$value" ] || continue
+            echo "::add-mask::$value"
+            printf '%s=%s\n' "$name" "$value" >> "$GITHUB_ENV"
+          done
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::warning::APPLE_ID, APPLE_PASSWORD and APPLE_TEAM_ID are not all set, so the app is signed but not notarized"
+          fi
 
       - name: Build
         env:
@@ -420,10 +444,22 @@ jobs:
       - name: Install npm packages
         run: npm ci && npm ci --prefix frontend
 
-      - name: Install Inno Setup (only if the runner lacks it)
+      - name: Install Inno Setup 7
         shell: pwsh
+        env:
+          INNO_VERSION: 7.1.1
         run: |
-          if (-not (Test-Path "C:\Program Files (x86)\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+          $tag = 'is-' + $env:INNO_VERSION.Replace('.', '_')
+          $file = "innosetup-$env:INNO_VERSION-x64.exe"
+          Invoke-WebRequest -Uri "https://github.com/jrsoftware/issrc/releases/download/$tag/$file" -OutFile $file
+          $sig = Get-AuthenticodeSignature $file
+          if ($sig.Status -ne 'Valid' -or $sig.SignerCertificate.Subject -notmatch 'O=Pyrsys B\.V\.') {
+            throw "$file is not signed by the Inno Setup publisher ($($sig.Status), $($sig.SignerCertificate.Subject))"
+          }
+          $dir = 'C:\InnoSetup7'
+          Start-Process -FilePath ".\$file" -ArgumentList '/VERYSILENT', '/SUPPRESSMSGBOXES', '/NORESTART', '/SP-', "/DIR=$dir" -Wait
+          if (-not (Test-Path "$dir\ISCC.exe")) { throw "Inno Setup $env:INNO_VERSION did not install to $dir" }
+          "ISCC=$dir\ISCC.exe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
       - name: Download WebView2 bootstrapper and check its Microsoft signature
         shell: pwsh
@@ -435,8 +471,6 @@ jobs:
           }
 
       - name: Build installer
-        env:
-          ISCC: C:\Program Files (x86)\Inno Setup 6\ISCC.exe
         run: node scripts/build-windows.mjs --webview2 MicrosoftEdgeWebview2Setup.exe
 
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -456,26 +490,45 @@ jobs:
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
       - run: node scripts/package-extension.mjs
-      - name: Sign the Firefox add-on with Mozilla (unlisted)
+      - name: Get the Mozilla-signed Firefox add-on
         env:
           AMO_JWT_ISSUER: ${{ secrets.AMO_JWT_ISSUER }}
           AMO_JWT_SECRET: ${{ secrets.AMO_JWT_SECRET }}
           VERSION: ${{ needs.create-release.outputs.version }}
         run: |
+          ext=$(node -p "require('./extension/manifest.json').version")
+          out="dist/multron-browser-extension-firefox-v${VERSION#v}.xpi"
+          api="https://addons.mozilla.org/api/v5/addons/addon/multron-download-manager/versions/$ext/"
+          fetch_signed() {
+            info=$(curl -fsSL "$api" 2>/dev/null) || return 1
+            url=$(printf '%s' "$info" | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const f=JSON.parse(s).file||{};if(f.status==="public"&&f.url)console.log(f.url+" "+String(f.hash||"").replace(/^sha256:/,""))})')
+            [ -n "$url" ] || return 1
+            set -- $url
+            curl -fsSL "$1" -o "$out" || return 1
+            if [ -n "$2" ] && [ "$(sha256sum "$out" | cut -d' ' -f1)" != "$2" ]; then
+              echo "::error::The .xpi from AMO does not match its published SHA-256"
+              rm -f "$out"
+              return 1
+            fi
+            echo "Signed add-on $ext from AMO -> $out"
+          }
+          fetch_signed && exit 0
           if [ -z "$AMO_JWT_ISSUER" ] || [ -z "$AMO_JWT_SECRET" ]; then
-            echo "::warning::AMO_JWT_ISSUER and AMO_JWT_SECRET are not set, so the signed Firefox .xpi is not built"
+            echo "::warning::Version $ext is not on addons.mozilla.org yet and AMO_JWT_ISSUER / AMO_JWT_SECRET are not set, so the signed Firefox .xpi is not attached. Upload $ext to AMO, or add the secrets."
             exit 0
           fi
           npx --yes web-ext@8.3.0 sign \
             --source-dir extension-build/firefox \
             --artifacts-dir xpi \
-            --channel unlisted \
-            --approval-timeout 1800000 \
+            --channel listed \
             --api-key "$AMO_JWT_ISSUER" \
-            --api-secret "$AMO_JWT_SECRET"
-          signed=$(find xpi -name '*.xpi' | head -n 1)
-          test -n "$signed"
-          cp "$signed" "dist/multron-browser-extension-firefox-v${VERSION#v}.xpi"
+            --api-secret "$AMO_JWT_SECRET" \
+            || echo "::warning::web-ext could not submit $ext to AMO (it may already be submitted)"
+          for _ in $(seq 40); do
+            fetch_signed && exit 0
+            sleep 30
+          done
+          echo "::warning::Mozilla has not approved $ext yet, so the signed Firefox .xpi is not attached. Add it to the release once AMO approves it."
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: release-extension
@@ -672,3 +725,34 @@ jobs:
     uses: ./.github/workflows/flatpak.yml
     with:
       version: ${{ needs.create-release.outputs.version }}
+
+  flathub-files:
+    name: Update Flathub files
+    needs: [create-release, publish]
+    if: needs.create-release.outputs.skip != 'true' && github.event.inputs.draft != 'true' && github.event.inputs.prerelease != 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          ref: main
+      - name: Point the Flathub manifest at the release
+        env:
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: node scripts/flathub-update.mjs "$VERSION"
+      - name: Commit the change to main
+        env:
+          VERSION: ${{ needs.create-release.outputs.version }}
+        run: |
+          if git diff --quiet -- packaging/flathub; then
+            echo "Flathub files already point at v$VERSION"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add packaging/flathub
+          git commit -m "Flathub: point at v$VERSION [skip ci]"
+          for attempt in 1 2 3; do
+            if git push origin HEAD:main; then exit 0; fi
+            git pull --rebase origin main
+          done
+          echo "::warning::Could not push the Flathub update to main (branch protection?). Run node scripts/flathub-update.mjs $VERSION and commit packaging/flathub by hand."

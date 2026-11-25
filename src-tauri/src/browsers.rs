@@ -31,6 +31,83 @@ struct Known {
 
 const FIREFOX_PAGE: &str = "about:debugging#/runtime/this-firefox";
 
+pub const FIREFOX_STORE: &str =
+    "https://addons.mozilla.org/firefox/addon/multron-download-manager/";
+const AMO_API: &str = "https://addons.mozilla.org/api/v5/addons/addon/multron-download-manager";
+const XPI_NAME: &str = "multron-download-manager-firefox.xpi";
+
+fn signed_file(json: &serde_json::Value) -> Option<(String, String)> {
+    let file = &json["file"];
+    if file["status"] != "public" {
+        return None;
+    }
+    let url = file["url"].as_str()?.to_string();
+    let hash = file["hash"]
+        .as_str()?
+        .strip_prefix("sha256:")?
+        .to_ascii_lowercase();
+    url.starts_with("https://addons.mozilla.org/")
+        .then_some((url, hash))
+}
+
+pub fn xpi_dir(app: &AppHandle, browser: &Browser) -> Result<PathBuf> {
+    if let Some(id) = &browser.flatpak {
+        let home = crate::flatpak::home().context("HOME is not set")?;
+        return Ok(crate::flatpak::data_dir(&home, id));
+    }
+    if cfg!(target_os = "linux") {
+        if let Ok(dir) = app.path().download_dir() {
+            return Ok(dir);
+        }
+    }
+    app.path().app_data_dir().context("no app data dir")
+}
+
+pub async fn download_signed_xpi(client: &reqwest::Client, dir: &Path) -> Result<PathBuf> {
+    let version = env!("CARGO_PKG_VERSION")
+        .split('-')
+        .next()
+        .unwrap_or_default();
+    let get_json = |url: String| async move {
+        let r = client.get(url).send().await.ok()?.error_for_status().ok()?;
+        r.json::<serde_json::Value>().await.ok()
+    };
+    let matching = get_json(format!("{AMO_API}/versions/{version}/")).await;
+    let (url, hash) = match matching.as_ref().and_then(signed_file) {
+        Some(found) => found,
+        None => get_json(format!("{AMO_API}/"))
+            .await
+            .as_ref()
+            .and_then(|a| signed_file(&a["current_version"]))
+            .context("Mozilla Add-ons did not answer. Check the internet connection.")?,
+    };
+    let data = client
+        .get(&url)
+        .send()
+        .await?
+        .error_for_status()?
+        .bytes()
+        .await?;
+    use sha2::Digest as _;
+    anyhow::ensure!(
+        hex::encode(sha2::Sha256::digest(&data)) == hash,
+        "the add-on file from Mozilla Add-ons is damaged (SHA-256 does not match)"
+    );
+    std::fs::create_dir_all(dir)?;
+    let file = dir.join(XPI_NAME);
+    std::fs::write(&file, &data).with_context(|| format!("could not save {}", file.display()))?;
+    Ok(file)
+}
+
+pub fn open_xpi(browser: &Browser, file: &Path) -> Result<()> {
+    anyhow::ensure!(
+        browser.engine == "firefox",
+        "{} is not a Firefox browser",
+        browser.name
+    );
+    open_in(browser, &file.to_string_lossy())
+}
+
 const KNOWN: &[Known] = &[
     Known {
         id: "chrome",
@@ -749,6 +826,19 @@ fn find(k: &Known) -> Option<PathBuf> {
 }
 
 pub fn open_page(browser: &Browser) -> Result<()> {
+    open_in(browser, &browser.extensions_page)
+}
+
+pub fn open_store(browser: &Browser) -> Result<()> {
+    anyhow::ensure!(
+        browser.engine == "firefox",
+        "{} has no add-on store listing",
+        browser.name
+    );
+    open_in(browser, FIREFOX_STORE)
+}
+
+fn open_in(browser: &Browser, target: &str) -> Result<()> {
     let mut cmd = match &browser.flatpak {
         Some(id) => {
             let mut c = Command::new("flatpak");
@@ -757,7 +847,7 @@ pub fn open_page(browser: &Browser) -> Result<()> {
         }
         None => Command::new(&browser.path),
     };
-    cmd.arg(&browser.extensions_page)
+    cmd.arg(target)
         .stdin(std::process::Stdio::null())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::null());
@@ -994,6 +1084,31 @@ mod tests {
         paths.sort();
         paths.dedup();
         assert_eq!(paths.len(), list.len());
+    }
+
+    #[test]
+    fn reads_only_public_signed_files_from_amo() {
+        let ok = serde_json::json!({ "file": {
+            "status": "public",
+            "url": "https://addons.mozilla.org/firefox/downloads/file/1/a.xpi",
+            "hash": "sha256:ABCDEF"
+        }});
+        assert_eq!(
+            signed_file(&ok),
+            Some((
+                "https://addons.mozilla.org/firefox/downloads/file/1/a.xpi".into(),
+                "abcdef".into()
+            ))
+        );
+        let mut waiting = ok.clone();
+        waiting["file"]["status"] = "unreviewed".into();
+        assert_eq!(signed_file(&waiting), None);
+        let mut elsewhere = ok.clone();
+        elsewhere["file"]["url"] = "https://example.com/a.xpi".into();
+        assert_eq!(signed_file(&elsewhere), None);
+        let mut no_sha = ok;
+        no_sha["file"]["hash"] = "md5:abc".into();
+        assert_eq!(signed_file(&no_sha), None);
     }
 
     #[test]

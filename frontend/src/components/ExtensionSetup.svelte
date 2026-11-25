@@ -12,6 +12,9 @@
   let error = $state<string | null>(null);
   let copied = $state(false);
   let baseline = $state(0);
+  let mode = $state<'store' | 'xpi' | 'folder' | null>(null);
+  let xpiFile = $state<string | null>(null);
+  let xpiFailed = $state(false);
 
   let browser = $derived(browsers?.find((b) => b.id === picked) ?? null);
   let firefox = $derived(browser?.engine === 'firefox');
@@ -24,6 +27,9 @@
     if (!app.extensionSetupOpen) return;
     baseline = app.settings?.trustedExtensions.length ?? 0;
     folder = null;
+    mode = null;
+    xpiFile = null;
+    xpiFailed = false;
     error = null;
     api
       .browserList()
@@ -46,13 +52,31 @@
     }
   }
 
-  async function start() {
+  async function installXpi() {
+    if (!browser) return;
+    busy = true;
+    error = null;
+    xpiFailed = false;
+    try {
+      xpiFile = await api.installFirefoxXpi(browser.id);
+      folder = xpiFile;
+      mode = 'xpi';
+    } catch (e) {
+      error = errorText(e);
+      xpiFailed = true;
+    } finally {
+      busy = false;
+    }
+  }
+
+  async function start(store = false) {
     if (!browser) return;
     busy = true;
     error = null;
     try {
-      folder = await api.setupExtension(browser.id);
-      await copy(pastePath);
+      folder = await api.setupExtension(browser.id, store);
+      mode = store ? 'store' : 'folder';
+      if (!store) await copy(pastePath);
     } catch (e) {
       error = errorText(e);
     } finally {
@@ -76,6 +100,18 @@
     }
   }
 </script>
+
+{#snippet flatpakNote(b: Browser)}
+  {#if b.flatpak && !b.flatpakAutostart && b.flatpakGrant}
+    <div class="rounded-[9px] border border-warn/40 bg-warn/10 p-2.5 space-y-2 text-[11.5px] leading-relaxed">
+      <p>{t('{name} is a Flatpak app. Downloads work right away. To let the extension also start Multron Download Manager when it is closed, run this command once and restart the browser:', { name: b.name })}</p>
+      <div class="flex items-center gap-2">
+        <input class="field mono flex-1 !text-[11px]" readonly value={b.flatpakGrant} onfocus={(e) => e.currentTarget.select()} />
+        <button class="btn" onclick={() => copy(b.flatpakGrant ?? '')}><Icon name="copy" size={13} />{t('Copy')}</button>
+      </div>
+    </div>
+  {/if}
+{/snippet}
 
 {#if app.extensionSetupOpen}
   <div class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[55] flex items-center justify-center p-4" role="presentation">
@@ -119,6 +155,9 @@
                   onclick={() => {
                     picked = b.id;
                     folder = null;
+                    mode = null;
+                    xpiFile = null;
+                    xpiFailed = false;
                   }}
                   class="min-h-[46px] px-3 py-1.5 rounded-[9px] border text-left text-[12.5px] flex items-center gap-2 cursor-pointer transition-colors
                     {picked === b.id ? 'border-accent/70 bg-accent-strong/15 text-white' : 'border-line text-white/90 hover:bg-hover hover:text-white'}"
@@ -136,18 +175,59 @@
         </section>
 
         {#if browser}
-          <section class="space-y-2">
-            <h3 class="text-[11px] font-semibold text-dim uppercase tracking-wider">2 · {t('Open the extensions page')}</h3>
-            <button class="btn btn-accent w-full justify-center" disabled={busy} onclick={start}>
-              <Icon name="bolt" size={13} />
-              {busy ? t('Preparing…') : folder ? t('Open {name} again', { name: browser.name }) : t('Prepare and open {name}', { name: browser.name })}
-            </button>
-            <p class="text-[11px] text-dim">
-              {t('Opens {page} and copies the extension folder’s path for you. The folder comes with Multron Download Manager and is updated with it.', { page: browser.extensionsPage })}
-            </p>
-          </section>
+          {#if firefox}
+            <section class="space-y-2">
+              <h3 class="text-[11px] font-semibold text-dim uppercase tracking-wider">2 · {t('Install from Firefox Add-ons')}</h3>
+              <button class="btn btn-accent w-full justify-center" disabled={busy} onclick={() => start(true)}>
+                <Icon name="puzzle" size={13} />
+                {busy ? t('Preparing…') : t('Open Firefox Add-ons in {name}', { name: browser.name })}
+              </button>
+              <p class="text-[11px] text-dim">
+                {t('The add-on is signed by Mozilla, stays installed after Firefox restarts and updates by itself.')}
+              </p>
+              <button type="button" class="text-[11.5px] text-muted hover:text-white underline underline-offset-2 cursor-pointer" disabled={busy} onclick={installXpi}>
+                {t('Or install the signed .xpi file')}
+              </button>
+              {#if xpiFailed}
+                <button type="button" class="block text-[11.5px] text-muted hover:text-white underline underline-offset-2 cursor-pointer" disabled={busy} onclick={() => start(false)}>
+                  {t('Load it from the extension folder instead (temporary)')}
+                </button>
+              {/if}
+            </section>
+          {:else}
+            <section class="space-y-2">
+              <h3 class="text-[11px] font-semibold text-dim uppercase tracking-wider">2 · {t('Open the extensions page')}</h3>
+              <button class="btn btn-accent w-full justify-center" disabled={busy} onclick={() => start()}>
+                <Icon name="bolt" size={13} />
+                {busy ? t('Preparing…') : folder ? t('Open {name} again', { name: browser.name }) : t('Prepare and open {name}', { name: browser.name })}
+              </button>
+              <p class="text-[11px] text-dim">
+                {t('Opens {page} and copies the extension folder’s path for you. The folder comes with Multron Download Manager and is updated with it.', { page: browser.extensionsPage })}
+              </p>
+            </section>
+          {/if}
 
-          {#if folder}
+          {#if folder && (mode === 'store' || mode === 'xpi')}
+            <section class="space-y-2">
+              <h3 class="text-[11px] font-semibold text-dim uppercase tracking-wider">3 · {t('In {name}', { name: browser.name })}</h3>
+              <ol class="text-[12.5px] list-decimal pl-5 space-y-1.5 leading-relaxed">
+                {#if mode === 'xpi'}
+                  <li>{t('Firefox asks whether to add Multron Download Manager. Click “Add”.')}</li>
+                {:else}
+                  <li>{t('Click “Add to Firefox”, then “Add”.')}</li>
+                {/if}
+                <li>{t('Press “Allow” when Multron Download Manager asks. The extension connects by itself.')}</li>
+              </ol>
+              {#if mode === 'xpi' && xpiFile}
+                <p class="text-[11px] text-dim leading-relaxed break-all">{t('Saved to {path}. You can also drag this file into a Firefox window.', { path: xpiFile })}</p>
+              {/if}
+              {@render flatpakNote(browser)}
+              <div class="flex items-center gap-2 text-[12px] text-muted pt-1">
+                <span class="w-[8px] h-[8px] rounded-full bg-warn animate-pulse"></span>
+                {t('Waiting for the extension to connect…')}
+              </div>
+            </section>
+          {:else if folder}
             <section class="space-y-2">
               <h3 class="text-[11px] font-semibold text-dim uppercase tracking-wider">3 · {t('In {name}', { name: browser.name })}</h3>
               <ol class="text-[12.5px] list-decimal pl-5 space-y-1.5 leading-relaxed">
@@ -180,15 +260,7 @@
                 </p>
               {/if}
 
-              {#if browser.flatpak && !browser.flatpakAutostart && browser.flatpakGrant}
-                <div class="rounded-[9px] border border-warn/40 bg-warn/10 p-2.5 space-y-2 text-[11.5px] leading-relaxed">
-                  <p>{t('{name} is a Flatpak app. Downloads work right away. To let the extension also start Multron Download Manager when it is closed, run this command once and restart the browser:', { name: browser.name })}</p>
-                  <div class="flex items-center gap-2">
-                    <input class="field mono flex-1 !text-[11px]" readonly value={browser.flatpakGrant} onfocus={(e) => e.currentTarget.select()} />
-                    <button class="btn" onclick={() => copy(browser.flatpakGrant ?? '')}><Icon name="copy" size={13} />{t('Copy')}</button>
-                  </div>
-                </div>
-              {/if}
+              {@render flatpakNote(browser)}
 
               <div class="flex items-center gap-2 text-[12px] text-muted pt-1">
                 <span class="w-[8px] h-[8px] rounded-full bg-warn animate-pulse"></span>

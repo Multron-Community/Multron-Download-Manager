@@ -12,7 +12,8 @@
   function focusOnMount(node: HTMLElement) {
     node.focus();
   }
-  import type { AddRequest, MediaInfo, ProbeInfo, TorrentPreview } from '../types';
+  import type { AddRequest, ArchiveEntry, ArchiveListing, MediaInfo, ProbeInfo, TorrentPreview } from '../types';
+  import ArchiveBrowser from './ArchiveBrowser.svelte';
   import Icon from './Icon.svelte';
 
   type Mode = 'link' | 'media' | 'torrent';
@@ -53,6 +54,15 @@
 
   let probe = $state<ProbeInfo | null>(null);
   let probing = $state(false);
+  let browsing = $state(false);
+  let archiveListing = $state<ArchiveListing | null>(null);
+  let archivePicked = $state<ArchiveEntry[]>([]);
+  let archiveFolders = $state(false);
+  const ARCHIVE_NAME = /\.(zip|zipx|jar|war|ear|apk|apks|xapk|aab|ipa|xpi|crx|whl|nupkg|vsix|appx|msix|docx|xlsx|pptx|odt|ods|odp|epub|cbz|iso|img|udf|tar|7z|cb7|rar|cbr)($|[?#])/i;
+  const ARCHIVE_TYPE = /zip|iso9660|x-iso|x-tar|x-7z|x-rar|vnd\.rar|java-archive|android\.package|epub|openxmlformats|opendocument/i;
+  let canBrowse = $derived(
+    !!probe && probe.resumable && !!probe.total && !probe.service && (ARCHIVE_NAME.test(probe.filename ?? '') || ARCHIVE_NAME.test(url.trim()) || ARCHIVE_TYPE.test(probe.contentType ?? ''))
+  );
 
   let media = $state<MediaInfo | null>(null);
   let mediaLoading = $state(false);
@@ -79,7 +89,7 @@
   let picked = $state<Set<number>>(new Set());
   let trackersText = $state('');
 
-  let extra: Partial<AddRequest> = {};
+  let extra = $state<Partial<AddRequest>>({});
   let probeTimer: ReturnType<typeof setTimeout> | undefined;
   let lastProbed = '';
 
@@ -119,6 +129,10 @@
     playlist = p?.playlist ?? false;
     probe = null;
     media = null;
+    browsing = false;
+    archiveListing = null;
+    archivePicked = [];
+    archiveFolders = false;
     mediaError = null;
     preview = null;
     torrentError = null;
@@ -136,6 +150,7 @@
   function onUrlInput() {
     const m = detectMode(url);
     if (m !== mode && !torrentFile) mode = m;
+    browsing = false;
     clearTimeout(probeTimer);
     if (mode === 'link') probeTimer = setTimeout(runProbe, 650);
   }
@@ -227,8 +242,33 @@
   let canSubmit = $derived(
     !busy &&
       !shaInvalid &&
-      (mode === 'torrent' ? !!(torrentFile || url.trim()) && (!preview || picked.size > 0) : !!url.trim())
+      (mode === 'torrent' ? !!(torrentFile || url.trim()) && (!preview || picked.size > 0) : !!url.trim()) &&
+      !(mode === 'link' && browsing && (!archiveListing || !archivePicked.length))
   );
+
+  async function addFromArchive(base: AddRequest, later: boolean) {
+    const listing = archiveListing!;
+    let first: string | null = null;
+    let added = 0;
+    for (const entry of archivePicked) {
+      const id = await app.addChecked({
+        ...base,
+        kind: 'http',
+        filename: null,
+        sha256: null,
+        mirrors: [],
+        later,
+        total: entry.size,
+        archive: { format: listing.format, archiveSize: listing.size, entry },
+        archiveFolders
+      });
+      if (id) {
+        first ??= id;
+        added++;
+      }
+    }
+    return added ? first : null;
+  }
 
   async function submit(e: SubmitEvent) {
     e.preventDefault();
@@ -250,6 +290,16 @@
       speedLimit: Number(speedLimit) || 0,
       threads: Number(threads) || 8
     };
+    if (mode === 'link' && browsing && archiveListing) {
+      const first = await addFromArchive(base, later);
+      busy = false;
+      if (first !== null) {
+        app.addOpen = false;
+        if (first) onAdded?.(first);
+        else onClose?.();
+      }
+      return;
+    }
     let req: AddRequest;
     if (mode === 'link') {
       req = { ...base, kind: 'http', filename: filename.trim() || null, sha256: sha256.trim() || null };
@@ -363,12 +413,21 @@
               <span class={probe.resumable ? 'text-ok' : 'text-warn'}>{probe.resumable ? `${t('Resumable')} · multi-connection` : t('Not resumable')}</span>
               {#if probe.contentType}<span class="text-muted">{probe.contentType}</span>{/if}
               {#if probe.error}<span class="text-warn w-full">{probe.error}</span>{/if}
+              {#if canBrowse && !browsing}
+                <button type="button" class="text-accent hover:underline flex items-center gap-1 w-full mt-0.5" onclick={() => (browsing = true)}>
+                  <Icon name="archive" size={12} />{t('Browse archive contents')}
+                </button>
+              {/if}
             </div>
           {/if}
-          <div class="space-y-1.5">
-            <label for="fname" class="label">{t('File name')}</label>
-            <input id="fname" class="field" bind:value={filename} placeholder="auto" />
-          </div>
+          {#if browsing}
+            <ArchiveBrowser url={url.trim()} referrer={extra.referrer ?? null} cookies={extra.cookies ?? []} bind:listing={archiveListing} bind:selected={archivePicked} bind:folders={archiveFolders} onClose={() => (browsing = false)} />
+          {:else}
+            <div class="space-y-1.5">
+              <label for="fname" class="label">{t('File name')}</label>
+              <input id="fname" class="field" bind:value={filename} placeholder="auto" />
+            </div>
+          {/if}
         {:else if mode === 'media'}
           {#if mediaError}
             <p class="text-[12px] text-bad whitespace-pre-wrap">{mediaError}</p>
@@ -466,7 +525,7 @@
           </div>
         </div>
 
-        {#if mode === 'link' && (app.settings?.askSha256 || showAdvanced)}
+        {#if mode === 'link' && !browsing && (app.settings?.askSha256 || showAdvanced)}
           <div class="space-y-1.5">
             <label for="sha" class="label flex items-center gap-1.5"><Icon name="shield" size={12} />{t('Expected SHA-256')}{app.settings?.askSha256 ? '' : ' (optional)'}</label>
             <input id="sha" class="field mono {shaInvalid ? '!border-bad' : ''}" bind:value={sha256} placeholder={t('64 hex characters — the file is verified automatically when it finishes')} />

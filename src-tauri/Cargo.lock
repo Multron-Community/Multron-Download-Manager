@@ -3455,7 +3455,7 @@ checksum = "743fb55ba31b18fb1ecef6bdc9aa2743314978ac084044301a7eee33fb99a20d"
 
 [[package]]
 name = "multron-download-manager"
-version = "1.0.2"
+version = "1.0.3"
 dependencies = [
  "aes 0.8.4",
  "anyhow",
@@ -3465,7 +3465,9 @@ dependencies = [
  "brotli",
  "bytes",
  "chrono",
+ "crc32fast",
  "ctr",
+ "deflate64",
  "ed25519-dalek",
  "flate2",
  "fs4",

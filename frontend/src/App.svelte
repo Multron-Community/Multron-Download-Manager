@@ -265,7 +265,13 @@
   </div>
 {/if}
 
-<NewTaskModal />
+<NewTaskModal
+  onAdded={(id) => {
+    const done = app.addDone;
+    app.addDone = null;
+    done?.(id);
+  }}
+/>
 <ExtensionSetup />
 <BatchModal />
 <CreateTorrentModal />

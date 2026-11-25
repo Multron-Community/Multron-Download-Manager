@@ -62,6 +62,11 @@
   </keywords>
   <content_rating type="oars-1.1"/>
   <releases>
+    <release version="1.0.3" date="2026-11-25">
+      <description>
+        <p>Download single files from inside ZIP, ISO, TAR, 7z and RAR archives on the server, and pick files from RSS feed items. Internet Archive torrents now download through their web seeds. The Firefox add-on installs permanently from Mozilla Add-ons, security levels also set related protections in other sections, and text on highlighted items is readable again in the light theme.</p>
+      </description>
+    </release>
     <release version="1.0.2" date="2026-11-21">
       <description>
         <p>Bug fixes.</p>

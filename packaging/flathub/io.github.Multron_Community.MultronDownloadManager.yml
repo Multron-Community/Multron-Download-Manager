@@ -27,16 +27,16 @@ modules:
         filename: multron-download-manager.deb
         only-arches:
           - x86_64
-        url: https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.11/Multron.Download.Manager_0.0.11_amd64.deb
-        sha256: aade85cab02f7dbd0b90017acd3fef6274c6ccb2a6622536b46b3160559b16a9
+        url: https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v1.0.2/Multron.Download.Manager_1.0.2_amd64.deb
+        sha256: c4accbff5f97336f10f7594fd81c96b63dfbae17fae7538e2964519788ed474a
         size: 14051104
 
       - type: extra-data
         filename: multron-download-manager.deb
         only-arches:
           - aarch64
-        url: https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v0.0.11/Multron.Download.Manager_0.0.11_arm64.deb
-        sha256: d70b9ebd6602cb1cf3242897f91cd0f98b06584e88542c5b8f845fbec0a41198
+        url: https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v1.0.2/Multron.Download.Manager_1.0.2_arm64.deb
+        sha256: c94282b15243337dcc62c2430c5056669fedbb532310ca2fb7f7d77614733624
         size: 13498060
 
       - type: script

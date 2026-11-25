@@ -2083,14 +2083,34 @@ impl Manager {
                 ..Default::default()
             })
             .await?;
+        self.remember_rss_item(&item.id);
+        Ok(id)
+    }
+
+    fn remember_rss_item(&self, item_id: &str) {
         self.with_rss(|r| {
-            r.downloaded.push(item.id.clone());
+            if r.downloaded.iter().any(|d| d == item_id) {
+                return;
+            }
+            r.downloaded.push(item_id.to_string());
             let len = r.downloaded.len();
             if len > RSS_KEEP_DOWNLOADED {
                 r.downloaded.drain(0..len - RSS_KEEP_DOWNLOADED);
             }
         });
-        Ok(id)
+    }
+
+    pub fn rss_mark(&self, feed: &str, item_id: &str) -> Result<()> {
+        let known = self.with_rss(|r| {
+            r.feeds
+                .get(feed)
+                .is_some_and(|f| f.items.iter().any(|i| i.id == item_id))
+        });
+        anyhow::ensure!(known, "item not found");
+        self.remember_rss_item(item_id);
+        self.save_rss();
+        let _ = self.app.emit("rss://changed", ());
+        Ok(())
     }
 
     pub async fn rss_download(self: &Arc<Self>, feed: &str, item_id: &str) -> Result<String> {

@@ -49,9 +49,29 @@
   <content_rating type="oars-1.1" />
 
   <releases>
-    <release version="0.0.11" date="2026-10-28">
+    <release version="1.0.2" date="2026-11-21">
       <description>
-        <p>Release v0.0.11 with multi-connection segmented downloads, BitTorrent support, and Linux packaging improvements.</p>
+        <p>Bug fixes.</p>
+      </description>
+    </release>
+    <release version="1.0.1" date="2026-11-21">
+      <description>
+        <p>No CPU use while the window is idle or in the tray, less memory in the tray and looping effects off by default. The browser extension now catches video and audio streams from the page, and its video download button stays on the video instead of covering menus and pop-ups.</p>
+      </description>
+    </release>
+    <release version="1.0.0" date="2026-11-20">
+      <description>
+        <p>The first full release. LinkGrabber finds every file on a page, archives are extracted by themselves, and downloads can be scheduled, limited per site and sent through Tor. Also new: RSS feed search with built-in feeds, VirusTotal, statistics, a download history, automatic backups and a refreshed interface with adjustable colors and animations.</p>
+      </description>
+    </release>
+    <release version="0.0.11" date="2026-10-29">
+      <description>
+        <p>Every video quality up to 12K with its size, more audio and video formats, faster YouTube downloads and a video download button that can be moved.</p>
+      </description>
+    </release>
+    <release version="0.0.10" date="2026-10-29">
+      <description>
+        <p>Faster downloads when a server or a connection slows down, full-speed YouTube downloads and steady video progress.</p>
       </description>
     </release>
   </releases>

@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 import type {
+  ArchiveListing,
   HistoryItem,
   HistoryEntry,
   QuarantineItem,
@@ -79,6 +80,8 @@ export const api = {
     invoke<ProbeInfo>('probe_url', { url, referrer, cookies }),
   mediaProbe: (url: string, cookies?: BrowserCookie[], referrer?: string | null, userAgent?: string | null) =>
     invoke<MediaInfo>('media_probe', { url, cookies, referrer: referrer ?? null, userAgent: userAgent ?? null }),
+  archiveList: (url: string, referrer?: string | null, cookies?: BrowserCookie[]) =>
+    invoke<ArchiveListing>('archive_list', { url, referrer, cookies }),
   torrentInspect: (source: string, file?: string | null) =>
     invoke<TorrentPreview>('torrent_inspect', { source, file }),
   add: (request: AddRequest) => invoke<string>('add_download', { request }),
@@ -116,6 +119,7 @@ export const api = {
   podcastSearch: (term: string) => invoke<Podcast[]>('podcast_search', { term }),
   discoverFeeds: (url: string) => invoke<{ url: string; title: string }[]>('discover_feeds', { url }),
   rssDownload: (feed: string, item: string) => invoke<string>('rss_download', { feed, item }),
+  rssMark: (feed: string, item: string) => invoke<void>('rss_mark', { feed, item }),
   searchSites: () => invoke<SearchSiteView[]>('search_sites'),
   torrentSearch: (query: string, sites?: string[]) => invoke<SearchOutcome>('torrent_search', { query, sites: sites ?? null }),
   moveInQueue: (id: string, to: 'up' | 'down' | 'top' | 'bottom') => invoke<void>('move_in_queue', { id, to }),
@@ -153,10 +157,11 @@ export const api = {
     invoke<{ hash: string; source: string } | null>('find_sha256', { url, filename }),
   extensionDir: (firefox = false) => invoke<string>('extension_dir', { firefox }),
   browserList: () => invoke<Browser[]>('browser_list'),
+  installFirefoxXpi: (browser: string) => invoke<string>('install_firefox_xpi', { browser }),
   appearanceSupport: () => invoke<{ materials: string[] }>('appearance_support'),
   applyAppearance: (theme: string, transparency: boolean, material: string, tint: [number, number, number, number]) =>
     invoke<boolean>('apply_appearance', { theme, transparency, material, tint }),
-  setupExtension: (browser: string) => invoke<string>('setup_extension', { browser }),
+  setupExtension: (browser: string, store = false) => invoke<string>('setup_extension', { browser, store }),
   quit: () => invoke<void>('quit_app')
 };
 

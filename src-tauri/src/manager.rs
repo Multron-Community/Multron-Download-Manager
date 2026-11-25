@@ -20,7 +20,10 @@ use crate::settings::{Settings, MAX_THREADS};
 use crate::torrent::{EngineConfig, TorrentEngine, TorrentSource};
 use crate::util::{self, now_ms};
 
+const WEB_SEED_AFTER_SECS: u64 = 60;
+
 pub mod automation;
+mod inside;
 pub use automation::FeedView;
 
 pub const EVT_DOWNLOADS: &str = "downloads://changed";
@@ -170,6 +173,7 @@ pub struct Manager {
     pub history: crate::extras::History,
     pub uninstall_requests: Mutex<std::collections::HashSet<String>>,
     pub pair_asked: Mutex<std::collections::HashSet<String>>,
+    torrent_stalled: Mutex<std::collections::HashMap<String, Instant>>,
     pub cloud_reports: Mutex<std::collections::HashMap<String, automation::CloudReport>>,
     pub cloud_stops: Mutex<std::collections::HashMap<String, Arc<AtomicBool>>>,
     pub filter_status: Mutex<FilterStatus>,
@@ -430,6 +434,7 @@ impl Manager {
             history,
             uninstall_requests: Mutex::new(std::collections::HashSet::new()),
             pair_asked: Mutex::new(std::collections::HashSet::new()),
+            torrent_stalled: Mutex::new(std::collections::HashMap::new()),
             cloud_reports: Mutex::new(std::collections::HashMap::new()),
             cloud_stops: Mutex::new(std::collections::HashMap::new()),
             filter_status: Mutex::new(FilterStatus::default()),
@@ -928,7 +933,10 @@ impl Manager {
                         .and_then(|t| t.info_hash.as_deref())
                         .is_some_and(|x| x.eq_ignore_ascii_case(h))
                 });
-                same_hash || (!url.is_empty() && crate::model::same_link(&e.rec.url, &url))
+                let same_entry = e.rec.archive.as_ref().map(|p| &p.entry.path)
+                    == req.archive.as_ref().map(|p| &p.entry.path);
+                same_hash
+                    || (!url.is_empty() && same_entry && crate::model::same_link(&e.rec.url, &url))
             })
             .map(|e| crate::model::Duplicate {
                 id: e.rec.id.clone(),
@@ -939,7 +947,7 @@ impl Manager {
             })
             .or_else(|| {
                 let s = self.settings.read();
-                if !s.history_enabled || !s.history_warn {
+                if !s.history_enabled || !s.history_warn || req.archive.is_some() {
                     return None;
                 }
                 let h = self.history.find(&url)?;
@@ -1310,6 +1318,9 @@ impl Manager {
             _ if req.torrent_file.is_some() => Kind::Torrent,
             _ => detect_kind(&url),
         };
+        if req.archive.is_some() {
+            kind = Kind::Http;
+        }
         if settings.click_n_load
             && kind != Kind::Torrent
             && req.torrent_file.is_none()
@@ -1402,7 +1413,17 @@ impl Manager {
             ..blank_record(&url)
         };
 
-        if kind == Kind::Http {
+        if let Some(pick) = req.archive.clone() {
+            rec.cookie_header = cookie_header(&req.cookies, &url);
+            self.place_archive_pick(
+                &mut rec,
+                pick,
+                req.archive_folders,
+                req.filename.clone(),
+                &base_dir,
+                &settings,
+            )?;
+        } else if kind == Kind::Http {
             rec.cookie_header = cookie_header(&req.cookies, &url);
             let mut headers = self.request_headers(&rec);
             let client = self.http.read().clone();
@@ -2040,6 +2061,10 @@ impl Manager {
         limiter: Arc<Limiter>,
     ) -> Result<bool> {
         let rec = self.record(id)?;
+        if let Some(pick) = rec.archive.clone() {
+            self.with_entry(id, |e| e.live.phase = Some("connecting".into()));
+            return self.run_archive_entry(id, rec, pick, cancel, limiter).await;
+        }
         let settings = self.settings();
         let mut headers = self.request_headers(&rec);
         let client = self.http.read().clone();
@@ -2136,6 +2161,7 @@ impl Manager {
             transform: resolved.transform,
             if_range: probe.validator.clone(),
             max_request: None,
+            window: None,
         });
         let done = engine::run(job).await;
         self.with_entry(id, |e| {
@@ -3037,10 +3063,30 @@ impl Manager {
             .collect();
         let mut to_pause = Vec::new();
         let mut finished_now = Vec::new();
+        let mut to_web_seed = Vec::new();
         for (id, hash) in items {
             let Some(snap) = engine.snapshot(&hash) else {
                 continue;
             };
+            let stalled =
+                snap.state == "live" && !snap.finished && snap.progress == 0 && snap.peers == 0;
+            {
+                let mut map = self.torrent_stalled.lock();
+                if stalled {
+                    let since = *map
+                        .entry(id.clone())
+                        .or_insert_with(std::time::Instant::now);
+                    if since.elapsed() >= Duration::from_secs(WEB_SEED_AFTER_SECS) {
+                        map.insert(
+                            id.clone(),
+                            std::time::Instant::now() + Duration::from_secs(3600),
+                        );
+                        to_web_seed.push(id.clone());
+                    }
+                } else {
+                    map.remove(&id);
+                }
+            }
             self.with_entry(&id, |e| {
                 let user_paused = e
                     .rec
@@ -3123,6 +3169,89 @@ impl Manager {
                 let _ = engine.pause(&hash).await;
             });
         }
+        for id in to_web_seed {
+            let this = self.clone();
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = this.torrent_to_web_seeds(&id).await {
+                    tracing::warn!("could not switch torrent {id} to its web seeds: {e:#}");
+                }
+            });
+        }
+    }
+
+    async fn torrent_to_web_seeds(self: &Arc<Self>, id: &str) -> Result<()> {
+        let rec = self.record(id)?;
+        let Some(opts) = rec.torrent.clone() else {
+            return Ok(());
+        };
+        let Some(file) = opts.torrent_file.as_deref() else {
+            return Ok(());
+        };
+        let bytes = tokio::fs::read(file).await?;
+        let files = crate::trackers::web_seed_files(&bytes);
+        if files.is_empty() {
+            return Ok(());
+        }
+        let multi_file = crate::trackers::Bencode::parse(&bytes)
+            .and_then(|b| b.get("info").and_then(|i| i.get("files")).map(|_| ()))
+            .is_some();
+        let picked: Vec<(usize, &crate::trackers::WebSeedFile)> = files
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| opts.only_files.as_ref().is_none_or(|only| only.contains(i)))
+            .collect();
+        if picked.is_empty() {
+            return Ok(());
+        }
+        if self.record(id).is_ok_and(|r| r.downloaded > 0) {
+            return Ok(());
+        }
+        tracing::info!(
+            "torrent {} has no peers; downloading {} files from its web seeds",
+            rec.name,
+            picked.len()
+        );
+        let base = PathBuf::from(&rec.dir);
+        let mut added = 0usize;
+        for (_, f) in picked {
+            let mut dir = base.clone();
+            let parts: Vec<String> = f
+                .path
+                .iter()
+                .map(|p| crate::util::sanitize_filename(p))
+                .filter(|p| !p.is_empty() && p != "." && p != "..")
+                .collect();
+            let Some((name, folders)) = parts.split_last() else {
+                continue;
+            };
+            if multi_file {
+                for folder in folders {
+                    dir.push(folder);
+                }
+            }
+            let req = AddRequest {
+                url: f.urls[0].clone(),
+                kind: Some("http".into()),
+                dir: Some(dir.to_string_lossy().into_owned()),
+                filename: Some(name.clone()),
+                total: Some(f.length),
+                mirrors: f.urls[1..].to_vec(),
+                tags: rec.tags.clone(),
+                allow_duplicate: true,
+                ..Default::default()
+            };
+            match self.add(req).await {
+                Ok(_) => added += 1,
+                Err(e) => tracing::warn!("web seed download of {name} failed to start: {e:#}"),
+            }
+        }
+        if added == 0 {
+            return Ok(());
+        }
+        self.remove(id, false).await?;
+        self.notify(None, "started", &format!("{} ({added})", rec.name));
+        self.emit_now();
+        Ok(())
     }
 
     pub async fn pause(self: &Arc<Self>, id: &str) -> Result<()> {
@@ -3253,6 +3382,9 @@ impl Manager {
                 }
                 let path = PathBuf::from(&rec.dir).join(&rec.name);
                 let mut targets = vec![util::part_path(&path)];
+                if rec.archive.is_some() {
+                    targets.push(inside::packed_path(&path));
+                }
                 if let Some(m) = rec.media.as_ref() {
                     for p in &m.partials {
                         targets.extend(media_leftovers(Path::new(p)));
@@ -3733,6 +3865,7 @@ impl Manager {
                 transform: None,
                 if_range: probe.validator.clone(),
                 max_request: youtube_cdn(&probe.final_url).then_some(8 << 20),
+                window: None,
             }))
             .await?;
             if !done {
@@ -3924,6 +4057,7 @@ fn blank_record(url: &str) -> DownloadRecord {
         sha256_actual: None,
         hash_state: HashState::None,
         validator: None,
+        archive: None,
     }
 }
 

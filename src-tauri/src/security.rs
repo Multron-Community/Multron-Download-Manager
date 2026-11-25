@@ -97,8 +97,14 @@ pub fn is_program(path: &Path) -> bool {
         .is_some_and(|e| PROGRAMS.iter().any(|p| p.eq_ignore_ascii_case(e)))
 }
 
+fn own_release(url: &str) -> bool {
+    url.starts_with(
+        "https://github.com/Multron-Community/Multron-Download-Manager/releases/download/",
+    )
+}
+
 pub fn mark_from_internet(path: &Path, url: &str, referrer: Option<&str>) -> bool {
-    if !path.is_file() {
+    if !path.is_file() || own_release(url) {
         return false;
     }
     #[cfg(windows)]
@@ -184,6 +190,19 @@ pub fn antivirus_error(err: &anyhow::Error) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn own_releases_are_not_marked() {
+        assert!(own_release(
+            "https://github.com/Multron-Community/Multron-Download-Manager/releases/download/v1.0.3/Multron.Download.Manager_1.0.3_aarch64.dmg"
+        ));
+        assert!(!own_release(
+            "https://github.com/someone/else/releases/download/v1/app.dmg"
+        ));
+        assert!(!own_release(
+            "https://example.com/?u=https://github.com/Multron-Community/Multron-Download-Manager/releases/download/x"
+        ));
+    }
 
     #[cfg(windows)]
     #[test]

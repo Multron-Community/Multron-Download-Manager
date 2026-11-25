@@ -58,6 +58,7 @@ export interface Download {
   sha256Expected: string | null;
   sha256Actual: string | null;
   hashState: HashState;
+  archive?: ArchivePick | null;
   scanState: '' | 'scanning' | 'clean' | 'threat' | 'skipped' | 'marked';
   scanDetail?: string | null;
   cloudScannedAt?: number | null;
@@ -417,6 +418,41 @@ export interface AddRequest {
   note?: string;
   autoExtract?: boolean | null;
   extractPassword?: string | null;
+  archive?: ArchivePick | null;
+  archiveFolders?: boolean;
+}
+
+export type ArchiveFormat = 'zip' | 'iso' | 'udf' | 'tar' | 'rar' | 'sevenzip';
+
+export interface ArchiveEntry {
+  path: string;
+  dir: boolean;
+  size: number;
+  modified: number | null;
+  method: 'stored' | 'deflate' | 'deflate64' | 'sevenzip' | 'unsupported';
+  offset: number;
+  fetch: number;
+  crc: number | null;
+  localHeader: boolean;
+  block: number | null;
+  index: number | null;
+  shared: number;
+  problem: 'encrypted' | 'solid' | 'method' | 'fragmented' | 'link' | null;
+}
+
+export interface ArchiveListing {
+  format: ArchiveFormat;
+  url: string;
+  size: number;
+  entries: ArchiveEntry[];
+  truncated: boolean;
+  solid: boolean;
+}
+
+export interface ArchivePick {
+  format: ArchiveFormat;
+  archiveSize: number;
+  entry: ArchiveEntry;
 }
 
 export interface FoundLink {

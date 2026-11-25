@@ -95,16 +95,25 @@
     close();
   }
 
+  function askInOwnWindow(d: Download) {
+    invoke('open_confirm_window', { id: d.id })
+      .catch(() => invoke('notice_show_download', { id: d.id, start: true }))
+      .catch(() => {})
+      .finally(close);
+  }
+
   function openIt() {
     const d = item;
     if (!d) return;
-    if (app.disguised(d) || (PROGRAM_FILE.test(d.name) && app.settings?.askBeforeStartingPrograms !== false)) {
-      invoke('notice_show_download', { id: d.id, start: true }).catch(() => {});
+    if (app.disguised(d) || app.settings?.askBeforeOpeningFiles || (PROGRAM_FILE.test(d.name) && app.settings?.askBeforeStartingPrograms !== false)) {
+      askInOwnWindow(d);
       return;
     }
     api.openFile(d.id).catch((e) => {
-      if (/confirm_start|blocked_threat|rescan_needed|in_quarantine/.test(String(e))) invoke('notice_show_download', { id: d.id, start: true }).catch(() => {});
-      else app.toast('error', String(e));
+      const s = String(e);
+      if (/confirm_start|blocked_threat/.test(s)) askInOwnWindow(d);
+      else if (/rescan_needed|in_quarantine/.test(s)) invoke('notice_show_download', { id: d.id, start: true }).catch(() => {});
+      else app.toast('error', s);
     });
   }
 
@@ -161,7 +170,7 @@
 
       {#if item && (item.cloudState === 'threat' || item.cloudState === 'suspicious')}
         <div class="rounded-[10px] overflow-hidden border border-bad/50">
-          <div class="px-3 py-2 flex items-center gap-2 text-white text-[12.5px] font-semibold" style="background: linear-gradient(135deg, #c62828, #ff5a4f)">
+          <div class="px-3 py-2 flex items-center gap-2 text-[#fff] text-[12.5px] font-semibold" style="background: linear-gradient(135deg, #c62828, #ff5a4f)">
             <Icon name="shield" size={15} />{item.cloudState === 'threat' ? t('Threat found in a download') : t('Suspicious file')}
           </div>
           <div class="px-3 py-2 bg-bad/10 text-[12px] space-y-2">

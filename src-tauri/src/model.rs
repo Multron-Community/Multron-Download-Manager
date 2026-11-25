@@ -194,6 +194,8 @@ pub struct DownloadRecord {
     pub hash_state: HashState,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub validator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub archive: Option<crate::remote_archive::Pick>,
 }
 
 #[derive(Serialize, Clone, Debug, Default)]
@@ -279,6 +281,8 @@ pub struct AddRequest {
     pub auto_extract: Option<bool>,
     pub extract_password: Option<String>,
     pub stream: bool,
+    pub archive: Option<crate::remote_archive::Pick>,
+    pub archive_folders: bool,
 }
 
 #[derive(Serialize, Clone, Debug, PartialEq)]

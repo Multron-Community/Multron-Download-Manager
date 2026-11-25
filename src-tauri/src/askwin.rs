@@ -66,6 +66,78 @@ pub fn open_progress(app: &AppHandle, id: &str) {
     });
 }
 
+static CONFIRM: Mutex<Option<HashMap<u64, String>>> = Mutex::new(None);
+
+pub fn confirm(key: u64) -> Option<String> {
+    CONFIRM.lock().as_ref().and_then(|m| m.get(&key).cloned())
+}
+
+pub fn open_confirm(app: &AppHandle, id: &str) {
+    let existing = CONFIRM
+        .lock()
+        .as_ref()
+        .and_then(|m| m.iter().find(|(_, v)| *v == id).map(|(k, _)| *k));
+    if let Some(window) = existing.and_then(|k| app.get_webview_window(&format!("{PREFIX}{k}"))) {
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+        return;
+    }
+    let key = NEXT.fetch_add(1, Ordering::Relaxed);
+    CONFIRM
+        .lock()
+        .get_or_insert_with(HashMap::new)
+        .insert(key, id.to_string());
+    let see_through = transparent_wanted(app);
+    let background = if see_through {
+        Color(0, 0, 0, 0)
+    } else if crate::notice::dark(app) {
+        Color(0x1c, 0x1c, 0x1e, 0xff)
+    } else {
+        Color(0xf6, 0xf6, 0xf7, 0xff)
+    };
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let label = format!("{PREFIX}{key}");
+        let built = tauri::WebviewWindowBuilder::new(
+            &app,
+            &label,
+            WebviewUrl::App(format!("index.html#confirm={key}").into()),
+        )
+        .title("Multron Download Manager")
+        .inner_size(460.0, 440.0)
+        .min_inner_size(380.0, 320.0)
+        .center()
+        .background_color(background)
+        .transparent(see_through)
+        .always_on_top(true)
+        .focused(true)
+        .visible(true)
+        .build();
+        match built {
+            Ok(window) => {
+                let _ = window.set_focus();
+                window.on_window_event(move |e| {
+                    if let WindowEvent::Destroyed = e {
+                        forget(key);
+                    }
+                });
+            }
+            Err(e) => {
+                let id = confirm(key);
+                forget(key);
+                tracing::warn!("could not open the confirmation window: {e}");
+                crate::show_main_window(&app);
+                let _ = tauri::Emitter::emit_to(
+                    &app,
+                    "main",
+                    "app://select",
+                    serde_json::json!({ "id": id, "start": true, "report": false }),
+                );
+            }
+        }
+    });
+}
+
 fn store(key: u64, req: AddRequest) {
     REQUESTS
         .lock()
@@ -82,6 +154,9 @@ pub fn forget(key: u64) {
         m.remove(&key);
     }
     if let Some(m) = PROGRESS.lock().as_mut() {
+        m.remove(&key);
+    }
+    if let Some(m) = CONFIRM.lock().as_mut() {
         m.remove(&key);
     }
 }

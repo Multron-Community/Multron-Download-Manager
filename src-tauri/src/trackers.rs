@@ -149,6 +149,91 @@ pub fn read_metainfo(torrent: &[u8]) -> TorrentMetaInfo {
     }
 }
 
+#[derive(Debug, Clone, PartialEq)]
+pub struct WebSeedFile {
+    pub path: Vec<String>,
+    pub length: u64,
+    pub urls: Vec<String>,
+}
+
+fn web_seed_url(seed: &str, parts: &[String]) -> Option<String> {
+    let mut url = url::Url::parse(seed).ok()?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return None;
+    }
+    if !seed.ends_with('/') {
+        return (parts.len() == 1).then(|| url.to_string());
+    }
+    {
+        let mut segs = url.path_segments_mut().ok()?;
+        segs.pop_if_empty();
+        for p in parts {
+            segs.push(p);
+        }
+    }
+    Some(url.to_string())
+}
+
+pub fn web_seed_files(torrent: &[u8]) -> Vec<WebSeedFile> {
+    let Some(root) = Bencode::parse(torrent) else {
+        return Vec::new();
+    };
+    let mut seeds: Vec<String> = match root.get("url-list") {
+        Some(Bencode::List(l)) => l.iter().filter_map(Bencode::as_str).collect(),
+        Some(b) => b.as_str().into_iter().collect(),
+        None => Vec::new(),
+    };
+    seeds.retain(|s| s.starts_with("http://") || s.starts_with("https://"));
+    seeds.sort_by_key(|s| !s.contains("archive.org/download/"));
+    dedup(&mut seeds);
+    let Some(info) = root.get("info") else {
+        return Vec::new();
+    };
+    let Some(name) = info.get("name").and_then(Bencode::as_str) else {
+        return Vec::new();
+    };
+    let entries: Vec<(Vec<String>, u64)> = match info.get("files").and_then(Bencode::as_list) {
+        Some(files) => files
+            .iter()
+            .filter_map(|f| {
+                let parts: Vec<String> = f
+                    .get("path")?
+                    .as_list()?
+                    .iter()
+                    .filter_map(Bencode::as_str)
+                    .collect();
+                let len = f.get("length")?.as_int()?;
+                (!parts.is_empty()).then_some((parts, len.max(0) as u64))
+            })
+            .collect(),
+        None => match info.get("length").and_then(Bencode::as_int) {
+            Some(len) => vec![(Vec::new(), len.max(0) as u64)],
+            None => return Vec::new(),
+        },
+    };
+    entries
+        .into_iter()
+        .map(|(path, length)| {
+            let mut full = vec![name.clone()];
+            full.extend(path.iter().cloned());
+            let urls = seeds
+                .iter()
+                .filter_map(|s| web_seed_url(s, &full))
+                .collect();
+            WebSeedFile {
+                path: if path.is_empty() {
+                    vec![name.clone()]
+                } else {
+                    path
+                },
+                length,
+                urls,
+            }
+        })
+        .filter(|f| !f.urls.is_empty())
+        .collect()
+}
+
 pub fn magnet_trackers(magnet: &str) -> Vec<String> {
     let Ok(url) = url::Url::parse(magnet) else {
         return Vec::new();
@@ -360,6 +445,69 @@ pub async fn fetch_public_trackers(client: &reqwest::Client) -> Result<Vec<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn bstr(s: &str) -> String {
+        format!("{}:{s}", s.len())
+    }
+
+    #[test]
+    fn web_seed_files_of_a_multi_file_archive_org_torrent() {
+        let t = format!(
+            "d8:url-listl{}{}{}e4:infod5:filesld6:lengthi10e4:pathl{}{}eed6:lengthi5e4:pathl{}eee4:name{}12:piece lengthi16384eee",
+            bstr("https://archive.org/download/"),
+            bstr("http://ia601803.us.archive.org/12/items/"),
+            bstr("ftp://example.com/"),
+            bstr("disk 1"),
+            bstr("setup.exe"),
+            bstr("readme.txt"),
+            bstr("windows-95-starter-pack")
+        );
+        let files = web_seed_files(t.as_bytes());
+        assert_eq!(files.len(), 2);
+        assert_eq!(
+            files[0].path,
+            vec!["disk 1".to_string(), "setup.exe".to_string()]
+        );
+        assert_eq!(files[0].length, 10);
+        assert_eq!(
+            files[0].urls,
+            vec![
+                "https://archive.org/download/windows-95-starter-pack/disk%201/setup.exe".to_string(),
+                "http://ia601803.us.archive.org/12/items/windows-95-starter-pack/disk%201/setup.exe".to_string()
+            ]
+        );
+        assert_eq!(
+            files[1].urls[0],
+            "https://archive.org/download/windows-95-starter-pack/readme.txt"
+        );
+    }
+
+    #[test]
+    fn web_seed_files_of_a_single_file_torrent() {
+        let file_seed = format!(
+            "d8:url-list{}4:infod6:lengthi7e4:name{}ee",
+            bstr("https://example.com/files/a.iso"),
+            bstr("a.iso")
+        );
+        let files = web_seed_files(file_seed.as_bytes());
+        assert_eq!(files.len(), 1);
+        assert_eq!(files[0].path, vec!["a.iso".to_string()]);
+        assert_eq!(
+            files[0].urls,
+            vec!["https://example.com/files/a.iso".to_string()]
+        );
+        let folder_seed = format!(
+            "d8:url-list{}4:infod6:lengthi7e4:name{}ee",
+            bstr("https://example.com/files/"),
+            bstr("a b.iso")
+        );
+        assert_eq!(
+            web_seed_files(folder_seed.as_bytes())[0].urls[0],
+            "https://example.com/files/a%20b.iso"
+        );
+        let no_seed = format!("d4:infod6:lengthi7e4:name{}ee", bstr("a.iso"));
+        assert!(web_seed_files(no_seed.as_bytes()).is_empty());
+    }
 
     #[test]
     fn bencode_roundtrip() {

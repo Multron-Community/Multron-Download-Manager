@@ -7,6 +7,8 @@ const load: Promise<{ default: Component }> =
     ? import('./components/NoticeApp.svelte')
     : hash.startsWith('#ask=')
       ? import('./components/AskApp.svelte')
-      : import('./App.svelte')
+      : hash.startsWith('#confirm=')
+        ? import('./components/ConfirmApp.svelte')
+        : import('./App.svelte')
 
 export default load.then(({ default: Root }) => mount(Root, { target: document.getElementById('app')! }))

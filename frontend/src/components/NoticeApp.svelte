@@ -115,15 +115,25 @@
   async function open(n: Notice) {
     if (!n.download) return;
     if (PROGRAM_FILE.test(n.body)) {
-      await show(n, true);
+      await ask(n);
       return;
     }
-    const asked = await invoke('open_file', { id: n.download }).then(
-      () => false,
-      (e) => /confirm_start|blocked_threat|rescan_needed|in_quarantine/.test(String(e))
+    const answer = await invoke('open_file', { id: n.download }).then(
+      () => '',
+      (e) => String(e)
     );
-    if (asked) await show(n, true);
+    if (/confirm_start|blocked_threat/.test(answer)) await ask(n);
+    else if (/rescan_needed|in_quarantine/.test(answer)) await show(n, true);
     else dismiss(n.id);
+  }
+
+  async function ask(n: Notice) {
+    const ok = await invoke('open_confirm_window', { id: n.download }).then(
+      () => true,
+      () => false
+    );
+    if (ok) dismiss(n.id);
+    else await show(n, true);
   }
 
   async function folder(n: Notice) {
@@ -165,7 +175,7 @@
         class="relative cursor-pointer overflow-hidden"
         onclick={() => show(n)}
       >
-        <div class="threat-band px-4 py-2.5 flex items-center gap-2.5 text-white">
+        <div class="threat-band px-4 py-2.5 flex items-center gap-2.5 text-[#fff]">
           <span class="threat-pulse w-[30px] h-[30px] rounded-full bg-white/20 flex items-center justify-center flex-shrink-0"><Icon name="shield" size={17} stroke={2.4} /></span>
           <span class="flex-1 min-w-0">
             <span class="block text-[10.5px] font-semibold uppercase tracking-wider opacity-85">Multron Cloud · {t('Security alert')}</span>

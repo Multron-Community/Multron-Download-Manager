@@ -23,6 +23,7 @@ pub mod nativehost;
 mod notice;
 mod portable;
 mod protection;
+mod remote_archive;
 mod resolver;
 mod rss;
 mod sandbox;
@@ -224,6 +225,7 @@ pub fn run() {
             commands::get_downloads,
             commands::get_global_stats,
             commands::probe_url,
+            commands::archive_list,
             commands::check_link,
             commands::scan_page,
             commands::rss_resolve,
@@ -284,6 +286,7 @@ pub fn run() {
             commands::extension_dir,
             commands::browser_list,
             commands::setup_extension,
+            commands::install_firefox_xpi,
             commands::appearance_support,
             commands::apply_appearance,
             commands::move_in_queue,
@@ -321,6 +324,8 @@ pub fn run() {
             commands::extract_tool_available,
             commands::ask_started,
             commands::ask_progress,
+            commands::ask_confirm,
+            commands::open_confirm_window,
             commands::notice_dismiss,
             commands::notice_layout,
             commands::notice_show_download,
@@ -333,6 +338,7 @@ pub fn run() {
             commands::rss_feeds,
             commands::rss_refresh,
             commands::rss_download,
+            commands::rss_mark,
             commands::search_sites,
             commands::torrent_search,
             commands::download_app_update,
